@@ -1,0 +1,216 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 cleanup precedence",
+   "kind": "contradiction",
+   "text": "Outcomes are closed and checked in this order, the first that holds deciding: wall deadline passed — `timeout`; a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`; a trap of rule 4 raised — `sandbox_violation`; the module failed to load, has no `run`, raised, or the process exited abnormally — `crashed`; the returned dict does not have exactly the output ports, or a value fails its port's schema, or a file output is not `bytes` — `contract_violation`; otherwise the execution succeeded.",
+   "question": "When `cleanup_unconfirmed` coincides with an earlier condition in this unqualified first-match order, must cleanup override it as A03 rules 7, A03-4 and A03-5 require, or must the first condition here decide?",
+   "options": [
+    "`cleanup_unconfirmed` always overrides every listed outcome and yields `crashed`/`cleanup_failed`",
+    "The rule 5 order still decides when one of its conditions holds",
+    "Cleanup overrides only some of the rule 5 outcomes"
+   ],
+   "default_guess": "Treat `cleanup_unconfirmed` as an unconditional override and amend rule 5 to say that its order applies only when cleanup is confirmed.",
+   "witness": {
+    "initial": "A sandbox execution passes its wall deadline, and afterward the parent cannot confirm removal of the exchange directory.",
+    "events": [
+     "The submitted function busy-loops until the wall deadline passes.",
+     "The parent terminates the environment.",
+     "Removal of the exchange directory cannot be confirmed."
+    ],
+    "outcomes": [
+     "Rule 5's first matching condition records `timeout`.",
+     "Rule 7 and A03-4 record `crashed` with detail `cleanup_failed`, discard output and stop the kernel."
+    ],
+    "observer": "The submitting actor inspecting the TrialExecution or NodeExecution and the operator observing whether the kernel stops."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03 recorded trap with unconfirmed cleanup",
+   "kind": "contradiction",
+   "text": "any recorded hit makes the execution `sandbox_violation` under the order of rule 5, even when the code catches it and returns a conforming output: `timeout` and `resource_exhausted` still come first.",
+   "question": "Does a recorded trap still require `sandbox_violation` when cleanup is unconfirmed, or is `cleanup_unconfirmed` a third exception that requires `crashed` with `cleanup_failed`?",
+   "options": [
+    "Add `cleanup_unconfirmed` as an exception and record `crashed`/`cleanup_failed`",
+    "Record `sandbox_violation` because the hit was recorded",
+    "Record the trap outcome but still stop the kernel for cleanup failure"
+   ],
+   "default_guess": "Add `cleanup_unconfirmed` as an explicit exception and record only `crashed` with `cleanup_failed`.",
+   "witness": {
+    "initial": "A function can catch a clock trap and return a conforming result, but cleanup of its environment cannot be confirmed.",
+    "events": [
+     "The function calls `time.time()`, causing the runner to record a trap hit.",
+     "The function catches the raised error and returns a conforming dict.",
+     "The parent cannot confirm cleanup."
+    ],
+    "outcomes": [
+     "Rule 4 records `sandbox_violation`.",
+     "A03-3, A03-4, A03-5 and rule 7 record `crashed` with `cleanup_failed`."
+    ],
+    "observer": "The caller and trace reader see different execution outcomes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03 cleanup_unconfirmed condition",
+   "kind": "undefined refusal condition",
+   "text": "If that cannot be confirmed the output is discarded, the execution is recorded `crashed` with detail `cleanup_failed`, and the kernel process stops",
+   "question": "Exactly which observations, errors, retries and verification steps make process reaping or exchange-directory removal `cleanup_unconfirmed`?",
+   "options": [
+    "Any failed reap or removal system call immediately makes cleanup unconfirmed",
+    "Retry and independently verify absence before declaring cleanup unconfirmed",
+    "Declare it only when a bounded cleanup deadline expires",
+    "Define separate predicates for unreaped processes and an exchange directory that still exists"
+   ],
+   "default_guess": "Use a bounded cleanup procedure, verify that no environment process remains and that the directory no longer exists, and declare `cleanup_unconfirmed` if either fact cannot be established by the deadline.",
+   "witness": {
+    "initial": "The function has ended, but the first attempt to remove its exchange directory returns a transient error.",
+    "events": [
+     "The parent reaps the sandbox process.",
+     "The first directory-removal call fails transiently.",
+     "One implementation immediately classifies cleanup as unconfirmed; another retries and successfully verifies the directory is absent."
+    ],
+    "outcomes": [
+     "The execution becomes `crashed`/`cleanup_failed` and the kernel stops.",
+     "The execution keeps its otherwise determined outcome and the kernel continues."
+    ],
+    "observer": "The caller sees a different outcome, and every user sees whether the kernel remains available."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03-4 Required tests",
+   "kind": "missing invariant test obligation",
+   "text": "A03-4: outcome = crashed(cleanup_failed)  IF cleanup_unconfirmed\n                 ELSE first_of(timeout, resource_exhausted, sandbox_violation, crashed,\n                               contract_violation, succeeded)",
+   "question": "Which Required tests item must show the newly added A03-4 override when `cleanup_unconfirmed` and one or more conditions in `first_of(...)` hold simultaneously?",
+   "options": [
+    "Extend test 11 with simultaneous timeout, resource, trap and contract-failure cases",
+    "Add a separate A03-4 precedence test for cleanup",
+    "Declare that test 11 alone proves the override without a simultaneous condition"
+   ],
+   "default_guess": "Add an A03-4 test in which cleanup is unconfirmed together with at least timeout and a recorded trap, and require `crashed`/`cleanup_failed` in every case.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 cleanup detail representation",
+   "kind": "representation ambiguity",
+   "text": "the execution is recorded `crashed` with detail `cleanup_failed`",
+   "question": "In which model field is `cleanup_failed` recorded for a trial execution and for a run's NodeExecution?",
+   "options": [
+    "M07 `detail_code` for trials and M23 `failure_detail` for run nodes",
+    "Add a closed `detail_code` field to M23 and use it in both record types",
+    "Use free-form `failure_detail` in both record types",
+    "Record it only on TrialExecution, leaving a run NodeExecution with status `crashed` alone"
+   ],
+   "default_guess": "Use M07 `detail_code` for TrialExecution and add an equivalent closed detail-code field to M23 rather than overloading free-form `failure_detail`.",
+   "witness": {
+    "initial": "The same admitted implementation is executed once by an explicit trial and once as a function node in a run; cleanup is unconfirmed in both executions.",
+    "events": [
+     "The trial execution is recorded `crashed`.",
+     "The run's function attempt is recorded as a NodeExecution with status `crashed`.",
+     "A caller reads both records."
+    ],
+    "outcomes": [
+     "`cleanup_failed` appears in M07 `detail_code` and M23 `failure_detail`.",
+     "`cleanup_failed` appears in a common closed detail-code field, requiring M23 to have such a field."
+    ],
+    "observer": "A trace consumer implementing typed handling of cleanup failures."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 clock source",
+   "kind": "underspecified source",
+   "text": "Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.",
+   "question": "What exact clock backend or authority is the one source, what wall-clock semantics does `now` use, and how does it reach generated code through the required `system_clock_backend` IR path?",
+   "options": [
+    "A declared `system_clock_backend` backed by the host UTC system clock",
+    "A clock port injected into every timestamp-writing component",
+    "One named authority module wrapping the host wall clock",
+    "A configurable environment-dependent clock selected through settings"
+   ],
+   "default_guess": "Declare one `system_clock_backend` that exposes a host UTC wall-clock source, with generated modules importing only the emitted clock-module symbol.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 timestamp representation",
+   "kind": "missing representation",
+   "text": "kernel_timestamp -> clock_module.now",
+   "question": "What type, timezone, precision and stored serialization represent every kernel timestamp?",
+   "options": [
+    "Timezone-aware UTC datetime stored as canonical RFC 3339 text",
+    "Integer Unix milliseconds",
+    "Integer Unix microseconds",
+    "A typed instant stored as seconds plus nanoseconds"
+   ],
+   "default_guess": "Use a timezone-aware UTC instant with fixed microsecond precision and one canonical RFC 3339 serialization.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 clock reading cardinality",
+   "kind": "missing read-count rule",
+   "text": "With an injected fixed clock, the same test sequence writes the same timestamps.",
+   "question": "How many wall-clock readings may one operation take, at which semantic points are they taken, and which timestamp fields must reuse one reading?",
+   "options": [
+    "Exactly one reading per request and reuse it for every record written by that request",
+    "Exactly one reading per store transaction",
+    "One reading per timestamped semantic event, reused by all fields for that event",
+    "A separate reading for every timestamp field"
+   ],
+   "default_guess": "Take one reading per timestamped semantic event and reuse it for every record and field representing that event; execution start and execution end are two distinct events.",
+   "witness": {
+    "initial": "A function-node attempt has both `started_at` and `ended_at`, and the injected clock returns a different instant on every call.",
+    "events": [
+     "A request starts the node attempt.",
+     "The sandbox execution completes.",
+     "The kernel writes its NodeExecution."
+    ],
+    "outcomes": [
+     "One clock read is reused, so `started_at` and `ended_at` are equal.",
+     "Two event readings are used, so `started_at` precedes `ended_at`."
+    ],
+    "observer": "The owner or agent reading the trace."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03-4 success outcome",
+   "kind": "terminology contradiction",
+   "text": "A03-4: A module using `dataclasses` under `from __future__ import annotations`, and\n    one reading its own entry in `sys.modules`, load and conclude `passed`.",
+   "question": "Must this A03-4 test assert the execution outcome `succeeded`, which A03-4 names, or the TrialExecution outcome `passed`, which M07 names after case evaluation?",
+   "options": [
+    "Change the test to `succeeded` because it tests A03's sandbox outcome",
+    "State that the sandbox succeeds and the enclosing TrialExecution is `passed`",
+    "Change A03-4's final outcome name from `succeeded` to `passed`"
+   ],
+   "default_guess": "State both layers explicitly: the sandbox execution succeeds and the enclosing trial case concludes `passed`.",
+   "witness": {
+    "initial": "A corpus contains a case without expected outputs, and the implementation uses `dataclasses` with postponed annotations but otherwise returns a conforming dict.",
+    "events": [
+     "The implementation is executed in admission.",
+     "Module loading and `run` succeed.",
+     "The kernel records the trial observation."
+    ],
+    "outcomes": [
+     "A03's execution classifier reports `succeeded`.",
+     "M07 records the TrialExecution outcome `passed`."
+    ],
+    "observer": "A test author deciding which layer and value the A03-4 assertion must inspect."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Carried to later states — trapped entry-point list",
+   "kind": "standard_violation",
+   "text": "- Release build: the frozen list of trapped standard-library entry points —\n  closed: A03 rule 4 lists them, and the release passes them as data (A20).",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The passage must identify the trapped-entry-point policy as one named imported data-provider constant, with that symbol and type visible to generated code, rather than saying only that the release passes it as data.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 cleanup precedence\",\"kind\":\"contradiction\",\"text\":\"Outcomes are closed and checked in this order, the first that holds deciding: wall deadline passed — `timeout`; a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`; a trap of rule 4 raised — `sandbox_violation`; the module failed to load, has no `run`, raised, or the process exited abnormally — `crashed`; the returned dict does not have exactly the output ports, or a value fails its port's schema, or a file output is not `bytes` — `contract_violation`; otherwise the execution succeeded.\",\"question\":\"When `cleanup_unconfirmed` coincides with an earlier condition in this unqualified first-match order, must cleanup override it as A03 rules 7, A03-4 and A03-5 require, or must the first condition here decide?\",\"options\":[\"`cleanup_unconfirmed` always overrides every listed outcome and yields `crashed`/`cleanup_failed`\",\"The rule 5 order still decides when one of its conditions holds\",\"Cleanup overrides only some of the rule 5 outcomes\"],\"default_guess\":\"Treat `cleanup_unconfirmed` as an unconditional override and amend rule 5 to say that its order applies only when cleanup is confirmed.\",\"witness\":{\"initial\":\"A sandbox execution passes its wall deadline, and afterward the parent cannot confirm removal of the exchange directory.\",\"events\":[\"The submitted function busy-loops until the wall deadline passes.\",\"The parent terminates the environment.\",\"Removal of the exchange directory cannot be confirmed.\"],\"outcomes\":[\"Rule 5's first matching condition records `timeout`.\",\"Rule 7 and A03-4 record `crashed` with detail `cleanup_failed`, discard output and stop the kernel.\"],\"observer\":\"The submitting actor inspecting the TrialExecution or NodeExecution and the operator observing whether the kernel stops.\"}},{\"subject\":\"A03 recorded trap with unconfirmed cleanup\",\"kind\":\"contradiction\",\"text\":\"any recorded hit makes the execution `sandbox_violation` under the order of rule 5, even when the code catches it and returns a conforming output: `timeout` and `resource_exhausted` still come first.\",\"question\":\"Does a recorded trap still require `sandbox_violation` when cleanup is unconfirmed, or is `cleanup_unconfirmed` a third exception that requires `crashed` with `cleanup_failed`?\",\"options\":[\"Add `cleanup_unconfirmed` as an exception and record `crashed`/`cleanup_failed`\",\"Record `sandbox_violation` because the hit was recorded\",\"Record the trap outcome but still stop the kernel for cleanup failure\"],\"default_guess\":\"Add `cleanup_unconfirmed` as an explicit exception and record only `crashed` with `cleanup_failed`.\",\"witness\":{\"initial\":\"A function can catch a clock trap and return a conforming result, but cleanup of its environment cannot be confirmed.\",\"events\":[\"The function calls `time.time()`, causing the runner to record a trap hit.\",\"The function catches the raised error and returns a conforming dict.\",\"The parent cannot confirm cleanup.\"],\"outcomes\":[\"Rule 4 records `sandbox_violation`.\",\"A03-3, A03-4, A03-5 and rule 7 record `crashed` with `cleanup_failed`.\"],\"observer\":\"The caller and trace reader see different execution outcomes.\"}},{\"subject\":\"A03 cleanup_unconfirmed condition\",\"kind\":\"undefined refusal condition\",\"text\":\"If that cannot be confirmed the output is discarded, the execution is recorded `crashed` with detail `cleanup_failed`, and the kernel process stops\",\"question\":\"Exactly which observations, errors, retries and verification steps make process reaping or exchange-directory removal `cleanup_unconfirmed`?\",\"options\":[\"Any failed reap or removal system call immediately makes cleanup unconfirmed\",\"Retry and independently verify absence before declaring cleanup unconfirmed\",\"Declare it only when a bounded cleanup deadline expires\",\"Define separate predicates for unreaped processes and an exchange directory that still exists\"],\"default_guess\":\"Use a bounded cleanup procedure, verify that no environment process remains and that the directory no longer exists, and declare `cleanup_unconfirmed` if either fact cannot be established by the deadline.\",\"witness\":{\"initial\":\"The function has ended, but the first attempt to remove its exchange directory returns a transient error.\",\"events\":[\"The parent reaps the sandbox process.\",\"The first directory-removal call fails transiently.\",\"One implementation immediately classifies cleanup as unconfirmed; another retries and successfully verifies the directory is absent.\"],\"outcomes\":[\"The execution becomes `crashed`/`cleanup_failed` and the kernel stops.\",\"The execution keeps its otherwise determined outcome and the kernel continues.\"],\"observer\":\"The caller sees a different outcome, and every user sees whether the kernel remains available.\"}},{\"subject\":\"A03-4 Required tests\",\"kind\":\"missing invariant test obligation\",\"text\":\"A03-4: outcome = crashed(cleanup_failed)  IF cleanup_unconfirmed\\n                 ELSE first_of(timeout, resource_exhausted, sandbox_violation, crashed,\\n                               contract_violation, succeeded)\",\"question\":\"Which Required tests item must show the newly added A03-4 override when `cleanup_unconfirmed` and one or more conditions in `first_of(...)` hold simultaneously?\",\"options\":[\"Extend test 11 with simultaneous timeout, resource, trap and contract-failure cases\",\"Add a separate A03-4 precedence test for cleanup\",\"Declare that test 11 alone proves the override without a simultaneous condition\"],\"default_guess\":\"Add an A03-4 test in which cleanup is unconfirmed together with at least timeout and a recorded trap, and require `crashed`/`cleanup_failed` in every case.\"},{\"subject\":\"A03 cleanup detail representation\",\"kind\":\"representation ambiguity\",\"text\":\"the execution is recorded `crashed` with detail `cleanup_failed`\",\"question\":\"In which model field is `cleanup_failed` recorded for a trial execution and for a run's NodeExecution?\",\"options\":[\"M07 `detail_code` for trials and M23 `failure_detail` for run nodes\",\"Add a closed `detail_code` field to M23 and use it in both record types\",\"Use free-form `failure_detail` in both record types\",\"Record it only on TrialExecution, leaving a run NodeExecution with status `crashed` alone\"],\"default_guess\":\"Use M07 `detail_code` for TrialExecution and add an equivalent closed detail-code field to M23 rather than overloading free-form `failure_detail`.\",\"witness\":{\"initial\":\"The same admitted implementation is executed once by an explicit trial and once as a function node in a run; cleanup is unconfirmed in both executions.\",\"events\":[\"The trial execution is recorded `crashed`.\",\"The run's function attempt is recorded as a NodeExecution with status `crashed`.\",\"A caller reads both records.\"],\"outcomes\":[\"`cleanup_failed` appears in M07 `detail_code` and M23 `failure_detail`.\",\"`cleanup_failed` appears in a common closed detail-code field, requiring M23 to have such a field.\"],\"observer\":\"A trace consumer implementing typed handling of cleanup failures.\"}},{\"subject\":\"A19 clock source\",\"kind\":\"underspecified source\",\"text\":\"Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.\",\"question\":\"What exact clock backend or authority is the one source, what wall-clock semantics does `now` use, and how does it reach generated code through the required `system_clock_backend` IR path?\",\"options\":[\"A declared `system_clock_backend` backed by the host UTC system clock\",\"A clock port injected into every timestamp-writing component\",\"One named authority module wrapping the host wall clock\",\"A configurable environment-dependent clock selected through settings\"],\"default_guess\":\"Declare one `system_clock_backend` that exposes a host UTC wall-clock source, with generated modules importing only the emitted clock-module symbol.\"},{\"subject\":\"A19 timestamp representation\",\"kind\":\"missing representation\",\"text\":\"kernel_timestamp -> clock_module.now\",\"question\":\"What type, timezone, precision and stored serialization represent every kernel timestamp?\",\"options\":[\"Timezone-aware UTC datetime stored as canonical RFC 3339 text\",\"Integer Unix milliseconds\",\"Integer Unix microseconds\",\"A typed instant stored as seconds plus nanoseconds\"],\"default_guess\":\"Use a timezone-aware UTC instant with fixed microsecond precision and one canonical RFC 3339 serialization.\"},{\"subject\":\"A19 clock reading cardinality\",\"kind\":\"missing read-count rule\",\"text\":\"With an injected fixed clock, the same test sequence writes the same timestamps.\",\"question\":\"How many wall-clock readings may one operation take, at which semantic points are they taken, and which timestamp fields must reuse one reading?\",\"options\":[\"Exactly one reading per request and reuse it for every record written by that request\",\"Exactly one reading per store transaction\",\"One reading per timestamped semantic event, reused by all fields for that event\",\"A separate reading for every timestamp field\"],\"default_guess\":\"Take one reading per timestamped semantic event and reuse it for every record and field representing that event; execution start and execution end are two distinct events.\",\"witness\":{\"initial\":\"A function-node attempt has both `started_at` and `ended_at`, and the injected clock returns a different instant on every call.\",\"events\":[\"A request starts the node attempt.\",\"The sandbox execution completes.\",\"The kernel writes its NodeExecution.\"],\"outcomes\":[\"One clock read is reused, so `started_at` and `ended_at` are equal.\",\"Two event readings are used, so `started_at` precedes `ended_at`.\"],\"observer\":\"The owner or agent reading the trace.\"}},{\"subject\":\"A03-4 success outcome\",\"kind\":\"terminology contradiction\",\"text\":\"A03-4: A module using `dataclasses` under `from __future__ import annotations`, and\\n    one reading its own entry in `sys.modules`, load and conclude `passed`.\",\"question\":\"Must this A03-4 test assert the execution outcome `succeeded`, which A03-4 names, or the TrialExecution outcome `passed`, which M07 names after case evaluation?\",\"options\":[\"Change the test to `succeeded` because it tests A03's sandbox outcome\",\"State that the sandbox succeeds and the enclosing TrialExecution is `passed`\",\"Change A03-4's final outcome name from `succeeded` to `passed`\"],\"default_guess\":\"State both layers explicitly: the sandbox execution succeeds and the enclosing trial case concludes `passed`.\",\"witness\":{\"initial\":\"A corpus contains a case without expected outputs, and the implementation uses `dataclasses` with postponed annotations but otherwise returns a conforming dict.\",\"events\":[\"The implementation is executed in admission.\",\"Module loading and `run` succeed.\",\"The kernel records the trial observation.\"],\"outcomes\":[\"A03's execution classifier reports `succeeded`.\",\"M07 records the TrialExecution outcome `passed`.\"],\"observer\":\"A test author deciding which layer and value the A03-4 assertion must inspect.\"}},{\"subject\":\"Carried to later states — trapped entry-point list\",\"kind\":\"standard_violation\",\"text\":\"- Release build: the frozen list of trapped standard-library entry points —\\n  closed: A03 rule 4 lists them, and the release passes them as data (A20).\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The passage must identify the trapped-entry-point policy as one named imported data-provider constant, with that symbol and type visible to generated code, rather than saying only that the release passes it as data.\"}]}",
+ "set_aside": []
+}

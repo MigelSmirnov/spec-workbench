@@ -1,0 +1,97 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 cleanup precedence over timeout and resource exhaustion",
+   "kind": "contradictory_precedence",
+   "text": "Outcomes are closed and checked in this order, the first that holds deciding: wall deadline passed — `timeout`; a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`; a trap of rule 4 raised — `sandbox_violation`; the module failed to load, has no `run`, raised, or the process exited abnormally — `crashed`; the returned dict does not have exactly the output ports, or a value fails its port's schema, or a file output is not `bytes` — `contract_violation`; otherwise the execution succeeded.\n\nA03-4: outcome = crashed(cleanup_failed)  IF cleanup_unconfirmed\n                 ELSE first_of(timeout, resource_exhausted, sandbox_violation, crashed,\n                               contract_violation, succeeded)",
+   "question": "When cleanup is unconfirmed and the wall deadline or a resource limit was also hit, does cleanup force `crashed(cleanup_failed)`, or does rule 5's first matching outcome remain `timeout` or `resource_exhausted`?",
+   "options": [
+    "Cleanup overrides every other outcome and records `crashed(cleanup_failed)`.",
+    "Rule 5 is applied first, so `timeout` or `resource_exhausted` wins.",
+    "Cleanup overrides only outcomes below some specified position in the order."
+   ],
+   "default_guess": "Cleanup overrides every other outcome, following A03-4.",
+   "witness": {
+    "initial": "A function execution is running in its fresh sandbox and its exchange directory has not yet been removed.",
+    "events": [
+     "The function exceeds its wall deadline.",
+     "The parent terminates the environment but cannot confirm cleanup of the exchange directory."
+    ],
+    "outcomes": [
+     "Rule 5 records `timeout` because the wall deadline is the first condition that holds.",
+     "A03-4 records `crashed` with detail `cleanup_failed` because `cleanup_unconfirmed` bypasses `first_of`."
+    ],
+    "observer": "The caller and trace reader see different execution outcomes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03 cleanup precedence over a recorded trap",
+   "kind": "contradictory_precedence",
+   "text": "Each trap, before raising, writes its hit to the runner's channel to the parent, which user code cannot unsend; any recorded hit makes the execution `sandbox_violation` under the order of rule 5, even when the code catches it and returns a conforming output: `timeout` and `resource_exhausted` still come first.\n\nA03-3: trap_raised AND NOT (timeout OR resource_exhausted OR cleanup_unconfirmed)\n         -> outcome = sandbox_violation   (even if output conforms)\n\nA03-5: cleanup_unconfirmed -> outcome = crashed AND detail = cleanup_failed\n                              AND output_discarded AND kernel_process_stops",
+   "question": "When a trap was recorded and cleanup is later unconfirmed, does the execution become `sandbox_violation` as rule 4 says for any recorded hit, or `crashed(cleanup_failed)` as A03-3 and A03-5 say?",
+   "options": [
+    "Cleanup overrides the recorded trap and the outcome is `crashed(cleanup_failed)`.",
+    "The recorded trap wins and the outcome is `sandbox_violation`.",
+    "One outcome is stored for the execution and the other only as subsidiary diagnostic information."
+   ],
+   "default_guess": "Cleanup overrides the trap and the outcome is `crashed(cleanup_failed)`.",
+   "witness": {
+    "initial": "A function catches sandbox trap exceptions and can otherwise return a conforming output.",
+    "events": [
+     "The function calls `time.time()`; the trap records its hit and raises.",
+     "The function catches the error and returns a conforming dict.",
+     "Cleanup of the environment cannot be confirmed."
+    ],
+    "outcomes": [
+     "Rule 4 records `sandbox_violation` because a hit was recorded and neither timeout nor resource exhaustion occurred.",
+     "A03-3 and A03-5 record `crashed` with detail `cleanup_failed`, discard the output and stop the kernel."
+    ],
+    "observer": "The caller and trace reader see different statuses and failure details."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03-4 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "11. A03-5: When removal of the exchange directory cannot be confirmed, the execution is\n    recorded `crashed` with detail `cleanup_failed`, its output is discarded and\n    the kernel process stops.\n    [witness: verification:kernel_a03_unconfirmed_cleanup_stops_kernel]",
+   "question": "Which Required tests item names A03-4 and demonstrates its new `cleanup_unconfirmed` branch, including its precedence when timeout, resource exhaustion or a recorded trap also holds?",
+   "options": [
+    "Add A03-4 to test 11 and make the test exercise cleanup failure both alone and together with competing outcomes.",
+    "Add a separate A03-4 precedence test for cleanup combined with timeout, resource exhaustion and a recorded trap.",
+    "Limit A03-4 so test 11's cleanup-only case is sufficient and specify that competing conditions cannot coexist."
+   ],
+   "default_guess": "Add a separate A03-4 precedence test covering cleanup failure with each competing outcome.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 cleanup failure detail in TrialExecution and NodeExecution",
+   "kind": "undefined_model_mapping",
+   "text": "If that cannot be confirmed the output is discarded, the execution is recorded `crashed` with detail `cleanup_failed`, and the kernel process stops; runs it left `running` are recovered on the next start (A14 rule 5).\n\nA03-5: cleanup_unconfirmed -> outcome = crashed AND detail = cleanup_failed\n                              AND output_discarded AND kernel_process_stops",
+   "question": "Where and in what representation is `cleanup_failed` stored for each execution kind, given that TrialExecution has `detail_code` while NodeExecution has only `failure_detail`?",
+   "options": [
+    "Store `cleanup_failed` in TrialExecution.detail_code and as the exact text of NodeExecution.failure_detail.",
+    "Add the same structured detail-code field to NodeExecution and use it for both execution kinds.",
+    "Treat `detail` as an execution result field that is mapped differently by an explicitly stated rule for trials and runs."
+   ],
+   "default_guess": "Use TrialExecution.detail_code for trials and the exact `cleanup_failed` text in NodeExecution.failure_detail for runs.",
+   "witness": {
+    "initial": "The same admitted implementation is executable both as a trial and as a function node in a run.",
+    "events": [
+     "A trial execution finishes but its cleanup cannot be confirmed.",
+     "After restart, a run executes the implementation and that execution also has unconfirmed cleanup.",
+     "The owner inspects the TrialExecution and the run's NodeExecution."
+    ],
+    "outcomes": [
+     "An implementer maps `detail` to TrialExecution.detail_code but leaves the NodeExecution failure detail absent because NodeExecution has no detail-code field.",
+     "Another implementer stores `cleanup_failed` as TrialExecution.detail_code and as NodeExecution.failure_detail."
+    ],
+    "observer": "The owner reading trial evidence and the run trace sees different diagnostic facts."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 cleanup precedence over timeout and resource exhaustion\",\"kind\":\"contradictory_precedence\",\"text\":\"Outcomes are closed and checked in this order, the first that holds deciding: wall deadline passed — `timeout`; a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`; a trap of rule 4 raised — `sandbox_violation`; the module failed to load, has no `run`, raised, or the process exited abnormally — `crashed`; the returned dict does not have exactly the output ports, or a value fails its port's schema, or a file output is not `bytes` — `contract_violation`; otherwise the execution succeeded.\\n\\nA03-4: outcome = crashed(cleanup_failed)  IF cleanup_unconfirmed\\n                 ELSE first_of(timeout, resource_exhausted, sandbox_violation, crashed,\\n                               contract_violation, succeeded)\",\"question\":\"When cleanup is unconfirmed and the wall deadline or a resource limit was also hit, does cleanup force `crashed(cleanup_failed)`, or does rule 5's first matching outcome remain `timeout` or `resource_exhausted`?\",\"options\":[\"Cleanup overrides every other outcome and records `crashed(cleanup_failed)`.\",\"Rule 5 is applied first, so `timeout` or `resource_exhausted` wins.\",\"Cleanup overrides only outcomes below some specified position in the order.\"],\"default_guess\":\"Cleanup overrides every other outcome, following A03-4.\",\"witness\":{\"initial\":\"A function execution is running in its fresh sandbox and its exchange directory has not yet been removed.\",\"events\":[\"The function exceeds its wall deadline.\",\"The parent terminates the environment but cannot confirm cleanup of the exchange directory.\"],\"outcomes\":[\"Rule 5 records `timeout` because the wall deadline is the first condition that holds.\",\"A03-4 records `crashed` with detail `cleanup_failed` because `cleanup_unconfirmed` bypasses `first_of`.\"],\"observer\":\"The caller and trace reader see different execution outcomes.\"}},{\"subject\":\"A03 cleanup precedence over a recorded trap\",\"kind\":\"contradictory_precedence\",\"text\":\"Each trap, before raising, writes its hit to the runner's channel to the parent, which user code cannot unsend; any recorded hit makes the execution `sandbox_violation` under the order of rule 5, even when the code catches it and returns a conforming output: `timeout` and `resource_exhausted` still come first.\\n\\nA03-3: trap_raised AND NOT (timeout OR resource_exhausted OR cleanup_unconfirmed)\\n         -> outcome = sandbox_violation   (even if output conforms)\\n\\nA03-5: cleanup_unconfirmed -> outcome = crashed AND detail = cleanup_failed\\n                              AND output_discarded AND kernel_process_stops\",\"question\":\"When a trap was recorded and cleanup is later unconfirmed, does the execution become `sandbox_violation` as rule 4 says for any recorded hit, or `crashed(cleanup_failed)` as A03-3 and A03-5 say?\",\"options\":[\"Cleanup overrides the recorded trap and the outcome is `crashed(cleanup_failed)`.\",\"The recorded trap wins and the outcome is `sandbox_violation`.\",\"One outcome is stored for the execution and the other only as subsidiary diagnostic information.\"],\"default_guess\":\"Cleanup overrides the trap and the outcome is `crashed(cleanup_failed)`.\",\"witness\":{\"initial\":\"A function catches sandbox trap exceptions and can otherwise return a conforming output.\",\"events\":[\"The function calls `time.time()`; the trap records its hit and raises.\",\"The function catches the error and returns a conforming dict.\",\"Cleanup of the environment cannot be confirmed.\"],\"outcomes\":[\"Rule 4 records `sandbox_violation` because a hit was recorded and neither timeout nor resource exhaustion occurred.\",\"A03-3 and A03-5 record `crashed` with detail `cleanup_failed`, discard the output and stop the kernel.\"],\"observer\":\"The caller and trace reader see different statuses and failure details.\"}},{\"subject\":\"A03-4 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"11. A03-5: When removal of the exchange directory cannot be confirmed, the execution is\\n    recorded `crashed` with detail `cleanup_failed`, its output is discarded and\\n    the kernel process stops.\\n    [witness: verification:kernel_a03_unconfirmed_cleanup_stops_kernel]\",\"question\":\"Which Required tests item names A03-4 and demonstrates its new `cleanup_unconfirmed` branch, including its precedence when timeout, resource exhaustion or a recorded trap also holds?\",\"options\":[\"Add A03-4 to test 11 and make the test exercise cleanup failure both alone and together with competing outcomes.\",\"Add a separate A03-4 precedence test for cleanup combined with timeout, resource exhaustion and a recorded trap.\",\"Limit A03-4 so test 11's cleanup-only case is sufficient and specify that competing conditions cannot coexist.\"],\"default_guess\":\"Add a separate A03-4 precedence test covering cleanup failure with each competing outcome.\"},{\"subject\":\"A03 cleanup failure detail in TrialExecution and NodeExecution\",\"kind\":\"undefined_model_mapping\",\"text\":\"If that cannot be confirmed the output is discarded, the execution is recorded `crashed` with detail `cleanup_failed`, and the kernel process stops; runs it left `running` are recovered on the next start (A14 rule 5).\\n\\nA03-5: cleanup_unconfirmed -> outcome = crashed AND detail = cleanup_failed\\n                              AND output_discarded AND kernel_process_stops\",\"question\":\"Where and in what representation is `cleanup_failed` stored for each execution kind, given that TrialExecution has `detail_code` while NodeExecution has only `failure_detail`?\",\"options\":[\"Store `cleanup_failed` in TrialExecution.detail_code and as the exact text of NodeExecution.failure_detail.\",\"Add the same structured detail-code field to NodeExecution and use it for both execution kinds.\",\"Treat `detail` as an execution result field that is mapped differently by an explicitly stated rule for trials and runs.\"],\"default_guess\":\"Use TrialExecution.detail_code for trials and the exact `cleanup_failed` text in NodeExecution.failure_detail for runs.\",\"witness\":{\"initial\":\"The same admitted implementation is executable both as a trial and as a function node in a run.\",\"events\":[\"A trial execution finishes but its cleanup cannot be confirmed.\",\"After restart, a run executes the implementation and that execution also has unconfirmed cleanup.\",\"The owner inspects the TrialExecution and the run's NodeExecution.\"],\"outcomes\":[\"An implementer maps `detail` to TrialExecution.detail_code but leaves the NodeExecution failure detail absent because NodeExecution has no detail-code field.\",\"Another implementer stores `cleanup_failed` as TrialExecution.detail_code and as NodeExecution.failure_detail.\"],\"observer\":\"The owner reading trial evidence and the run trace sees different diagnostic facts.\"}}]}",
+ "set_aside": []
+}

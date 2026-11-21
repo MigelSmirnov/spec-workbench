@@ -1,0 +1,113 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 outcome precedence",
+   "kind": "contradiction",
+   "text": "any recorded hit makes the execution `sandbox_violation` under the order of rule 5, even when the code catches it and returns a conforming output: `timeout` and `resource_exhausted` still come first.\n\nOutcomes are closed and checked in this order, the first that holds deciding: wall deadline passed — `timeout`; a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`; a trap of rule 4 raised — `sandbox_violation`; the module failed to load, has no `run`, raised, or the process exited abnormally — `crashed`; the returned dict does not have exactly the output ports, or a value fails its port's schema, or a file output is not `bytes` — `contract_violation`; otherwise the execution succeeded.\n\nIf that cannot be confirmed the output is discarded, the execution is recorded `crashed` with detail `cleanup_failed`, and the kernel process stops; runs it left `running` are recovered on the next start (A14 rule 5).",
+   "question": "When cleanup is unconfirmed together with a timeout, resource limit, recorded trap, abnormal exit or contract violation, does cleanup override the rule 5 order and force `crashed` with `cleanup_failed`, or does the first rule 5 outcome remain?",
+   "options": [
+    "Cleanup always overrides and the outcome is `crashed` with detail `cleanup_failed`.",
+    "Rule 5 keeps precedence, so timeout, resource exhaustion or a trap can remain the outcome despite unconfirmed cleanup.",
+    "Cleanup overrides only some earlier outcomes; the exact precedence table must be stated."
+   ],
+   "default_guess": "Follow A03-4 and A03-5: cleanup always overrides and records `crashed` with detail `cleanup_failed`.",
+   "witness": {
+    "initial": "A sandbox execution has no timeout or resource exhaustion; its code calls `time.time()`, catches the trap and returns a conforming output, but afterward removal of the exchange directory cannot be confirmed.",
+    "events": [
+     "An agent tries the implementation.",
+     "The sandbox records the clock trap before raising it.",
+     "The function catches the error and returns conforming output.",
+     "The parent cannot confirm cleanup of the execution environment."
+    ],
+    "outcomes": [
+     "Rule 4 together with rule 5 records `sandbox_violation` because a trap was recorded and no timeout or resource exhaustion occurred.",
+     "Rule 7 and A03-4/A03-5 record `crashed` with detail `cleanup_failed`, discard the output and stop the kernel process."
+    ],
+    "observer": "The requesting agent and every later reader of the TrialExecution or NodeExecution."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 value-size precedence",
+   "kind": "contradiction",
+   "text": "A value a node produces — a function output or a service output — above `stored_value_bytes_max` is checked only after the execution or the response has otherwise succeeded, so A03's `resource_exhausted` for `output_bytes` wins when both hold;",
+   "question": "If a function output exceeds both `output_bytes` and `stored_value_bytes_max` and cleanup is also unconfirmed, does A15 still require `resource_exhausted`, or does A03-4 require `crashed` with `cleanup_failed`?",
+   "options": [
+    "`crashed` with `cleanup_failed` overrides the size outcomes.",
+    "`resource_exhausted` wins whenever both size bounds are exceeded, even if cleanup is unconfirmed.",
+    "A15's statement is conditional on confirmed cleanup and must say so."
+   ],
+   "default_guess": "Treat A15's precedence statement as conditional on confirmed cleanup; otherwise A03-4 makes the outcome `crashed` with `cleanup_failed`.",
+   "witness": {
+    "initial": "A function returns a value exceeding both `output_bytes` and `stored_value_bytes_max`, and cleanup of its environment cannot be confirmed.",
+    "events": [
+     "An agent runs the function.",
+     "The function returns the oversized value.",
+     "The parent detects the output ceiling violation.",
+     "The parent cannot confirm cleanup."
+    ],
+    "outcomes": [
+     "A15's unqualified statement records `resource_exhausted` because the `output_bytes` failure wins when both size conditions hold.",
+     "A03-4 records `crashed` with detail `cleanup_failed` because `cleanup_unconfirmed` overrides `resource_exhausted`."
+    ],
+    "observer": "The caller and trace readers, who see different execution statuses and details."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03-3 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "1. A03-3: Code that calls `time.time()`, `os.urandom`, opens a socket or reads `/etc`\n   concludes `sandbox_violation`, also when it swallows the error and returns a\n   conforming output.\n   [witness: verification:kernel_a03_trap_hit_is_sandbox_violation]",
+   "question": "Which Required tests item must show the newly added `cleanup_unconfirmed` exclusion in A03-3 by combining a recorded trap with unconfirmed cleanup and asserting the required outcome?",
+   "options": [
+    "Extend this test to include a trap plus unconfirmed cleanup and require `crashed` with `cleanup_failed`, not `sandbox_violation`.",
+    "Add a separate A03-3 Required tests item for the combined trap-and-cleanup case.",
+    "Remove `cleanup_unconfirmed` from A03-3 if trap precedence is intended instead."
+   ],
+   "default_guess": "Add a separate A03-3 test in which the trap is recorded and cleanup is unconfirmed, asserting `crashed` with `cleanup_failed`.",
+   "witness": {
+    "initial": "Two implementations conform to all currently described A03-3 Required tests; neither existing A03-3 test combines a trap with unconfirmed cleanup.",
+    "events": [
+     "Implementation one applies the new cleanup override after a recorded trap.",
+     "Implementation two applies the prose rule that any recorded trap is a sandbox violation unless timeout or resource exhaustion occurred.",
+     "The existing A03-3 Required tests are run."
+    ],
+    "outcomes": [
+     "Implementation one passes the existing tests and would record `crashed(cleanup_failed)` in the combined case.",
+     "Implementation two passes the existing tests and would record `sandbox_violation` in the combined case."
+    ],
+    "observer": "A later test author or caller encountering the untested combined condition."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03-4 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "11. A03-5: When removal of the exchange directory cannot be confirmed, the execution is\n    recorded `crashed` with detail `cleanup_failed`, its output is discarded and\n    the kernel process stops.\n    [witness: verification:kernel_a03_unconfirmed_cleanup_stops_kernel]",
+   "question": "Which Required tests line naming A03-4 must demonstrate that its new `cleanup_unconfirmed` branch overrides every otherwise applicable member of `first_of(timeout, resource_exhausted, sandbox_violation, crashed, contract_violation, succeeded)`?",
+   "options": [
+    "Make item 11 name A03-4 as well and cover cleanup combined with every otherwise applicable outcome.",
+    "Add a separate A03-4 precedence test covering the combined cases.",
+    "State that only an otherwise successful execution needs to test the cleanup branch, leaving interactions with other outcomes unspecified."
+   ],
+   "default_guess": "Add an A03-4 precedence test covering unconfirmed cleanup together with timeout, resource exhaustion, a trap, an ordinary crash, a contract violation and an otherwise successful result.",
+   "witness": {
+    "initial": "Two implementations both record `crashed` with `cleanup_failed` when cleanup alone is unconfirmed and therefore both pass item 11.",
+    "events": [
+     "Implementation one checks `cleanup_unconfirmed` before all ordinary outcomes.",
+     "Implementation two applies the rule 5 outcome first and applies `cleanup_failed` only when no earlier failure exists.",
+     "A trapped execution is run and its cleanup cannot be confirmed."
+    ],
+    "outcomes": [
+     "Implementation one records `crashed` with detail `cleanup_failed`.",
+     "Implementation two records `sandbox_violation`; both implementations still pass the existing cleanup-only Required test."
+    ],
+    "observer": "The caller, trace readers and the later agent binding Required tests to checks."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 outcome precedence\",\"kind\":\"contradiction\",\"text\":\"any recorded hit makes the execution `sandbox_violation` under the order of rule 5, even when the code catches it and returns a conforming output: `timeout` and `resource_exhausted` still come first.\\n\\nOutcomes are closed and checked in this order, the first that holds deciding: wall deadline passed — `timeout`; a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`; a trap of rule 4 raised — `sandbox_violation`; the module failed to load, has no `run`, raised, or the process exited abnormally — `crashed`; the returned dict does not have exactly the output ports, or a value fails its port's schema, or a file output is not `bytes` — `contract_violation`; otherwise the execution succeeded.\\n\\nIf that cannot be confirmed the output is discarded, the execution is recorded `crashed` with detail `cleanup_failed`, and the kernel process stops; runs it left `running` are recovered on the next start (A14 rule 5).\",\"question\":\"When cleanup is unconfirmed together with a timeout, resource limit, recorded trap, abnormal exit or contract violation, does cleanup override the rule 5 order and force `crashed` with `cleanup_failed`, or does the first rule 5 outcome remain?\",\"options\":[\"Cleanup always overrides and the outcome is `crashed` with detail `cleanup_failed`.\",\"Rule 5 keeps precedence, so timeout, resource exhaustion or a trap can remain the outcome despite unconfirmed cleanup.\",\"Cleanup overrides only some earlier outcomes; the exact precedence table must be stated.\"],\"default_guess\":\"Follow A03-4 and A03-5: cleanup always overrides and records `crashed` with detail `cleanup_failed`.\",\"witness\":{\"initial\":\"A sandbox execution has no timeout or resource exhaustion; its code calls `time.time()`, catches the trap and returns a conforming output, but afterward removal of the exchange directory cannot be confirmed.\",\"events\":[\"An agent tries the implementation.\",\"The sandbox records the clock trap before raising it.\",\"The function catches the error and returns conforming output.\",\"The parent cannot confirm cleanup of the execution environment.\"],\"outcomes\":[\"Rule 4 together with rule 5 records `sandbox_violation` because a trap was recorded and no timeout or resource exhaustion occurred.\",\"Rule 7 and A03-4/A03-5 record `crashed` with detail `cleanup_failed`, discard the output and stop the kernel process.\"],\"observer\":\"The requesting agent and every later reader of the TrialExecution or NodeExecution.\"}},{\"subject\":\"A15 value-size precedence\",\"kind\":\"contradiction\",\"text\":\"A value a node produces — a function output or a service output — above `stored_value_bytes_max` is checked only after the execution or the response has otherwise succeeded, so A03's `resource_exhausted` for `output_bytes` wins when both hold;\",\"question\":\"If a function output exceeds both `output_bytes` and `stored_value_bytes_max` and cleanup is also unconfirmed, does A15 still require `resource_exhausted`, or does A03-4 require `crashed` with `cleanup_failed`?\",\"options\":[\"`crashed` with `cleanup_failed` overrides the size outcomes.\",\"`resource_exhausted` wins whenever both size bounds are exceeded, even if cleanup is unconfirmed.\",\"A15's statement is conditional on confirmed cleanup and must say so.\"],\"default_guess\":\"Treat A15's precedence statement as conditional on confirmed cleanup; otherwise A03-4 makes the outcome `crashed` with `cleanup_failed`.\",\"witness\":{\"initial\":\"A function returns a value exceeding both `output_bytes` and `stored_value_bytes_max`, and cleanup of its environment cannot be confirmed.\",\"events\":[\"An agent runs the function.\",\"The function returns the oversized value.\",\"The parent detects the output ceiling violation.\",\"The parent cannot confirm cleanup.\"],\"outcomes\":[\"A15's unqualified statement records `resource_exhausted` because the `output_bytes` failure wins when both size conditions hold.\",\"A03-4 records `crashed` with detail `cleanup_failed` because `cleanup_unconfirmed` overrides `resource_exhausted`.\"],\"observer\":\"The caller and trace readers, who see different execution statuses and details.\"}},{\"subject\":\"A03-3 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"1. A03-3: Code that calls `time.time()`, `os.urandom`, opens a socket or reads `/etc`\\n   concludes `sandbox_violation`, also when it swallows the error and returns a\\n   conforming output.\\n   [witness: verification:kernel_a03_trap_hit_is_sandbox_violation]\",\"question\":\"Which Required tests item must show the newly added `cleanup_unconfirmed` exclusion in A03-3 by combining a recorded trap with unconfirmed cleanup and asserting the required outcome?\",\"options\":[\"Extend this test to include a trap plus unconfirmed cleanup and require `crashed` with `cleanup_failed`, not `sandbox_violation`.\",\"Add a separate A03-3 Required tests item for the combined trap-and-cleanup case.\",\"Remove `cleanup_unconfirmed` from A03-3 if trap precedence is intended instead.\"],\"default_guess\":\"Add a separate A03-3 test in which the trap is recorded and cleanup is unconfirmed, asserting `crashed` with `cleanup_failed`.\",\"witness\":{\"initial\":\"Two implementations conform to all currently described A03-3 Required tests; neither existing A03-3 test combines a trap with unconfirmed cleanup.\",\"events\":[\"Implementation one applies the new cleanup override after a recorded trap.\",\"Implementation two applies the prose rule that any recorded trap is a sandbox violation unless timeout or resource exhaustion occurred.\",\"The existing A03-3 Required tests are run.\"],\"outcomes\":[\"Implementation one passes the existing tests and would record `crashed(cleanup_failed)` in the combined case.\",\"Implementation two passes the existing tests and would record `sandbox_violation` in the combined case.\"],\"observer\":\"A later test author or caller encountering the untested combined condition.\"}},{\"subject\":\"A03-4 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"11. A03-5: When removal of the exchange directory cannot be confirmed, the execution is\\n    recorded `crashed` with detail `cleanup_failed`, its output is discarded and\\n    the kernel process stops.\\n    [witness: verification:kernel_a03_unconfirmed_cleanup_stops_kernel]\",\"question\":\"Which Required tests line naming A03-4 must demonstrate that its new `cleanup_unconfirmed` branch overrides every otherwise applicable member of `first_of(timeout, resource_exhausted, sandbox_violation, crashed, contract_violation, succeeded)`?\",\"options\":[\"Make item 11 name A03-4 as well and cover cleanup combined with every otherwise applicable outcome.\",\"Add a separate A03-4 precedence test covering the combined cases.\",\"State that only an otherwise successful execution needs to test the cleanup branch, leaving interactions with other outcomes unspecified.\"],\"default_guess\":\"Add an A03-4 precedence test covering unconfirmed cleanup together with timeout, resource exhaustion, a trap, an ordinary crash, a contract violation and an otherwise successful result.\",\"witness\":{\"initial\":\"Two implementations both record `crashed` with `cleanup_failed` when cleanup alone is unconfirmed and therefore both pass item 11.\",\"events\":[\"Implementation one checks `cleanup_unconfirmed` before all ordinary outcomes.\",\"Implementation two applies the rule 5 outcome first and applies `cleanup_failed` only when no earlier failure exists.\",\"A trapped execution is run and its cleanup cannot be confirmed.\"],\"outcomes\":[\"Implementation one records `crashed` with detail `cleanup_failed`.\",\"Implementation two records `sandbox_violation`; both implementations still pass the existing cleanup-only Required test.\"],\"observer\":\"The caller, trace readers and the later agent binding Required tests to checks.\"}}]}",
+ "set_aside": []
+}
