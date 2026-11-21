@@ -408,7 +408,11 @@ Stage 9 completion criteria.
 
 Apply the repair discipline in `AGENTS.md` only after identifying the defect's
 owner. Preserve the exact diagnostic, tool and artifact revisions and a minimal
-reproducer; compare the accepted obligation with its structured data/contracts,
+reproducer. Retrieve the current instructions with
+`python tools/design_questions.py guide --factory-return --json`; this needs
+no remembered case or phase. Blocked Factory admission reports also carry
+these instructions as `author_guidance`. Then
+compare the accepted obligation with its structured data/contracts,
 notes and generated implementation. Repair the earliest layer that actually
 loses the obligation, or Factory when its tool misreads valid input. A failure
 in generation does not by itself reopen State 2. The signal-name and dictionary

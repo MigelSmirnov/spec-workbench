@@ -141,7 +141,7 @@ def _result(
         "read": _read(sequence, phase),
         "ask": [str(item) for item in _phase(sequence, phase).get("questions") or []],
         "question_round": _question_round(sequence, phase, project_text),
-        "author_guidance": question_rounds.author_guidance() if _phase(sequence, phase).get("question_scope") else [],
+        "author_guidance": question_rounds.author_guidance(_phase(sequence, phase).get("semantic_state")) if _phase(sequence, phase).get("question_scope") else [],
         "layer": transition.layer(sequence, phase),
         "carried_dispositions": _carried_dispositions(project, _phase(sequence, phase)),
         "summary": summary or {},

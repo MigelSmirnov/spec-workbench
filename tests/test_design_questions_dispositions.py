@@ -34,7 +34,7 @@ Rule two drops a thing.
 WITNESS = {"initial": "a thing exists", "events": ["the owner reads it"], "outcomes": ["a", "b"],
            "observer": "the owner", "basis": ["Rule one keeps every thing."]}
 VERDICTS = {
-    "gap": {"kind": "consequential_gap", "quotes": ["Rule one keeps every thing."], "divergence": "a or b; the owner notices",
+    "gap": {"kind": "consequential_gap", "decision_owner": 2, "quotes": ["Rule one keeps every thing."], "requirement": "Rule one keeps every thing.", "divergence": "a or b; the owner notices",
             "witness": WITNESS},
     "contradiction": {"kind": "contradiction", "quotes": ["Rule one keeps every thing.", "Rule two drops a thing."], "witness": WITNESS},
     "hypothesis": {"kind": "contradiction", "quotes": ["Rule one keeps every thing.", "Rule two drops a thing."]},   # no witness
@@ -119,7 +119,7 @@ def test_author_guidance_reaches_round_json_saved_result_and_status_until_dispos
     assert design_questions.main(["ask", str(case), "--state", "2", "--json"]) == 1
     summary = json.loads(capsys.readouterr().out)
     kept = json.loads((service.rounds_dir(case, 2) / summary["round"] / "summary.json").read_text())
-    assert summary["author_guidance"] == kept["author_guidance"] == service.author_guidance()
+    assert summary["author_guidance"] == kept["author_guidance"] == service.author_guidance(2)
     assert "owning state" in design_questions._human_round(summary)
     assert "--what" in design_questions._human_round(summary)
     assert design_questions.main(["status", str(case), "--state", "2"]) == 1
@@ -136,7 +136,7 @@ def test_guidance_on_a_contradiction_offers_no_disposition_bypass(tmp_path):
     case = make_case(tmp_path)
     summary = ask(case, "contradiction")
     assert summary["awaiting_disposition"] == [] and summary["contradiction_units"]
-    assert summary["author_guidance"] == service.status(case, 2)["author_guidance"] == service.author_guidance()
+    assert summary["author_guidance"] == service.status(case, 2)["author_guidance"] == service.author_guidance(2)
     assert "contradiction and standard_violation take no disposition" in " ".join(summary["author_guidance"])
     with pytest.raises(service.QuestionRoundError, match="contradiction"):
         service.dispose(case, 2, "T1", "accepted", reason="accept anyway")
@@ -149,7 +149,7 @@ def test_authoring_next_carries_guidance_through_the_human_transport(tmp_path, c
     sequence = design_authoring_next.load_sequence()
     payload = design_authoring_next._result(sequence=sequence, project=case, project_text="demo",
                                             phase="state2_rules_decisions", blocked=True, reason="r")
-    assert payload["author_guidance"] == service.author_guidance()
+    assert payload["author_guidance"] == service.author_guidance(2)
     authoring._print_next({"project": {"title": "Demo", "id": "demo", "canonical_ref": "origin/agent/demo",
                                        "path": "examples/demo"}, "authoring": payload})
     assert "Author:  Before editing" in capsys.readouterr().out
@@ -174,7 +174,8 @@ def test_a_state_closes_when_every_gap_and_hypothesis_of_its_round_has_a_disposi
     assert status["closed"] is True
     assert status["closed_by"]["single_round"] == len(service.state_texts(case, 2).units)
     assert status["unit_status"]["A01"]["carried"] == [
-        {"topic": ids["gap"], "to": 6, "what": "the contracts fix which of a or b is returned"}]
+        {"topic": ids["gap"], "to": 6, "what": "the contracts fix which of a or b is returned",
+         "keeps": ["Rule one keeps every thing."]}]
     # no further round on the same text
     with pytest.raises(service.QuestionRoundError, match="nothing to ask"):
         ask(case)
@@ -192,11 +193,11 @@ def test_a_gap_without_a_disposition_keeps_its_unit_open_and_is_not_asked_again(
         ask(case, "gap")
 
 
-def test_a_deferred_gap_needs_a_disposition_too(tmp_path):
+def test_an_unquoted_state2_gap_stays_unresolved_instead_of_automatically_deferring(tmp_path):
     case = make_case(tmp_path)
     summary = ask(case, "deferred")
     judgement = summary["topics"][0]["judgement"]
-    assert judgement["blocking"] is False and judgement["deferred_to"]
+    assert judgement["kind"] == "hypothesis" and "deferred_to" not in judgement
     assert summary["awaiting_disposition"] == ["T1"]
 
 
@@ -366,7 +367,8 @@ def test_a_topic_naming_no_unit_keeps_no_unit_open_and_is_disposed_as_itself(tmp
     status = service.status(case, 2)
     assert status["closed"] is True
     assert status["unit_status"][units.NO_UNIT]["carried"] == [
-        {"topic": "T1", "to": "generation", "what": "which of a or b the code returns"}]
+        {"topic": "T1", "to": "generation", "what": "which of a or b the code returns",
+         "keeps": ["Rule one keeps every thing."]}]
     assert [row["topic"] for row in service.carried_items(case, to="generation")] == ["T1"]
 
 
@@ -508,7 +510,7 @@ def test_a_unit_with_one_old_clear_round_closes_by_the_new_rule_with_its_disposi
 
 # ---------------------------------------------------------------- the review prompt
 
-def test_the_review_instruction_says_what_the_layer_decides_changes_and_receives_and_shrank():
+def test_the_review_instruction_says_what_the_layer_decides_changes_and_receives():
     context = {"state": 2, "owns": ["where time comes from"], "carries": [], "results": [], "gate_findings": []}
     instruction = (prompts.ask_instruction(2, documents.question_scope(2))
                    + prompts.unit_scope(2, [("A01", "Accepted decision A01")], {"A01": "-a\n+b\n"})
@@ -520,5 +522,6 @@ def test_the_review_instruction_says_what_the_layer_decides_changes_and_receives
     for gone in ("Do not propose designs", "which existing check an item is bound to",
                  "ask the protocol's five questions", "its closed units are not audited again"):
         assert gone not in instruction
-    # main at 5bcdd685 built the same instruction in 4,224 characters; now 2,436
-    assert len(instruction) < 2600
+    # The owner-first boundary is now included; keep the instruction bounded.
+    assert "Keep the broad task" in instruction and "Do not demand its implementation" in instruction
+    assert len(instruction) < 4500

@@ -11,8 +11,9 @@ differently. List every point where continuing from it forces a guess.
 
 The points of State {state}:
 {scope}
-A contradiction between two texts is always one; what the texts carry on
-purpose to a later state is not.
+A contradiction requires incompatible obligations in the same admissible
+history: obeying one breaks the other. Different levels of detail alone are
+not a contradiction; what the texts carry on purpose to a later state is not.
 
 A point may carry a witness: one history the texts allow — a state the product
 can be in, the events in order with who acts, the two outcomes careful
@@ -116,12 +117,14 @@ contradiction."""
 
 def module_ask_instruction(state: int, scope: str, diff: str | None = None,
                            obligations: list[str] | None = None,
-                           sections: list[dict[str, str]] | None = None) -> str:
+                           sections: list[dict[str, str]] | None = None,
+                           carried: list[dict] | None = None) -> str:
     instruction = MODULE_ASK.format(state=state, scope=scope)
     if sections:
         instruction += MODULE_NOTES_ONLY + standard_ask(sections, "the notes of the prompt")
     if obligations:
         instruction += MODULE_OBLIGATIONS.format(listing="\n".join(obligations))
+    instruction += carried_context(carried)
     return instruction + (MODULE_CHANGE.format(diff=diff) if diff is not None else "")
 
 
@@ -145,12 +148,15 @@ is still a contradiction.
 {listing}"""
 
 
-def module_layer_judge(obligations: list[str], notes: list[str] | None = None) -> str | None:
+def module_layer_judge(obligations: list[str], notes: list[str] | None = None,
+                       carried: list[dict] | None = None) -> str | None:
     blocks = []
     if obligations:
         blocks.append(MODULE_LAYER_JUDGE.format(listing="\n".join(obligations)))
     if notes is not None:
         blocks.append(MODULE_NOTES_JUDGE.format(listing="\n".join(notes) or "(none)"))
+    if carried:
+        blocks.append(carried_context(carried))
     return "\n\n".join(blocks) or None
 
 
@@ -179,7 +185,31 @@ Output strict JSON, nothing else:
 
 
 def ask_instruction(state: int, scope: str, sections: list[dict[str, str]] | None = None) -> str:
-    return ASK.format(state=state, scope=scope) + standard_ask(sections, "the texts of State {state}".format(state=state))
+    from . import documents
+
+    boundary = REVIEW_BOUNDARY if documents.gap_needs_requirement(state) else ""
+    return ASK.format(state=state, scope=scope) + boundary + standard_ask(sections, "the texts of State {state}".format(state=state))
+
+
+REVIEW_BOUNDARY = """
+
+Keep the broad task: notice where the generator will have to choose. Separate
+a missing decision of this stage from a choice owned by a later layer. For a
+later-layer question, name its owner in "decision_owner" (a later state number,
+generation, factory_checks or deploy), give the options, their consequences
+in "consequences", and the already accepted requirement every option must
+preserve, quoted verbatim in "requirement". Do not demand its implementation
+here. If no such requirement exists, say so; do not invent one.
+State 2 owns required results, refusals, invariants and constraints, including
+precedence when it expresses a required guarantee. It does not own every
+order of steps or the mechanism by which a test or deployment proves a rule.
+State 5 owns obligations between modules: what callers supply and may rely
+on in results, failures and effects. Exact contract forms, serialization and
+hidden procedures belong to later layers unless they express an already
+required boundary guarantee. Technical vocabulary alone decides no owner.
+If a product choice is missing, report its question, options and consequences
+for the owner instead of presuming that both outcomes are permitted.
+"""
 
 
 # The rules a state is written by are SPEC_STANDARD's own sections, the ones
@@ -225,24 +255,74 @@ texts raised about State {state}. A review always finds one more question; your
 task is to tell the questions that must change the texts before the next state
 from those that need not.{scope_rule} Judge each topic by exactly one kind:
 
-- "contradiction": two passages of the texts say different things. Quote both,
-  verbatim.{contradiction_extra}{standard_kind}
-- "consequential_gap": the texts leave a choice open, and two careful
-  implementers would build different behaviour that the owner, an agent, a
-  caller or an external service would notice. Name the two behaviours and who
-  notices in "divergence". Quote, verbatim, every passage of the texts that
+- "contradiction": two obligations are incompatible in the same admissible
+  history: obeying one breaks the other. Mere difference in detail is not
+  enough. Quote both verbatim and explain the incompatibility in "why".
+  {contradiction_extra}{standard_kind}
+{gap_kind} Quote, verbatim, every passage of the texts that
   leaves the choice open or bears on it. {unquoted_gap}{witness_rule}
 - "answered": the texts already answer the question. Quote the passage that
   answers it, verbatim.
-{later_state}- "indifferent": any answer is acceptable, because no caller, owner or service
-  acts differently on the difference. Say why in "why".{preexisting}{answered_later}{judged_before}
+{later_state}{indifferent_kind}{preexisting}{answered_later}{judged_before}
 
 Quotes are checked mechanically against the texts: copy them character for
 character, without ellipsis, at least a full clause. A quote not found in the
-texts counts against your judgement, so never paraphrase. {unsure_rule}{state_files}
+texts counts against your judgement, so never paraphrase. {unsure_rule}{requirement_order}{state_files}
 
 Output strict JSON, nothing else:
-{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"{witness_schema}{standard_schema}}}]}}"""
+{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"{requirement_schema}{witness_schema}{standard_schema}}}]}}"""
+
+GAP_NOTICED = """- "consequential_gap": the texts leave a choice open, and two careful
+  implementers would build different behaviour that the owner, an agent, a
+  caller or an external service would notice. Name the two behaviours and who
+  notices in "divergence"."""
+
+INDIFFERENT_NOTICED = """- "indifferent": any answer is acceptable, because no caller, owner or service
+  acts differently on the difference. Say why in "why"."""
+
+GAP_REQUIREMENT = """- "consequential_gap": the choice belongs to State {state}, and an outcome
+  breaks an accepted requirement. Quote that promise, invariant, constraint
+  or boundary obligation verbatim in "requirement". In "divergence", explain
+  which outcome violates it; an observer of a difference is not sufficient."""
+
+INDIFFERENT_REQUIREMENT = """- "indifferent": both outcomes are permitted by the accepted obligations.
+  Explain why in "why"; absence of a requirement quote alone does not establish
+  freedom or resolve a missing product decision."""
+
+REQUIREMENT_ORDER = """
+
+For a topic that is not a contradiction or a standard violation, judge in
+this strict order:
+1. Establish the decision owner from the phase's purpose, question_scope and
+   layer obligations. Record it in "decision_owner". Importance does not make
+   a question belong to the current stage. Use the semantic obligation, not
+   a blacklist of words: authorization or refusal precedence may be a required
+   result even though it names an order.
+2. If it belongs to State {state}, establish whether its outcomes must be
+   distinguished: consequential_gap needs the quoted requirement and an
+   explanation of which outcome breaks it. If both outcomes are allowed,
+   indifferent. Do not require all implementation choices to be settled here.
+3. If a necessary choice belongs later, use later_state, with its receiving
+   state number or generation/factory_checks/deploy in "later_state". Preserve
+   the options, consequences and any accepted guarantee in "requirement";
+   without a guarantee explain why the later layer still needs to decide it.
+4. If the product decision itself is absent, use hypothesis with
+   "owner_question": the question to the product owner, options and
+   consequences. Do not invent a requirement, classify the silence as
+   indifferent, or automatically defer it to contracts or deployment.
+A gap without its requirement remains an unresolved hypothesis for the author,
+not evidence of permitted freedom. A missing or invalid quote never proves a
+topic harmless. Contradictions and standard violations keep their own rules.
+"""
+
+REQUIREMENT_SCHEMA = ',"decision_owner":"<owning state number or named layer>","requirement":"<accepted obligation, verbatim, or empty>","options":["<option>","<alternative>"],"consequences":["<consequence>"],"owner_question":"<missing product decision to ask the owner, or empty>"'
+
+LATER_REQUIREMENT = """- "later_state": the decision belongs to a later layer. Set "later_state"
+  to a later state number (through 8), or generation, factory_checks, deploy.
+  Preserve the options and consequences, and quote in "requirement" any
+  already accepted obligation all implementations must preserve. Never use
+  this to carry away an undecided guarantee of the current stage.
+"""
 
 UNSURE_BLOCKING = """When unsure between a
 blocking kind (contradiction, consequential_gap) and another, choose the
@@ -379,7 +459,7 @@ LAST_DESIGN_STATE = 7
 def judge_instruction(state: int, reopened: bool, later_files: list[str] | None = None,
                       precedents: bool = False, scope: str | None = None, witness: bool = False,
                       state_files: list[str] | None = None, closed_files: list[str] | None = None,
-                      standard: bool = False) -> str:
+                      standard: bool = False, requirement: bool = False) -> str:
     """`standard`: the round gives the state's SPEC_STANDARD sections, and a
     passage that breaks one of their rules is judged a standard_violation.
     `witness`: a blocking kind needs a witness and a contradiction its
@@ -388,7 +468,8 @@ def judge_instruction(state: int, reopened: bool, later_files: list[str] | None 
     passages inline (judge_context.py); `closed_files`, the texts a reopened
     state was closed with, likewise."""
     answered_later = ANSWERED_LATER.format(files=", ".join(later_files), state=state) if later_files else ""
-    unquoted_gap = DEFERRED_GAP if state <= LAST_DEFERRING_STATE else ANSWERING_STATE_GAP.format(state=state)
+    unquoted_gap = ("Do not infer a later-layer mechanism from silence alone." if requirement else
+                    DEFERRED_GAP if state <= LAST_DEFERRING_STATE else ANSWERING_STATE_GAP.format(state=state))
     scope_rule = SCOPE_RULE.format(state=state, scope=scope) if scope else ""
     bases = CONTRADICTION_BASES.format(before=state - 1) if witness and state > 0 else ""
     preexisting = ""
@@ -400,10 +481,14 @@ def judge_instruction(state: int, reopened: bool, later_files: list[str] | None 
              if state_files else "")
     return JUDGE.format(state=state, preexisting=preexisting, answered_later=answered_later,
                         judged_before=JUDGED_BEFORE if precedents else "", unquoted_gap=unquoted_gap,
-                        later_state=LATER_STATE.format(state=state) if state < LAST_DESIGN_STATE else "",
+                        later_state=(LATER_REQUIREMENT if requirement else LATER_STATE.format(state=state)) if state < LAST_DESIGN_STATE else "",
                         scope_rule=scope_rule, contradiction_extra=bases,
                         witness_rule=WITNESS_RULE if witness else "",
                         unsure_rule=UNSURE_WITNESS if witness else UNSURE_BLOCKING,
+                        gap_kind=GAP_REQUIREMENT.format(state=state) if requirement else GAP_NOTICED,
+                        indifferent_kind=INDIFFERENT_REQUIREMENT if requirement else INDIFFERENT_NOTICED,
+                        requirement_order=REQUIREMENT_ORDER.format(state=state) if requirement else "",
+                        requirement_schema=REQUIREMENT_SCHEMA if requirement else "",
                         witness_schema=WITNESS_SCHEMA if witness else "", state_files=files,
                         standard_kind=STANDARD_KIND if standard else "",
                         standard_schema=STANDARD_SCHEMA if standard else "")
@@ -468,12 +553,29 @@ handoff."""
 MAX_LAYER_LINES = 40
 
 
+def carried_lines(carried: list[dict] | None) -> list[str]:
+    return [f"- [carried by the author] {c['what']} (State {c['state']} {c['round']} {c['topic']})"
+            + (f" Every option must preserve: {'; '.join(c['keeps'])}." if c.get("keeps") else "")
+            + (f" Options: {c['options']}." if c.get("options") else "")
+            + (f" Consequences: {c['consequences']}." if c.get("consequences") else "")
+            for c in carried or []]
+
+
+def carried_context(carried: list[dict] | None) -> str:
+    if not carried:
+        return ""
+    return ("\n\nAuthor-carried choices received at this stage (context, not Factory prompt text). "
+            "For each, establish whether this module participates; shared words do not establish that. "
+            "Preserve the accepted guarantee when resolving the choice. These instructions do not add "
+            "new kinds of State 7 findings; judge the module's prompt under its existing scope.\n"
+            + "\n".join(carried_lines(carried)))
+
+
 def _layer_lines(context: dict) -> tuple[str, str, str, str]:
     owns = "\n".join(f"- {item}" for item in context.get("owns") or []) or "- (nothing declared)"
     received = "\n".join([f"- [{r['outcome']}] {r['obligation']} (from {r['from']}, check {r['check']})"
                           for r in context.get("results") or []]
-                         + [f"- [carried by the author] {c['what']} (State {c['state']} {c['round']} {c['topic']})"
-                            for c in context.get("carried_in") or []]) or "- (nothing)"
+                         + carried_lines(context.get("carried_in"))) or "- (nothing)"
     carries = "\n".join(f"- {c.get('obligation', '')} -> {c.get('to')} (confirmed by {c.get('check')})"
                         for c in context.get("carries") or []) or "- (nothing)"
     lines = [f"- [{r['outcome']}] {f.get('code')}: {f.get('message', '')}"

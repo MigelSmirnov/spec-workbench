@@ -255,7 +255,9 @@ missing implementation guidance → repair notes.
 Update global_spec.json only after all affected earlier states agree.
 Working rules
 When Factory returns a failure, establish the defect's owner before applying
-the earliest-state repair rule. Keep the exact diagnostic, Workbench and Factory
+the earliest-state repair rule. Retrieve the current author instructions with
+`python tools/design_questions.py guide --factory-return --json` (add `--state`
+only after establishing the owning state). Keep the exact diagnostic, Workbench and Factory
 revisions, exported artifact revision/hash, and a minimal reproducer. Compare the
 requirement, structured data/contract, notes and generated code: identify the first
 place that fails to express or preserve the accepted obligation. A generation or

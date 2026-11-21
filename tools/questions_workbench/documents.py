@@ -69,6 +69,12 @@ def question_states(sequence_path: Path = SEQUENCE) -> list[int]:
                    if p.get("question_scope") and p.get("semantic_state") is not None})
 
 
+def gap_needs_requirement(state: int, sequence_path: Path = SEQUENCE) -> bool:
+    """Whether this phase judges choices by their owner and required result."""
+    return any(p.get("semantic_state") == state and p.get("gap_needs_requirement")
+               for p in json.loads(sequence_path.read_text(encoding="utf-8"))["phases"])
+
+
 def factory_root() -> Path | None:
     """The Factory checkout SPEC_WORKBENCH_FACTORY_ROOT names, or the sibling
     `code_factory`; None when there is none."""

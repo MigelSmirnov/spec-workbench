@@ -11,6 +11,7 @@
          | --accepted <reason>) [--round round-07] [--unit A5]
     python tools/design_questions.py carried examples/<case> [--to factory_checks]
     python tools/design_questions.py rejudge examples/<case> --state 7 --unit <module>
+    python tools/design_questions.py guide --factory-return --json
 
 `ask` runs one round (several independent reviews, grouped into topics; topics
 raised by two reviews are judged) and keeps it under
@@ -82,6 +83,13 @@ def _human_round(summary: dict) -> str:
             verdict = f" <{j['kind']}{'' if j['verified'] else ', UNVERIFIED: ' + j.get('failure', '')}{', BLOCKING' if j['blocking'] else ''}{', DEFERRED to ' + j['deferred_to'] if j.get('deferred_to') else ''}>"
         where = f" ({', '.join(topic['units'])})" if topic.get("units") else ""
         lines.append(f"  [{len(topic['runs'])}/{summary['reviews']}] {topic['topic']}{where}{verdict}")
+        j = topic.get("judgement") or {}
+        if j.get("owner_question"):
+            lines.append(f"    ask owner: {j['owner_question']}; options={j.get('options', [])}; consequences={j.get('consequences', [])}")
+        elif j.get("requirement_missing"):
+            lines.append(f"    unresolved: {j['requirement_missing']}")
+        if j.get("requirement"):
+            lines.append(f"    preserve: {j['requirement']}; options={j.get('options', [])}; consequences={j.get('consequences', [])}")
     lines.extend(f"  author: {line}" for line in summary.get("author_guidance") or [])
     return "\n".join(lines)
 
@@ -94,6 +102,10 @@ def _provider(args: argparse.Namespace):
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
+    guide = sub.add_parser("guide", help="instructions for processing a round or a return from Factory")
+    guide.add_argument("--state", type=int, choices=range(9))
+    guide.add_argument("--factory-return", action="store_true")
+    guide.add_argument("--json", action="store_true")
     ask = sub.add_parser("ask")
     ask.add_argument("case", type=Path)
     ask.add_argument("--state", type=int, required=True)
@@ -133,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
                       help="the receiving layer: a later state number, generation, factory_checks or deploy")
     kind.add_argument("--accepted", metavar="REASON", help="the author's reason to accept it as it stands")
     dispose.add_argument("--what", help="with --carried: what the receiving layer must decide")
+    dispose.add_argument("--keeps", action="append", help="with --carried: accepted guarantee quoted verbatim; repeatable; the judge's verified requirement is preserved automatically")
     dispose.add_argument("--json", action="store_true")
     again = sub.add_parser("rejudge", help="check one unchanged module's kept verdicts under the current judge rules")
     again.add_argument("case", type=Path)
@@ -151,6 +164,12 @@ def main(argv: list[str] | None = None) -> int:
     stat.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "guide":
+            guidance = service.author_guidance(args.state, factory_return=args.factory_return)
+            print(json.dumps({"state": args.state, "factory_return": args.factory_return,
+                              "author_guidance": guidance}, ensure_ascii=False, indent=2) if args.json
+                  else "\n".join(guidance))
+            return 0
         if args.command == "judge-checks":
             import design_decision_witness
             import witness_judgement
@@ -170,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
             disposition = "fixed" if args.fixed else "carried" if args.carried else "accepted"
             entry = service.dispose(args.case, args.state, args.topic, disposition, round_name=args.round_name,
                                     unit=args.unit, ref=args.fixed, to=args.carried, what=args.what,
-                                    reason=args.accepted)
+                                    reason=args.accepted, keeps=args.keeps)
             print(json.dumps(entry, ensure_ascii=False, indent=2) if args.json
                   else f"{entry['topic']}: {entry['disposition']}"
                        + (f" for {entry['unit']}" if entry.get("unit") else ""))
@@ -202,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"State {row['state']} {row['round']} {row['topic']}"
                           + (f" ({row['unit']})" if row.get("unit") else "")
                           + f" -> {row['to']}: {row['what']}")
+                    if row.get("keeps"):
+                        print(f"  preserve: {'; '.join(row['keeps'])}")
             return 0
         if args.command == "ask" and args.probe is not None:
             summary = service.probe_round(args.case, args.state, _provider(args), args.probe, args.runs,
@@ -255,6 +276,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  reopened since {result['closed_at']}: ask --since {result['closed_at']}")
             for line in result.get("author_guidance") or []:
                 print(f"  author: {line}")
+            for row in result.get("owner_questions") or []:
+                print(f"  ask owner ({row['round']} {row['topic']}): {row['question']}; "
+                      f"options={row['options']}; consequences={row['consequences']}")
         return 0 if result["ready"] else 1
     except (service.QuestionRoundError, ValueError, RuntimeError) as exc:
         print(f"design_questions: error: {exc}", file=sys.stderr)

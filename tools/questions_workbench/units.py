@@ -245,6 +245,12 @@ def topic_need(topic: dict[str, Any], summary: dict[str, Any]) -> str | None:
         return CONTRADICTION
     if not judgement.get("verified"):
         return DISPOSITION if judgement.get("blocking", True) else None
+    if judgement.get("needs_disposition"):
+        return DISPOSITION
+    if judgement.get("requirement") and (kind == "later_state" or
+                                        (kind == "judged_before" and
+                                         (judgement.get("precedent") or {}).get("kind") == "later_state")):
+        return DISPOSITION  # carry the choice together with the accepted guarantee
     if kind in SETTLED_KINDS:
         return None
     return DISPOSITION  # consequential_gap (quoted, deferred or recorded), hypothesis
@@ -344,7 +350,8 @@ def _close_on_topics(state: dict[str, Any], summary: dict[str, Any], key: str, c
         if entry is None:
             state["awaiting"].append(topic_id)
         elif entry.get("disposition") == "carried":
-            state["carried"].append({"topic": topic_id, "to": entry.get("to"), "what": entry.get("what")})
+            state["carried"].append({"topic": topic_id, "to": entry.get("to"), "what": entry.get("what"),
+                                      **{k: entry[k] for k in ("keeps", "options", "consequences") if entry.get(k)}})
     if state["unverified"]:
         state["needs_round"] = UNVERIFIED
     state["closed"] = not (state["contradictions"] or state["unverified"] or state["awaiting"])

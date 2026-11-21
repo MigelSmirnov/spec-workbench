@@ -633,7 +633,8 @@ def main() -> int:
         blockers = [
             item["summary"] for item in admission["checks"] if item["status"] == "BLOCK"
         ]
-        raise SystemExit("Factory admission blocked: " + "; ".join(blockers))
+        raise SystemExit("Factory admission blocked: " + "; ".join(blockers)
+                         + "".join("\nauthor: " + line for line in admission.get("author_guidance") or []))
 
     # the standard and its quick index, as FA004 compares them
     for name in ("SPEC_STANDARD.md", "SPEC_STANDARD_INDEX.md"):
