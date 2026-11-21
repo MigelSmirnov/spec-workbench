@@ -132,11 +132,11 @@ A replaced file is scanned again by its new content (A3).
 
 ### Required tests
 
-- INV-03: a source holding GPS, EXIF, XMP and a comment is stored with none of them, and the stored image a client downloads has no EXIF.
+- INV-03: a source holding GPS, EXIF, XMP and a comment is stored with none of them.
   [witness: verification:deliverer_a02_a_placed_photo_keeps_no_metadata_and_the_source_is_untouched]
 - INV-04: camera times with an offset, without one, implausible or absent give the expected UTC value.
   [witness: verification:deliverer_a02_the_photo_date_is_naive_utc]
-- INV-05: every publication body returned by a placement has `client_visible` exactly false, and a published delivery is absent from the client's overview until the owner shows it.
+- INV-05: every publication body returned by a placement has `client_visible` exactly false.
   [witness: verification:deliverer_a02_publication_body_is_not_client_visible]
 
 ### Consequence

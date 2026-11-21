@@ -56,10 +56,6 @@ def test_deliverer_a02_a_placed_photo_keeps_no_metadata_and_the_source_is_untouc
     assert b"Exif" not in stored and b"secret-comment" not in stored and b"secret-xmp" not in stored
     with Image.open(BytesIO(stored)) as image:
         assert not image.getexif() and "comment" not in image.info
-    photo_id = r.portal.publish(PROJECT, result["publication"])
-    downloaded = r.portal.download_staff_photo(PROJECT, photo_id)
-    with Image.open(BytesIO(downloaded)) as image:
-        assert not image.getexif()
 
 
 
@@ -83,8 +79,4 @@ def test_deliverer_a02_publication_body_is_not_client_visible(semantic_runtime):
     r = semantic_runtime
     publication = place(r, seed(r))["placement"]["publication"]
     assert publication["client_visible"] is False
-    photo_id = r.portal.publish(PROJECT, publication)
-    assert photo_id not in r.portal.client_photo_ids(PROJECT)
-    r.portal.set_visible(PROJECT, photo_id, True)
-    assert photo_id in r.portal.client_photo_ids(PROJECT)
 

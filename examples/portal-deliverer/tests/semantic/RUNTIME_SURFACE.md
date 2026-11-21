@@ -16,11 +16,14 @@ Missing bindings must fail, never skip or return canned domain answers.
 not a successful generated-service execution. `factory_execution_verified` stays
 false. Factory admission is checked separately and may still block export.
 
-A9 needs the actual deployment route (not built yet according to A9).
-A11 needs the actual calling flow and a Portal test instance. Those tests specify
-the future integration contract; they provide no evidence that these integrations
-exist today. Neither test may be bound to an implementation of the rule in the
-fixture. The Portal visibility check similarly needs a real Portal instance.
+A9 needs the actual deployment route of this service (the Factory's, as the Client
+Portal's). A11 binds the calling flow, which is its owner (30_trace.json:
+external_owner): its test is that flow's integration contract, run against the
+actual calling flow and a Portal test instance, and it is no evidence that they
+exist; the deliverer's own verification does not block on it. Neither test may be
+bound to an implementation of the rule in the fixture. The A2 witnesses judge the
+stored image and the publication body only: how the Portal serves or shows a
+published photo is the Portal's own decision and verification (owner, 2026-11-21).
 
 ## Fixture contract
 
