@@ -1,0 +1,283 @@
+{
+ "open_points": [
+  {
+   "subject": "A19 timestamp representation",
+   "kind": "missing_representation",
+   "text": "Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.",
+   "question": "In what exact type, timezone, precision and serialization are kernel timestamps returned by `clock_module.now` and stored?",
+   "options": [
+    "timezone-aware UTC datetime with fixed microsecond precision",
+    "integer Unix milliseconds",
+    "RFC 3339 UTC string"
+   ],
+   "default_guess": "Use a timezone-aware UTC datetime, persisted and serialized as an RFC 3339 string with fixed microsecond precision.",
+   "witness": {
+    "initial": "The clock represents an instant containing sub-millisecond precision.",
+    "events": [
+     "The kernel records `started_at`.",
+     "An owner inspects the run after storage and reload."
+    ],
+    "outcomes": [
+     "The stored and returned timestamp preserves microseconds as an RFC 3339 UTC value.",
+     "The timestamp is rounded to integer Unix milliseconds."
+    ],
+    "observer": "The owner comparing trace timestamps"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19 clock readings per operation",
+   "kind": "missing_read_count",
+   "text": "Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.",
+   "question": "For each operation or store change that writes several fresh timestamps, is `now` read once and reused or read separately for every field or event?",
+   "options": [
+    "one reading per surface operation",
+    "one reading per store call",
+    "one reading per timestamp field"
+   ],
+   "default_guess": "Read once per atomic store call and reuse that instant for every timestamp written by that call.",
+   "witness": {
+    "initial": "An injected clock returns a different instant on every call.",
+    "events": [
+     "The owner approves an effect.",
+     "The request records the approval decision, EffectAttempt and concluding NodeExecution in its successive changes."
+    ],
+    "outcomes": [
+     "All timestamps produced by the operation share one instant.",
+     "Each timestamp reflects a separate clock reading and differs from the others."
+    ],
+    "observer": "The owner reading the approval, attempt and trace"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03-3 and A03-4 outcome precedence",
+   "kind": "contradictory_invariants",
+   "text": "A03-3: trap_raised -> outcome = sandbox_violation   (even if output conforms)\n\nA03-4: outcome = first_of(timeout, resource_exhausted, sandbox_violation, crashed,\n                          contract_violation, succeeded)",
+   "question": "When a trap is recorded and a higher-priority timeout or resource limit also holds, is the outcome unconditionally `sandbox_violation` or the earlier outcome in A03-4?",
+   "options": [
+    "A03-4 precedence wins",
+    "A03-3 is unconditional"
+   ],
+   "default_guess": "Apply A03-4: timeout and resource exhaustion win over a recorded trap.",
+   "witness": {
+    "initial": "A function execution has a short wall deadline.",
+    "events": [
+     "Agent code calls `time.time()` and catches the trap.",
+     "The same code then busy-loops past the deadline."
+    ],
+    "outcomes": [
+     "The execution is `timeout` under A03-4 and Required test 8.",
+     "The execution is `sandbox_violation` under the unconditional A03-3 implication."
+    ],
+    "observer": "The agent or owner reading the TrialExecution or NodeExecution"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03 resource-limit classification",
+   "kind": "undefined_refusal_condition",
+   "text": "a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`;",
+   "question": "What observable event proves that each limit was hit, particularly when `setrlimit` causes an exception or abnormal exit that user code can catch, rather than a parent-visible limit notification?",
+   "options": [
+    "any limit-related exception or signal counts even when caught",
+    "only a parent-observed signal or measured excess counts",
+    "the runner reports limit hits over its protected channel"
+   ],
+   "default_guess": "Have the runner report recognizable limit exceptions over a protected channel and combine that with parent-observed signals and byte counters.",
+   "witness": {
+    "initial": "A function is close to its address-space limit and otherwise returns a conforming value.",
+    "events": [
+     "The function allocates until Python raises `MemoryError`.",
+     "The function catches `MemoryError` and returns its conforming output."
+    ],
+    "outcomes": [
+     "The allocation counts as a memory limit hit and the execution is `resource_exhausted`.",
+     "Because the parent observes a normal return and no defined hit signal, the execution succeeds."
+    ],
+    "observer": "The caller reading the execution outcome"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 waiting-element execution",
+   "kind": "contradiction",
+   "text": "A waiting element can still execute, so M19's \"no node can run any more\" holds only when nothing waits",
+   "question": "Can an element recorded as waiting execute before the human action or resume condition that ends its wait?",
+   "options": [
+    "the waiting element cannot execute; only other ready elements can",
+    "the waiting element remains eligible to execute"
+   ],
+   "default_guess": "Treat this as referring to other elements: the waiting element itself cannot execute until its wait is resolved.",
+   "witness": {
+    "initial": "A non-read operation element has an `unknown` EffectAttempt and waits with reason `outcome_unknown`.",
+    "events": [
+     "An unrelated request advances the run without the owner resolving the attempt."
+    ],
+    "outcomes": [
+     "The element remains waiting and no request is sent, as A11 requires.",
+     "The element is eligible to execute because A13 says a waiting element can still execute."
+    ],
+    "observer": "The service and the owner reading the trace"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M17 ProofResult versus A05-6",
+   "kind": "contradiction",
+   "text": "Substitution: proving the same version gives the same result.",
+   "question": "Is a ProofResult a stable function of the flow-version content alone, or may the same `flow_version_id` change from failed to proven when a referenced binding changes status?",
+   "options": [
+    "the result may change with referenced binding status",
+    "the same flow version always has the same result"
+   ],
+   "default_guess": "Allow recomputation to change the result when a named binding moves from `proposed` to `accepted`, as A05-6 requires.",
+   "witness": {
+    "initial": "A flow version names a binding whose status is `proposed`.",
+    "events": [
+     "An agent proves the flow and receives a phase-1 failure.",
+     "The owner accepts the binding.",
+     "The agent proves the same `flow_version_id` again."
+    ],
+    "outcomes": [
+     "The second proof is proven under A05-6.",
+     "The second proof returns the same failure under M17's identity evidence."
+    ],
+    "observer": "The agent proving or activating the flow"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M19 run success versus A13-7",
+   "kind": "contradiction",
+   "text": "The run is `failed` when no node can run any more and some node failed, `succeeded` when every node and output concluded successfully.",
+   "question": "Does a run succeed when a guarded branch and its flow output conclude `skipped_by_guard`, or does the requirement that every output conclude successfully make it fail?",
+   "options": [
+    "`skipped_by_guard` counts toward successful run completion",
+    "every output must produce a value"
+   ],
+   "default_guess": "Count `skipped_by_guard` as successful completion for the run, following A13-7 and A05 rule 4.",
+   "witness": {
+    "initial": "A proven flow has a guarded save branch leading to one flow output.",
+    "events": [
+     "The source succeeds with a guard value that disables the save edge.",
+     "The save node and output become `skipped_by_guard`."
+    ],
+    "outcomes": [
+     "The run is `succeeded` under A13-7.",
+     "The run is not `succeeded` because the output did not conclude successfully under M19."
+    ],
+    "observer": "The caller of the run and later trace readers"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A05-1 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "A05-1: proof = first_failure(phases[1..9], fixed_order) OR proven",
+   "question": "Which Required test must show the complete phase order and the listed condition precedence, rather than only phase 3 preceding phase 7 and ordering among failing edges?",
+   "options": [
+    "one parameterized test covers every adjacent phase and condition boundary",
+    "separate tests cover every phase and each multi-condition check"
+   ],
+   "default_guess": "Add parameterized witnesses for every adjacent phase pair and every ordered condition within a phase.",
+   "unit": "?"
+  },
+  {
+   "subject": "A05-2 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "A05-2: order(identifiers) = unicode_codepoint_order",
+   "question": "Which Required test distinguishes Unicode code-point ordering from UTF-16 code-unit, locale-aware or normalization-based ordering for non-ASCII and supplementary characters?",
+   "options": [
+    "add identifiers containing supplementary and combining characters",
+    "declare the existing ASCII `Z`/`a` case sufficient"
+   ],
+   "default_guess": "Add a witness using supplementary-plane and canonically equivalent but differently encoded identifiers.",
+   "unit": "?"
+  },
+  {
+   "subject": "A05-3 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "A05-3: can_both_deliver(e1, e2) <-> NOT (guarded_same_port(e1, e2) AND e1.guard_value != e2.guard_value)",
+   "question": "Which Required test shows that different guard values are not exclusive when the guards belong to different source nodes or guard ports?",
+   "options": [
+    "add a different-source or different-guard-port pair that phase 6 refuses",
+    "infer this case from the formula without a test"
+   ],
+   "default_guess": "Add a test with different guard ports and different values whose edges are refused as able to deliver together.",
+   "unit": "?"
+  },
+  {
+   "subject": "A05-5 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "A05-5: highest_effect_class = max(operation_nodes.effect_class) OR read",
+   "question": "Which Required test proves the maximum over the complete five-member effect-class order rather than only the `read` and `draft-write` cases?",
+   "options": [
+    "test all effect classes and mixed orderings",
+    "keep only the read/draft-write example"
+   ],
+   "default_guess": "Add a table-driven test covering every class and mixtures whose maximum is each non-lowest class.",
+   "unit": "?"
+  },
+  {
+   "subject": "A05-6 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "A05-6: proof(version) recomputed_on_demand   (not persisted)",
+   "question": "Which Required test must demonstrate the `not persisted` part by asserting that proving and reproving create no ProofResult record?",
+   "options": [
+    "inspect the store before and after proof calls",
+    "treat changed binding status alone as proof of non-persistence"
+   ],
+   "default_guess": "Add a store-level assertion that proof calls write no ProofResult or equivalent cached record.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03-1 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "A03-1: function_executed -> inside(fresh_bubblewrap_environment)\n       environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}",
+   "question": "Which Required test shows the fresh user, PID, IPC and UTS namespaces, visibility of only the execution's own processes, and the exact presence of code and inputs?",
+   "options": [
+    "extend the external inspection test to every namespace and environment member",
+    "test only mounts, network and exchange-directory freshness"
+   ],
+   "default_guess": "Extend Required test 10 to inspect all namespaces, process visibility and every declared environment member.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03-4 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "A03-4: outcome = first_of(timeout, resource_exhausted, sandbox_violation, crashed,\n                          contract_violation, succeeded)",
+   "question": "Which Required tests establish every relevant precedence boundary, including `resource_exhausted` over a trap or crash and `crashed` over a simultaneous contract defect?",
+   "options": [
+    "construct a witness for every adjacent precedence pair",
+    "test only the timeout/trap/contract combination"
+   ],
+   "default_guess": "Add targeted witnesses for every simultaneously observable adjacent outcome pair.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13-1 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "A13-1: advance(run) -> inside(start | approve | resolve | resume | startup_recovery)",
+   "question": "Which Required test explicitly demonstrates advancement inside `start` and `startup_recovery`, in addition to approval, resolution and resume?",
+   "options": [
+    "extend the boundary test to all five contexts",
+    "rely on unrelated start and recovery tests that do not name A13-1"
+   ],
+   "default_guess": "Add or retag tests that observe advancement inside start and startup recovery and no advancement outside the five contexts.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 trapped-entry-point policy delivery",
+   "kind": "standard_violation",
+   "text": "- Release build: the frozen list of trapped standard-library entry points —\n  closed: A03 rule 4 lists them, and the release passes them as data (A20).",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name the frozen trap list as a specific imported data-provider constant, with one owning module and symbol, rather than merely saying that the release passes it as data.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A19 timestamp representation\",\"kind\":\"missing_representation\",\"text\":\"Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.\",\"question\":\"In what exact type, timezone, precision and serialization are kernel timestamps returned by `clock_module.now` and stored?\",\"options\":[\"timezone-aware UTC datetime with fixed microsecond precision\",\"integer Unix milliseconds\",\"RFC 3339 UTC string\"],\"default_guess\":\"Use a timezone-aware UTC datetime, persisted and serialized as an RFC 3339 string with fixed microsecond precision.\",\"witness\":{\"initial\":\"The clock represents an instant containing sub-millisecond precision.\",\"events\":[\"The kernel records `started_at`.\",\"An owner inspects the run after storage and reload.\"],\"outcomes\":[\"The stored and returned timestamp preserves microseconds as an RFC 3339 UTC value.\",\"The timestamp is rounded to integer Unix milliseconds.\"],\"observer\":\"The owner comparing trace timestamps\"}},{\"subject\":\"A19 clock readings per operation\",\"kind\":\"missing_read_count\",\"text\":\"Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.\",\"question\":\"For each operation or store change that writes several fresh timestamps, is `now` read once and reused or read separately for every field or event?\",\"options\":[\"one reading per surface operation\",\"one reading per store call\",\"one reading per timestamp field\"],\"default_guess\":\"Read once per atomic store call and reuse that instant for every timestamp written by that call.\",\"witness\":{\"initial\":\"An injected clock returns a different instant on every call.\",\"events\":[\"The owner approves an effect.\",\"The request records the approval decision, EffectAttempt and concluding NodeExecution in its successive changes.\"],\"outcomes\":[\"All timestamps produced by the operation share one instant.\",\"Each timestamp reflects a separate clock reading and differs from the others.\"],\"observer\":\"The owner reading the approval, attempt and trace\"}},{\"subject\":\"A03-3 and A03-4 outcome precedence\",\"kind\":\"contradictory_invariants\",\"text\":\"A03-3: trap_raised -> outcome = sandbox_violation   (even if output conforms)\\n\\nA03-4: outcome = first_of(timeout, resource_exhausted, sandbox_violation, crashed,\\n                          contract_violation, succeeded)\",\"question\":\"When a trap is recorded and a higher-priority timeout or resource limit also holds, is the outcome unconditionally `sandbox_violation` or the earlier outcome in A03-4?\",\"options\":[\"A03-4 precedence wins\",\"A03-3 is unconditional\"],\"default_guess\":\"Apply A03-4: timeout and resource exhaustion win over a recorded trap.\",\"witness\":{\"initial\":\"A function execution has a short wall deadline.\",\"events\":[\"Agent code calls `time.time()` and catches the trap.\",\"The same code then busy-loops past the deadline.\"],\"outcomes\":[\"The execution is `timeout` under A03-4 and Required test 8.\",\"The execution is `sandbox_violation` under the unconditional A03-3 implication.\"],\"observer\":\"The agent or owner reading the TrialExecution or NodeExecution\"}},{\"subject\":\"A03 resource-limit classification\",\"kind\":\"undefined_refusal_condition\",\"text\":\"a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`;\",\"question\":\"What observable event proves that each limit was hit, particularly when `setrlimit` causes an exception or abnormal exit that user code can catch, rather than a parent-visible limit notification?\",\"options\":[\"any limit-related exception or signal counts even when caught\",\"only a parent-observed signal or measured excess counts\",\"the runner reports limit hits over its protected channel\"],\"default_guess\":\"Have the runner report recognizable limit exceptions over a protected channel and combine that with parent-observed signals and byte counters.\",\"witness\":{\"initial\":\"A function is close to its address-space limit and otherwise returns a conforming value.\",\"events\":[\"The function allocates until Python raises `MemoryError`.\",\"The function catches `MemoryError` and returns its conforming output.\"],\"outcomes\":[\"The allocation counts as a memory limit hit and the execution is `resource_exhausted`.\",\"Because the parent observes a normal return and no defined hit signal, the execution succeeds.\"],\"observer\":\"The caller reading the execution outcome\"}},{\"subject\":\"A13 waiting-element execution\",\"kind\":\"contradiction\",\"text\":\"A waiting element can still execute, so M19's \\\"no node can run any more\\\" holds only when nothing waits\",\"question\":\"Can an element recorded as waiting execute before the human action or resume condition that ends its wait?\",\"options\":[\"the waiting element cannot execute; only other ready elements can\",\"the waiting element remains eligible to execute\"],\"default_guess\":\"Treat this as referring to other elements: the waiting element itself cannot execute until its wait is resolved.\",\"witness\":{\"initial\":\"A non-read operation element has an `unknown` EffectAttempt and waits with reason `outcome_unknown`.\",\"events\":[\"An unrelated request advances the run without the owner resolving the attempt.\"],\"outcomes\":[\"The element remains waiting and no request is sent, as A11 requires.\",\"The element is eligible to execute because A13 says a waiting element can still execute.\"],\"observer\":\"The service and the owner reading the trace\"}},{\"subject\":\"M17 ProofResult versus A05-6\",\"kind\":\"contradiction\",\"text\":\"Substitution: proving the same version gives the same result.\",\"question\":\"Is a ProofResult a stable function of the flow-version content alone, or may the same `flow_version_id` change from failed to proven when a referenced binding changes status?\",\"options\":[\"the result may change with referenced binding status\",\"the same flow version always has the same result\"],\"default_guess\":\"Allow recomputation to change the result when a named binding moves from `proposed` to `accepted`, as A05-6 requires.\",\"witness\":{\"initial\":\"A flow version names a binding whose status is `proposed`.\",\"events\":[\"An agent proves the flow and receives a phase-1 failure.\",\"The owner accepts the binding.\",\"The agent proves the same `flow_version_id` again.\"],\"outcomes\":[\"The second proof is proven under A05-6.\",\"The second proof returns the same failure under M17's identity evidence.\"],\"observer\":\"The agent proving or activating the flow\"}},{\"subject\":\"M19 run success versus A13-7\",\"kind\":\"contradiction\",\"text\":\"The run is `failed` when no node can run any more and some node failed, `succeeded` when every node and output concluded successfully.\",\"question\":\"Does a run succeed when a guarded branch and its flow output conclude `skipped_by_guard`, or does the requirement that every output conclude successfully make it fail?\",\"options\":[\"`skipped_by_guard` counts toward successful run completion\",\"every output must produce a value\"],\"default_guess\":\"Count `skipped_by_guard` as successful completion for the run, following A13-7 and A05 rule 4.\",\"witness\":{\"initial\":\"A proven flow has a guarded save branch leading to one flow output.\",\"events\":[\"The source succeeds with a guard value that disables the save edge.\",\"The save node and output become `skipped_by_guard`.\"],\"outcomes\":[\"The run is `succeeded` under A13-7.\",\"The run is not `succeeded` because the output did not conclude successfully under M19.\"],\"observer\":\"The caller of the run and later trace readers\"}},{\"subject\":\"A05-1 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"A05-1: proof = first_failure(phases[1..9], fixed_order) OR proven\",\"question\":\"Which Required test must show the complete phase order and the listed condition precedence, rather than only phase 3 preceding phase 7 and ordering among failing edges?\",\"options\":[\"one parameterized test covers every adjacent phase and condition boundary\",\"separate tests cover every phase and each multi-condition check\"],\"default_guess\":\"Add parameterized witnesses for every adjacent phase pair and every ordered condition within a phase.\"},{\"subject\":\"A05-2 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"A05-2: order(identifiers) = unicode_codepoint_order\",\"question\":\"Which Required test distinguishes Unicode code-point ordering from UTF-16 code-unit, locale-aware or normalization-based ordering for non-ASCII and supplementary characters?\",\"options\":[\"add identifiers containing supplementary and combining characters\",\"declare the existing ASCII `Z`/`a` case sufficient\"],\"default_guess\":\"Add a witness using supplementary-plane and canonically equivalent but differently encoded identifiers.\"},{\"subject\":\"A05-3 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"A05-3: can_both_deliver(e1, e2) <-> NOT (guarded_same_port(e1, e2) AND e1.guard_value != e2.guard_value)\",\"question\":\"Which Required test shows that different guard values are not exclusive when the guards belong to different source nodes or guard ports?\",\"options\":[\"add a different-source or different-guard-port pair that phase 6 refuses\",\"infer this case from the formula without a test\"],\"default_guess\":\"Add a test with different guard ports and different values whose edges are refused as able to deliver together.\"},{\"subject\":\"A05-5 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"A05-5: highest_effect_class = max(operation_nodes.effect_class) OR read\",\"question\":\"Which Required test proves the maximum over the complete five-member effect-class order rather than only the `read` and `draft-write` cases?\",\"options\":[\"test all effect classes and mixed orderings\",\"keep only the read/draft-write example\"],\"default_guess\":\"Add a table-driven test covering every class and mixtures whose maximum is each non-lowest class.\"},{\"subject\":\"A05-6 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"A05-6: proof(version) recomputed_on_demand   (not persisted)\",\"question\":\"Which Required test must demonstrate the `not persisted` part by asserting that proving and reproving create no ProofResult record?\",\"options\":[\"inspect the store before and after proof calls\",\"treat changed binding status alone as proof of non-persistence\"],\"default_guess\":\"Add a store-level assertion that proof calls write no ProofResult or equivalent cached record.\"},{\"subject\":\"A03-1 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"A03-1: function_executed -> inside(fresh_bubblewrap_environment)\\n       environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}\",\"question\":\"Which Required test shows the fresh user, PID, IPC and UTS namespaces, visibility of only the execution's own processes, and the exact presence of code and inputs?\",\"options\":[\"extend the external inspection test to every namespace and environment member\",\"test only mounts, network and exchange-directory freshness\"],\"default_guess\":\"Extend Required test 10 to inspect all namespaces, process visibility and every declared environment member.\"},{\"subject\":\"A03-4 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"A03-4: outcome = first_of(timeout, resource_exhausted, sandbox_violation, crashed,\\n                          contract_violation, succeeded)\",\"question\":\"Which Required tests establish every relevant precedence boundary, including `resource_exhausted` over a trap or crash and `crashed` over a simultaneous contract defect?\",\"options\":[\"construct a witness for every adjacent precedence pair\",\"test only the timeout/trap/contract combination\"],\"default_guess\":\"Add targeted witnesses for every simultaneously observable adjacent outcome pair.\"},{\"subject\":\"A13-1 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"A13-1: advance(run) -> inside(start | approve | resolve | resume | startup_recovery)\",\"question\":\"Which Required test explicitly demonstrates advancement inside `start` and `startup_recovery`, in addition to approval, resolution and resume?\",\"options\":[\"extend the boundary test to all five contexts\",\"rely on unrelated start and recovery tests that do not name A13-1\"],\"default_guess\":\"Add or retag tests that observe advancement inside start and startup recovery and no advancement outside the five contexts.\"},{\"subject\":\"A03 trapped-entry-point policy delivery\",\"kind\":\"standard_violation\",\"text\":\"- Release build: the frozen list of trapped standard-library entry points —\\n  closed: A03 rule 4 lists them, and the release passes them as data (A20).\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name the frozen trap list as a specific imported data-provider constant, with one owning module and symbol, rather than merely saying that the release passes it as data.\"}]}",
+ "set_aside": []
+}

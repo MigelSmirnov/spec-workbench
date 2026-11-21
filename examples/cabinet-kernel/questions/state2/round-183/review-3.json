@@ -1,0 +1,374 @@
+{
+ "open_points": [
+  {
+   "subject": "A03",
+   "kind": "contradiction",
+   "text": "A03-3: trap_raised -> outcome = sandbox_violation   (even if output conforms)",
+   "question": "Does a recorded trap always determine `sandbox_violation`, or do `timeout` and `resource_exhausted` override it as rule 5 and Required test 8 say?",
+   "options": [
+    "Every recorded trap yields `sandbox_violation`.",
+    "Apply the ordered outcome precedence, so `timeout` and `resource_exhausted` override a trap."
+   ],
+   "default_guess": "Apply the ordered outcome precedence and qualify A03-3 accordingly.",
+   "witness": {
+    "initial": "A function implementation can call `time.time()`, catch the trap, and then busy-loop past the wall deadline.",
+    "events": [
+     "An agent tries or runs the implementation.",
+     "The sandbox records the clock trap.",
+     "The same execution passes its wall deadline."
+    ],
+    "outcomes": [
+     "A03-3 gives `sandbox_violation`.",
+     "Rule 5 and Required test 8 give `timeout`."
+    ],
+    "observer": "The owner or agent reading the TrialExecution or NodeExecution"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03",
+   "kind": "contradictory_precedence",
+   "text": "If that cannot be confirmed the output is discarded, the execution is recorded `crashed` with detail `cleanup_failed`, and the kernel process stops;",
+   "question": "When cleanup is unconfirmed after another outcome condition already holds, does `cleanup_failed` replace that outcome, or does the first-of outcome order still win?",
+   "options": [
+    "Always record `crashed` with `cleanup_failed`.",
+    "Keep the earlier outcome selected by A03-4, while discarding output and stopping the kernel.",
+    "Make cleanup failure another explicitly ordered outcome condition."
+   ],
+   "default_guess": "Treat unconfirmed cleanup as an overriding `crashed` outcome and state that exception explicitly.",
+   "witness": {
+    "initial": "A sandbox execution passes its wall deadline, and afterward removal of its exchange directory cannot be confirmed.",
+    "events": [
+     "The parent observes the wall deadline.",
+     "The execution is stopped and reaped.",
+     "Exchange-directory cleanup cannot be confirmed."
+    ],
+    "outcomes": [
+     "The ordered outcome rule gives `timeout`.",
+     "Rule 7 gives `crashed` with `cleanup_failed`."
+    ],
+    "observer": "The trace reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03",
+   "kind": "undefined_condition",
+   "text": "A limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`;",
+   "question": "What observable event counts as a limit hit, especially when Python code catches `MemoryError`, `OSError`, or a short-write error and then returns a conforming output?",
+   "options": [
+    "Any failed operation caused by an enforced limit counts, even if user code catches it.",
+    "Only termination or a parent-observed limit event counts.",
+    "A caught exception is ordinary program behavior unless the runner separately records the hit."
+   ],
+   "default_guess": "Have the runner record every enforced-limit denial out of user control and classify the execution `resource_exhausted`.",
+   "witness": {
+    "initial": "A function allocates beyond its address-space limit, catches `MemoryError`, and returns a valid output.",
+    "events": [
+     "The allocation is denied by the configured limit.",
+     "User code catches the exception.",
+     "The function returns a conforming dict before the deadline."
+    ],
+    "outcomes": [
+     "The limit denial makes the outcome `resource_exhausted`.",
+     "The caught exception leaves no parent-observed hit, so the outcome is `succeeded`."
+    ],
+    "observer": "The caller and trace reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03",
+   "kind": "undefined_measurement",
+   "text": "The output count is the sum of the canonical JSON bytes of every `value` output — for an output that has none, the bytes of its JSON text as returned —",
+   "question": "What bytes are counted when a returned Python value has no canonical JSON representation, given that `run` returns Python objects rather than JSON text?",
+   "options": [
+    "Count a runner-defined serialization of the returned object.",
+    "Count no bytes and classify it only as `contract_violation`.",
+    "Reject during serialization and count the bytes consumed or produced before rejection."
+   ],
+   "default_guess": "Use a deterministic bounded serializer that reports bytes consumed before failure, then apply outcome precedence explicitly.",
+   "witness": {
+    "initial": "A function returns the correct output key with a non-JSON-serializable Python object as its value.",
+    "events": [
+     "The runner receives the returned dict.",
+     "It attempts output-size accounting.",
+     "It then validates the output contract."
+    ],
+    "outcomes": [
+     "There is no JSON text to count, so the result is `contract_violation`.",
+     "A runner-specific representation is counted and can make the result `resource_exhausted`."
+    ],
+    "observer": "The caller reading the execution outcome"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03",
+   "kind": "vague_payload",
+   "text": "The kernel keeps at most `failure_detail_bytes_max` of it as `failure_detail`, and only for the exception type and message, never stdout.",
+   "question": "Must `failure_detail` contain the exception type, the message, or both; in what format; and must the kernel keep the longest permitted prefix rather than any amount up to the ceiling?",
+   "options": [
+    "Always store a specified type-and-message format, truncated at a UTF-8 boundary.",
+    "Store only the exception message.",
+    "Store any prefix, including an empty string, because only a maximum is stated."
+   ],
+   "default_guess": "Specify one type-and-message format and retain its longest UTF-8 prefix within the ceiling.",
+   "witness": {
+    "initial": "A function raises `ValueError` with a nonempty message shorter than the ceiling.",
+    "events": [
+     "The sandbox reports the exception type and message.",
+     "The kernel records the failed execution."
+    ],
+    "outcomes": [
+     "The trace contains a fixed rendering such as `ValueError: message`.",
+     "The trace contains only the message, only the type, or no detail."
+    ],
+    "observer": "The owner or agent reading the trace"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A03",
+   "kind": "invariant_test_gap",
+   "text": "A03-1: function_executed -> inside(fresh_bubblewrap_environment)\n       environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}",
+   "question": "What must a Required tests item demonstrate for `code`, `inputs`, and `own_proc`, and what exactly does `own_proc` mean?",
+   "options": [
+    "A private PID namespace and private `/proc`, plus execution-private code and inputs.",
+    "Only a private PID namespace; no `/proc` requirement.",
+    "Only absence of surviving processes, with code and inputs allowed to share read-only storage."
+   ],
+   "default_guess": "Define `own_proc` as a private PID namespace with a correctly mounted private procfs, and add a test that code and input material are execution-private.",
+   "unit": "?"
+  },
+  {
+   "subject": "A05",
+   "kind": "invariant_test_gap",
+   "text": "A05-6: proof(version) recomputed_on_demand   (not persisted)",
+   "question": "What Required tests item proves that a ProofResult is not persisted, rather than merely proving that a cached result is invalidated and recomputed after a binding-status change?",
+   "options": [
+    "Inspect persistence and show that no proof record is written.",
+    "Restart and prove again while showing no stored proof is read.",
+    "Allow a persisted cache if it is invalidated correctly."
+   ],
+   "default_guess": "Add a persistence-boundary test showing that composition and activation leave no ProofResult record and invoke proof computation anew.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "contradiction",
+   "text": "A waiting element can still execute, so M19's \"no node can run any more\" holds only when nothing waits:",
+   "question": "Can the waiting element itself execute without the human action or resume that ends its wait, or does this mean only that other ready elements can execute while it waits?",
+   "options": [
+    "Only other ready elements can execute; the waiting element remains blocked.",
+    "The waiting element may execute again during the same advancement request.",
+    "Some waiting reasons permit execution and others do not."
+   ],
+   "default_guess": "Change this to say that other ready elements can still execute while a waiting element remains blocked.",
+   "witness": {
+    "initial": "A run has one operation element waiting for owner approval and no other node.",
+    "events": [
+     "The start request reaches the operation and records its waiting point.",
+     "The owner takes no further action."
+    ],
+    "outcomes": [
+     "The element remains blocked and the run rests `awaiting_approval`.",
+     "The waiting element can execute during the same request, potentially sending without a decision."
+    ],
+    "observer": "The owner and the target service"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13",
+   "kind": "invariant_test_gap",
+   "text": "A13-1: advance(run) -> inside(start | approve | resolve | resume | startup_recovery)",
+   "question": "Which Required tests item must show that startup recovery is the only advancement outside a surface request and that recovery advancement itself occurs only in the stated startup phase?",
+   "options": [
+    "Extend the A13 test to exercise and delimit startup recovery.",
+    "Treat A14's recovery test as the A13 witness and name A13-1 on that test.",
+    "Remove `startup_recovery` from this invariant."
+   ],
+   "default_guess": "Name A13-1 on a recovery test that proves recovery finishes before the surface opens and no other background advancement occurs.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19",
+   "kind": "missing_representation",
+   "text": "Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.",
+   "question": "In what representation does `clock_module.now` return and the kernel store and expose an instant: timezone-aware UTC datetime, an RFC 3339 string, integer epoch units, or something else, with what precision and rounding?",
+   "options": [
+    "Timezone-aware UTC datetime serialized as canonical RFC 3339.",
+    "Integer Unix epoch milliseconds.",
+    "Integer Unix epoch nanoseconds."
+   ],
+   "default_guess": "Use timezone-aware UTC instants stored and exposed in one canonical RFC 3339 form with fixed precision.",
+   "witness": {
+    "initial": "A clock returns an instant with sub-millisecond precision and a non-UTC offset representation.",
+    "events": [
+     "An agent submits an implementation and the kernel records `submitted_at`.",
+     "The record is inspected through the surface."
+    ],
+    "outcomes": [
+     "The instant is normalized to a canonical UTC string at a specified precision.",
+     "The offset and precision are preserved, or an integer epoch value is returned."
+    ],
+    "observer": "The caller inspecting the record"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19",
+   "kind": "missing_read_count",
+   "text": "Deadlines of one sandbox execution and one HTTP request are measured with the monotonic clock of the same module; a monotonic reading is never stored.",
+   "question": "How many wall-clock and monotonic readings does each operation take, and which records created by one request or store change share an instant?",
+   "options": [
+    "One wall-clock reading per surface operation, shared by all timestamps it writes; separate monotonic start and deadline readings for each external execution.",
+    "One wall-clock reading for every timestamp field and as many monotonic readings as the implementation chooses.",
+    "One wall-clock reading per store call, with execution start and end taking distinct readings."
+   ],
+   "default_guess": "Define one wall-clock reading per atomic semantic event, explicitly state which fields share it, and define monotonic start and completion/deadline readings for each sandbox or HTTP attempt.",
+   "witness": {
+    "initial": "An injected clock advances on every read, and one implementation submission runs admission and creates a verdict and activation.",
+    "events": [
+     "An agent submits the implementation.",
+     "The kernel records submission, trial executions, verdict, and activation.",
+     "The caller inspects their timestamps."
+    ],
+    "outcomes": [
+     "All records created by the request share one instant.",
+     "Each event or store call has a successive instant."
+    ],
+    "observer": "The caller inspecting the records"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A09",
+   "kind": "undefined_refusal_condition",
+   "text": "Plain `http` is allowed only for an instance of class `local_dev` or `disposable_rig`, as the manifest instance's `class` states — an absent or unknown class counts as `production` — or one whose `api_base_url` host is a loopback address;",
+   "question": "How is a loopback host recognized: only by an IP literal in a loopback range, by special hostnames such as `localhost`, or by DNS resolution, and how are multiple or changing DNS answers handled?",
+   "options": [
+    "Only syntactic IPv4 or IPv6 loopback literals qualify.",
+    "`localhost` and loopback literals qualify, without arbitrary DNS lookup.",
+    "Resolve the hostname and allow it when every selected address is loopback."
+   ],
+   "default_guess": "Allow only syntactic IPv4 and IPv6 loopback literals, avoiding DNS-dependent authorization.",
+   "witness": {
+    "initial": "A production-class instance has `api_base_url` `http://localhost:8000`.",
+    "events": [
+     "An agent proposes and the owner accepts the binding.",
+     "A run reaches its operation node."
+    ],
+    "outcomes": [
+     "`localhost` counts as loopback and the request is sent.",
+     "It is not an address literal, so `plain_http_not_allowed` is returned before sending."
+    ],
+    "observer": "The run caller and the local service"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A09",
+   "kind": "undefined_encoding",
+   "text": "Each part has exactly two\n   headers: `Content-Disposition: form-data; name=\"<port>\"`, with\n   `filename=\"<port>\"` added for a file part, and `Content-Type`, the port's\n   media type for a file part and `application/json` for a value part, without\n   parameters; nothing else.",
+   "question": "How are port names containing quotes, backslashes, non-ASCII characters, CR, or LF encoded in multipart header parameters, or at which earlier check are such names refused?",
+   "options": [
+    "Restrict port names to a closed safe ASCII syntax at proposal or contract authoring.",
+    "Escape quoted-string characters and use a specified encoding for non-ASCII names.",
+    "Insert the name verbatim."
+   ],
+   "default_guess": "Restrict port names used in multipart framing to a closed safe ASCII syntax and refuse nonconforming bindings before any request is built.",
+   "witness": {
+    "initial": "A proposed binding has a file input port whose name contains a quote or CRLF.",
+    "events": [
+     "The agent proposes the binding.",
+     "A run later builds a multipart request for it."
+    ],
+    "outcomes": [
+     "The proposal is refused by an explicit port-name rule.",
+     "The name is escaped and sent as one parameter.",
+     "The name is inserted verbatim and changes the multipart headers."
+    ],
+    "observer": "The proposer, trace reader, and receiving service"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A09",
+   "kind": "undefined_wire_representation",
+   "text": "the instance's `required_headers` with their manifest values verbatim",
+   "question": "What byte encoding is used for non-ASCII required-header or credential values, and are values that cannot be represented by the selected HTTP header syntax refused before sending?",
+   "options": [
+    "Require all outbound header values to be visible ASCII and refuse others.",
+    "Encode header values as UTF-8 bytes.",
+    "Use an HTTP library's Latin-1 or implementation-specific conversion."
+   ],
+   "default_guess": "Require a precisely defined ASCII-compatible header-value syntax and refuse other values during manifest or credential validation.",
+   "witness": {
+    "initial": "A required header or resolved credential has the value `café`, which contains no control character.",
+    "events": [
+     "The binding passes the stated validation.",
+     "A run builds and sends the request."
+    ],
+    "outcomes": [
+     "The value is sent as UTF-8 bytes.",
+     "The HTTP client encodes it as Latin-1.",
+     "The pre-send check refuses it as unrepresentable."
+    ],
+    "observer": "The target service and the run caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A09",
+   "kind": "vague_payload",
+   "text": "at most `failure_detail_bytes_max` of it\n   is kept as `failure_detail` — the body decoded as UTF-8, each invalid\n   sequence replaced by U+FFFD, then cut at a character boundary to its\n   longest prefix that fits as UTF-8 bytes —",
+   "question": "Must the longest permitted prefix always be retained, or may the implementation keep less or no failure detail because the passage first says `at most`?",
+   "options": [
+    "Always keep the longest prefix produced by the stated decoding and truncation algorithm.",
+    "Any shorter prefix, including empty, is conforming.",
+    "Keep detail only for selected HTTP statuses."
+   ],
+   "default_guess": "Require the longest permitted prefix whenever the body is eligible for failure detail.",
+   "witness": {
+    "initial": "A 400 response has a short UTF-8 body that contains no credential.",
+    "events": [
+     "The service returns the response.",
+     "The kernel records `operation_refused`."
+    ],
+    "outcomes": [
+     "The entire short body is stored as `failure_detail`.",
+     "The kernel stores an empty or shorter detail while still satisfying `at most`."
+    ],
+    "observer": "The trace reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A09",
+   "kind": "invariant_test_gap",
+   "text": "A09-3: http_without_tls -> instance.class IN {local_dev, disposable_rig} OR loopback(host)",
+   "question": "What Required tests must show for the two allowed branches, since the named A09-3 test only refuses a production non-loopback target?",
+   "options": [
+    "Show successful sends for both an allowed instance class and a loopback host.",
+    "Show one allowed branch and one refused branch.",
+    "Test only refusal; allowed cases remain unverified."
+   ],
+   "default_guess": "Add successful-send cases for a `local_dev` or `disposable_rig` non-loopback target and for a production-class loopback target.",
+   "unit": "?"
+  },
+  {
+   "subject": "02_rules_runs.md:Carried to later states",
+   "kind": "standard_violation",
+   "text": "- Release build: the frozen list of trapped standard-library entry points —\n  closed: A03 rule 4 lists them, and the release passes them as data (A20).",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "Replace the unnamed claim that the release “passes them as data” with one named imported data-provider constant for the frozen trap table, including the symbol name and type used by generated code.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03\",\"kind\":\"contradiction\",\"text\":\"A03-3: trap_raised -> outcome = sandbox_violation   (even if output conforms)\",\"question\":\"Does a recorded trap always determine `sandbox_violation`, or do `timeout` and `resource_exhausted` override it as rule 5 and Required test 8 say?\",\"options\":[\"Every recorded trap yields `sandbox_violation`.\",\"Apply the ordered outcome precedence, so `timeout` and `resource_exhausted` override a trap.\"],\"default_guess\":\"Apply the ordered outcome precedence and qualify A03-3 accordingly.\",\"witness\":{\"initial\":\"A function implementation can call `time.time()`, catch the trap, and then busy-loop past the wall deadline.\",\"events\":[\"An agent tries or runs the implementation.\",\"The sandbox records the clock trap.\",\"The same execution passes its wall deadline.\"],\"outcomes\":[\"A03-3 gives `sandbox_violation`.\",\"Rule 5 and Required test 8 give `timeout`.\"],\"observer\":\"The owner or agent reading the TrialExecution or NodeExecution\"}},{\"subject\":\"A03\",\"kind\":\"contradictory_precedence\",\"text\":\"If that cannot be confirmed the output is discarded, the execution is recorded `crashed` with detail `cleanup_failed`, and the kernel process stops;\",\"question\":\"When cleanup is unconfirmed after another outcome condition already holds, does `cleanup_failed` replace that outcome, or does the first-of outcome order still win?\",\"options\":[\"Always record `crashed` with `cleanup_failed`.\",\"Keep the earlier outcome selected by A03-4, while discarding output and stopping the kernel.\",\"Make cleanup failure another explicitly ordered outcome condition.\"],\"default_guess\":\"Treat unconfirmed cleanup as an overriding `crashed` outcome and state that exception explicitly.\",\"witness\":{\"initial\":\"A sandbox execution passes its wall deadline, and afterward removal of its exchange directory cannot be confirmed.\",\"events\":[\"The parent observes the wall deadline.\",\"The execution is stopped and reaped.\",\"Exchange-directory cleanup cannot be confirmed.\"],\"outcomes\":[\"The ordered outcome rule gives `timeout`.\",\"Rule 7 gives `crashed` with `cleanup_failed`.\"],\"observer\":\"The trace reader\"}},{\"subject\":\"A03\",\"kind\":\"undefined_condition\",\"text\":\"A limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`;\",\"question\":\"What observable event counts as a limit hit, especially when Python code catches `MemoryError`, `OSError`, or a short-write error and then returns a conforming output?\",\"options\":[\"Any failed operation caused by an enforced limit counts, even if user code catches it.\",\"Only termination or a parent-observed limit event counts.\",\"A caught exception is ordinary program behavior unless the runner separately records the hit.\"],\"default_guess\":\"Have the runner record every enforced-limit denial out of user control and classify the execution `resource_exhausted`.\",\"witness\":{\"initial\":\"A function allocates beyond its address-space limit, catches `MemoryError`, and returns a valid output.\",\"events\":[\"The allocation is denied by the configured limit.\",\"User code catches the exception.\",\"The function returns a conforming dict before the deadline.\"],\"outcomes\":[\"The limit denial makes the outcome `resource_exhausted`.\",\"The caught exception leaves no parent-observed hit, so the outcome is `succeeded`.\"],\"observer\":\"The caller and trace reader\"}},{\"subject\":\"A03\",\"kind\":\"undefined_measurement\",\"text\":\"The output count is the sum of the canonical JSON bytes of every `value` output — for an output that has none, the bytes of its JSON text as returned —\",\"question\":\"What bytes are counted when a returned Python value has no canonical JSON representation, given that `run` returns Python objects rather than JSON text?\",\"options\":[\"Count a runner-defined serialization of the returned object.\",\"Count no bytes and classify it only as `contract_violation`.\",\"Reject during serialization and count the bytes consumed or produced before rejection.\"],\"default_guess\":\"Use a deterministic bounded serializer that reports bytes consumed before failure, then apply outcome precedence explicitly.\",\"witness\":{\"initial\":\"A function returns the correct output key with a non-JSON-serializable Python object as its value.\",\"events\":[\"The runner receives the returned dict.\",\"It attempts output-size accounting.\",\"It then validates the output contract.\"],\"outcomes\":[\"There is no JSON text to count, so the result is `contract_violation`.\",\"A runner-specific representation is counted and can make the result `resource_exhausted`.\"],\"observer\":\"The caller reading the execution outcome\"}},{\"subject\":\"A03\",\"kind\":\"vague_payload\",\"text\":\"The kernel keeps at most `failure_detail_bytes_max` of it as `failure_detail`, and only for the exception type and message, never stdout.\",\"question\":\"Must `failure_detail` contain the exception type, the message, or both; in what format; and must the kernel keep the longest permitted prefix rather than any amount up to the ceiling?\",\"options\":[\"Always store a specified type-and-message format, truncated at a UTF-8 boundary.\",\"Store only the exception message.\",\"Store any prefix, including an empty string, because only a maximum is stated.\"],\"default_guess\":\"Specify one type-and-message format and retain its longest UTF-8 prefix within the ceiling.\",\"witness\":{\"initial\":\"A function raises `ValueError` with a nonempty message shorter than the ceiling.\",\"events\":[\"The sandbox reports the exception type and message.\",\"The kernel records the failed execution.\"],\"outcomes\":[\"The trace contains a fixed rendering such as `ValueError: message`.\",\"The trace contains only the message, only the type, or no detail.\"],\"observer\":\"The owner or agent reading the trace\"}},{\"subject\":\"A03\",\"kind\":\"invariant_test_gap\",\"text\":\"A03-1: function_executed -> inside(fresh_bubblewrap_environment)\\n       environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}\",\"question\":\"What must a Required tests item demonstrate for `code`, `inputs`, and `own_proc`, and what exactly does `own_proc` mean?\",\"options\":[\"A private PID namespace and private `/proc`, plus execution-private code and inputs.\",\"Only a private PID namespace; no `/proc` requirement.\",\"Only absence of surviving processes, with code and inputs allowed to share read-only storage.\"],\"default_guess\":\"Define `own_proc` as a private PID namespace with a correctly mounted private procfs, and add a test that code and input material are execution-private.\"},{\"subject\":\"A05\",\"kind\":\"invariant_test_gap\",\"text\":\"A05-6: proof(version) recomputed_on_demand   (not persisted)\",\"question\":\"What Required tests item proves that a ProofResult is not persisted, rather than merely proving that a cached result is invalidated and recomputed after a binding-status change?\",\"options\":[\"Inspect persistence and show that no proof record is written.\",\"Restart and prove again while showing no stored proof is read.\",\"Allow a persisted cache if it is invalidated correctly.\"],\"default_guess\":\"Add a persistence-boundary test showing that composition and activation leave no ProofResult record and invoke proof computation anew.\"},{\"subject\":\"A13\",\"kind\":\"contradiction\",\"text\":\"A waiting element can still execute, so M19's \\\"no node can run any more\\\" holds only when nothing waits:\",\"question\":\"Can the waiting element itself execute without the human action or resume that ends its wait, or does this mean only that other ready elements can execute while it waits?\",\"options\":[\"Only other ready elements can execute; the waiting element remains blocked.\",\"The waiting element may execute again during the same advancement request.\",\"Some waiting reasons permit execution and others do not.\"],\"default_guess\":\"Change this to say that other ready elements can still execute while a waiting element remains blocked.\",\"witness\":{\"initial\":\"A run has one operation element waiting for owner approval and no other node.\",\"events\":[\"The start request reaches the operation and records its waiting point.\",\"The owner takes no further action.\"],\"outcomes\":[\"The element remains blocked and the run rests `awaiting_approval`.\",\"The waiting element can execute during the same request, potentially sending without a decision.\"],\"observer\":\"The owner and the target service\"}},{\"subject\":\"A13\",\"kind\":\"invariant_test_gap\",\"text\":\"A13-1: advance(run) -> inside(start | approve | resolve | resume | startup_recovery)\",\"question\":\"Which Required tests item must show that startup recovery is the only advancement outside a surface request and that recovery advancement itself occurs only in the stated startup phase?\",\"options\":[\"Extend the A13 test to exercise and delimit startup recovery.\",\"Treat A14's recovery test as the A13 witness and name A13-1 on that test.\",\"Remove `startup_recovery` from this invariant.\"],\"default_guess\":\"Name A13-1 on a recovery test that proves recovery finishes before the surface opens and no other background advancement occurs.\"},{\"subject\":\"A19\",\"kind\":\"missing_representation\",\"text\":\"Every timestamp the kernel records comes from one clock module; no other part of the kernel reads the wall clock.\",\"question\":\"In what representation does `clock_module.now` return and the kernel store and expose an instant: timezone-aware UTC datetime, an RFC 3339 string, integer epoch units, or something else, with what precision and rounding?\",\"options\":[\"Timezone-aware UTC datetime serialized as canonical RFC 3339.\",\"Integer Unix epoch milliseconds.\",\"Integer Unix epoch nanoseconds.\"],\"default_guess\":\"Use timezone-aware UTC instants stored and exposed in one canonical RFC 3339 form with fixed precision.\",\"witness\":{\"initial\":\"A clock returns an instant with sub-millisecond precision and a non-UTC offset representation.\",\"events\":[\"An agent submits an implementation and the kernel records `submitted_at`.\",\"The record is inspected through the surface.\"],\"outcomes\":[\"The instant is normalized to a canonical UTC string at a specified precision.\",\"The offset and precision are preserved, or an integer epoch value is returned.\"],\"observer\":\"The caller inspecting the record\"}},{\"subject\":\"A19\",\"kind\":\"missing_read_count\",\"text\":\"Deadlines of one sandbox execution and one HTTP request are measured with the monotonic clock of the same module; a monotonic reading is never stored.\",\"question\":\"How many wall-clock and monotonic readings does each operation take, and which records created by one request or store change share an instant?\",\"options\":[\"One wall-clock reading per surface operation, shared by all timestamps it writes; separate monotonic start and deadline readings for each external execution.\",\"One wall-clock reading for every timestamp field and as many monotonic readings as the implementation chooses.\",\"One wall-clock reading per store call, with execution start and end taking distinct readings.\"],\"default_guess\":\"Define one wall-clock reading per atomic semantic event, explicitly state which fields share it, and define monotonic start and completion/deadline readings for each sandbox or HTTP attempt.\",\"witness\":{\"initial\":\"An injected clock advances on every read, and one implementation submission runs admission and creates a verdict and activation.\",\"events\":[\"An agent submits the implementation.\",\"The kernel records submission, trial executions, verdict, and activation.\",\"The caller inspects their timestamps.\"],\"outcomes\":[\"All records created by the request share one instant.\",\"Each event or store call has a successive instant.\"],\"observer\":\"The caller inspecting the records\"}},{\"subject\":\"A09\",\"kind\":\"undefined_refusal_condition\",\"text\":\"Plain `http` is allowed only for an instance of class `local_dev` or `disposable_rig`, as the manifest instance's `class` states — an absent or unknown class counts as `production` — or one whose `api_base_url` host is a loopback address;\",\"question\":\"How is a loopback host recognized: only by an IP literal in a loopback range, by special hostnames such as `localhost`, or by DNS resolution, and how are multiple or changing DNS answers handled?\",\"options\":[\"Only syntactic IPv4 or IPv6 loopback literals qualify.\",\"`localhost` and loopback literals qualify, without arbitrary DNS lookup.\",\"Resolve the hostname and allow it when every selected address is loopback.\"],\"default_guess\":\"Allow only syntactic IPv4 and IPv6 loopback literals, avoiding DNS-dependent authorization.\",\"witness\":{\"initial\":\"A production-class instance has `api_base_url` `http://localhost:8000`.\",\"events\":[\"An agent proposes and the owner accepts the binding.\",\"A run reaches its operation node.\"],\"outcomes\":[\"`localhost` counts as loopback and the request is sent.\",\"It is not an address literal, so `plain_http_not_allowed` is returned before sending.\"],\"observer\":\"The run caller and the local service\"}},{\"subject\":\"A09\",\"kind\":\"undefined_encoding\",\"text\":\"Each part has exactly two\\n   headers: `Content-Disposition: form-data; name=\\\"<port>\\\"`, with\\n   `filename=\\\"<port>\\\"` added for a file part, and `Content-Type`, the port's\\n   media type for a file part and `application/json` for a value part, without\\n   parameters; nothing else.\",\"question\":\"How are port names containing quotes, backslashes, non-ASCII characters, CR, or LF encoded in multipart header parameters, or at which earlier check are such names refused?\",\"options\":[\"Restrict port names to a closed safe ASCII syntax at proposal or contract authoring.\",\"Escape quoted-string characters and use a specified encoding for non-ASCII names.\",\"Insert the name verbatim.\"],\"default_guess\":\"Restrict port names used in multipart framing to a closed safe ASCII syntax and refuse nonconforming bindings before any request is built.\",\"witness\":{\"initial\":\"A proposed binding has a file input port whose name contains a quote or CRLF.\",\"events\":[\"The agent proposes the binding.\",\"A run later builds a multipart request for it.\"],\"outcomes\":[\"The proposal is refused by an explicit port-name rule.\",\"The name is escaped and sent as one parameter.\",\"The name is inserted verbatim and changes the multipart headers.\"],\"observer\":\"The proposer, trace reader, and receiving service\"}},{\"subject\":\"A09\",\"kind\":\"undefined_wire_representation\",\"text\":\"the instance's `required_headers` with their manifest values verbatim\",\"question\":\"What byte encoding is used for non-ASCII required-header or credential values, and are values that cannot be represented by the selected HTTP header syntax refused before sending?\",\"options\":[\"Require all outbound header values to be visible ASCII and refuse others.\",\"Encode header values as UTF-8 bytes.\",\"Use an HTTP library's Latin-1 or implementation-specific conversion.\"],\"default_guess\":\"Require a precisely defined ASCII-compatible header-value syntax and refuse other values during manifest or credential validation.\",\"witness\":{\"initial\":\"A required header or resolved credential has the value `café`, which contains no control character.\",\"events\":[\"The binding passes the stated validation.\",\"A run builds and sends the request.\"],\"outcomes\":[\"The value is sent as UTF-8 bytes.\",\"The HTTP client encodes it as Latin-1.\",\"The pre-send check refuses it as unrepresentable.\"],\"observer\":\"The target service and the run caller\"}},{\"subject\":\"A09\",\"kind\":\"vague_payload\",\"text\":\"at most `failure_detail_bytes_max` of it\\n   is kept as `failure_detail` — the body decoded as UTF-8, each invalid\\n   sequence replaced by U+FFFD, then cut at a character boundary to its\\n   longest prefix that fits as UTF-8 bytes —\",\"question\":\"Must the longest permitted prefix always be retained, or may the implementation keep less or no failure detail because the passage first says `at most`?\",\"options\":[\"Always keep the longest prefix produced by the stated decoding and truncation algorithm.\",\"Any shorter prefix, including empty, is conforming.\",\"Keep detail only for selected HTTP statuses.\"],\"default_guess\":\"Require the longest permitted prefix whenever the body is eligible for failure detail.\",\"witness\":{\"initial\":\"A 400 response has a short UTF-8 body that contains no credential.\",\"events\":[\"The service returns the response.\",\"The kernel records `operation_refused`.\"],\"outcomes\":[\"The entire short body is stored as `failure_detail`.\",\"The kernel stores an empty or shorter detail while still satisfying `at most`.\"],\"observer\":\"The trace reader\"}},{\"subject\":\"A09\",\"kind\":\"invariant_test_gap\",\"text\":\"A09-3: http_without_tls -> instance.class IN {local_dev, disposable_rig} OR loopback(host)\",\"question\":\"What Required tests must show for the two allowed branches, since the named A09-3 test only refuses a production non-loopback target?\",\"options\":[\"Show successful sends for both an allowed instance class and a loopback host.\",\"Show one allowed branch and one refused branch.\",\"Test only refusal; allowed cases remain unverified.\"],\"default_guess\":\"Add successful-send cases for a `local_dev` or `disposable_rig` non-loopback target and for a production-class loopback target.\"},{\"subject\":\"02_rules_runs.md:Carried to later states\",\"kind\":\"standard_violation\",\"text\":\"- Release build: the frozen list of trapped standard-library entry points —\\n  closed: A03 rule 4 lists them, and the release passes them as data (A20).\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"Replace the unnamed claim that the release “passes them as data” with one named imported data-provider constant for the frozen trap table, including the symbol name and type used by generated code.\"}]}",
+ "set_aside": []
+}
