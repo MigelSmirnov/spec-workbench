@@ -1,0 +1,187 @@
+Module: photo_delivery
+Target path: portal_deliverer/photo_delivery.py
+Target file: photo_delivery.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from builtins import OSError
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import UUID
+from hashlib import sha256
+
+from portal_deliverer.data_provider import OBSERVATION_FAILURES, SOURCE_ID_PATTERN, STORED_MEDIA_TYPE
+from portal_deliverer.delivery_store import project_lock, read_mark, read_placement, store_image, write_mark, write_placement
+from portal_deliverer.models import DateSource, DeliveryContext, MarkOutcome, MarkStatus, ObjectConnection, ObservationReason, PhotoPlacement, PhotoPublication, PlacementFailure, PlacementOutcome, PlacementStatus, PreparedPhoto, PublicationMark, Refusal, RefusalCode, ScanResult, ScanStatus, SourceFile, SourcePhotoObservation, SourceRead, ObservationFailure
+from portal_deliverer.object_connections import available_photo_folder, confirmed_connection
+from portal_deliverer.photo_preparation import build_publication, prepare_photo
+from portal_deliverer.refusals import DelivererError, Rejected
+from portal_deliverer.source_folder import observe_source_files, read_named_source
+from portal_deliverer.system_clock import utc_now
+
+CONTRACTS (function signatures — follow exactly):
+def _failed(source_id: str, reason: PlacementFailure) -> PlacementOutcome
+def _mark_outcome(mark: PublicationMark, status: MarkStatus) -> MarkOutcome
+def _observation(context: DeliveryContext, project_id: UUID, source: SourceFile) -> SourcePhotoObservation
+def _photo_folder(context: DeliveryContext, project_id: UUID) -> Path
+def _place(context: DeliveryContext, project_id: UUID, source_id: str, source: SourceFile, raw: bytes) -> PhotoPlacement
+def _require_source_id(source_id: str) -> None
+def deliver_project_photo(context: DeliveryContext, project_id: UUID, name: str, source_id: str) -> PlacementOutcome
+def mark_photo_published(context: DeliveryContext, project_id: UUID, source_id: str, photo_id: UUID) -> MarkOutcome
+def scan_project_photos(context: DeliveryContext, project_id: UUID) -> ScanResult
+# DelivererError
+def __init__(self, code: RefusalCode) -> None
+# Rejected
+def __init__(self, reason: PlacementFailure) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def project_lock(context: DeliveryContext, project_id: UUID) -> Iterator[None]
+def read_mark(context: DeliveryContext, project_id: UUID, source_id: str) -> PublicationMark | None
+def read_placement(context: DeliveryContext, project_id: UUID, source_id: str) -> PhotoPlacement | None
+def store_image(context: DeliveryContext, project_id: UUID, source_id: str, content: bytes) -> str
+def write_mark(context: DeliveryContext, mark: PublicationMark) -> None
+def write_placement(context: DeliveryContext, placement: PhotoPlacement) -> None
+def available_photo_folder(connection: ObjectConnection) -> Path
+def confirmed_connection(connections_file: Path, project_id: UUID) -> ObjectConnection
+def build_publication(project_id: UUID, source_id: str, file_ref: str, photo: PreparedPhoto) -> PhotoPublication
+def prepare_photo(raw: bytes, modified: datetime, timezone_name: str) -> PreparedPhoto
+def observe_source_files(folder: Path) -> list[SourceFile]
+def read_named_source(folder: Path, name: str) -> SourceRead | None
+def utc_now() -> datetime
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+OBSERVATION_FAILURES: tuple[ObservationFailure, ...]
+SOURCE_ID_PATTERN: str
+STORED_MEDIA_TYPE: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _failed: (source_id: str, reason: PlacementFailure) -> PlacementOutcome
+- _mark_outcome: (mark: PublicationMark, status: MarkStatus) -> MarkOutcome
+- _observation: (context: DeliveryContext, project_id: UUID, source: SourceFile) -> SourcePhotoObservation
+- _photo_folder: (context: DeliveryContext, project_id: UUID) -> Path
+- _place: (context: DeliveryContext, project_id: UUID, source_id: str, source: SourceFile, raw: bytes) -> PhotoPlacement
+- _require_source_id: (source_id: str) -> None
+- deliver_project_photo: (context: DeliveryContext, project_id: UUID, name: str, source_id: str) -> PlacementOutcome
+- mark_photo_published: (context: DeliveryContext, project_id: UUID, source_id: str, photo_id: UUID) -> MarkOutcome
+- scan_project_photos: (context: DeliveryContext, project_id: UUID) -> ScanResult
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _failed: [RETURN_SHAPE] MUST return a PlacementOutcome of the source id with the FAILED member of = models.PlacementStatus, the given reason, no placement and no photo_id.
+- _mark_outcome: [FIELD_PROJECTION] MUST return a MarkOutcome holding the project_id, source_id, photo_id and marked_at of the mark unchanged and the given = models.MarkStatus member.
+- _observation: [FIELD_PROJECTION] MUST copy name, size, source_id, status and reason of a source whose status is the REJECTED member of = models.ScanStatus into a SourcePhotoObservation with no file_ref and no photo_id and read no record for it; for a source whose status is the READY member, which observe_source_files always gives a source id, it MUST call read_placement and then read_mark for the project id and that source_id and return the PUBLISHED member of = models.ScanStatus with the file_ref of the placement and the photo_id of the mark when both exist, the PLACED member with that file_ref and no photo_id when only the placement exists, and the READY member with neither otherwise, letting their DelivererError pass.
+- _photo_folder: [ORCHESTRATION] MUST call the imported confirmed_connection once with the connections_file of context and the project id, then the imported available_photo_folder with that connection, and return the folder it gives, letting each DelivererError pass; it is the one reading of the connections file in a scan or a delivery.
+- _place: [FIELD_ASSIGNMENT] MUST call the imported prepare_photo with raw, the modified of source and the timezone of context, then the imported store_image with its content, then the imported build_publication, and write with the imported write_placement a PhotoPlacement of the project id and source id, the name of source, the reference store_image returned, the lowercase hexadecimal digest of the imported sha256 of the stored bytes and their length, the imported STORED_MEDIA_TYPE constant as media_type, the date_source of the prepared photo and the publication, returning that placement; an exception raised by any of these calls MUST pass to the caller unchanged.
+- _require_source_id: [VALIDATION_ERROR] MUST return None only when the whole source id, from its first character to its last, matches the pattern of the imported SOURCE_ID_PATTERN constant, and MUST raise DelivererError with the INVALID_SOURCE_ID member of = models.RefusalCode otherwise; the source id never becomes part of a path before this check.
+- deliver_project_photo: [ORCHESTRATION] MUST run these steps in this order, letting every DelivererError pass as the refusal of the whole request: _photo_folder; _require_source_id; then, inside the imported project_lock, which is released whenever it returns, call read_placement and then read_mark for the project id and source id before anything else, so a damaged record stops the delivery. An existing placement MUST be answered with the REPLAYED member of = models.PlacementStatus, that placement and the photo_id of the mark when one exists, writing nothing and reading no source file whatever the name.
+- deliver_project_photo: [VALIDATION_ERROR] Without a placement it MUST call the imported read_named_source once with the photo folder and the name and answer with _failed: the NOT_READY_OR_ABSENT member of = models.PlacementFailure when it returns None; for a SourceFile whose status is the REJECTED member of = models.ScanStatus, which read_named_source always gives a reason, the failure of the row of the imported OBSERVATION_FAILURES constant whose reason is that reason; the SOURCE_CHANGED member when the lowercase hexadecimal digest of the imported sha256 of the bytes read differs from the source id; the reason of a Rejected that _place raises; and the UNREADABLE_FILE member when _place raises OSError; otherwise it MUST answer the PLACED member with the placement _place returns and no photo_id, leaving any existing mark as it is.
+- mark_photo_published: [ORCHESTRATION] MUST call _require_source_id, then read the imported utc_now exactly once, then the imported confirmed_connection with the connections_file of context and the project id, without consulting the photo folder, and then, inside the imported project_lock, which is released whenever it returns, call read_placement and then read_mark for the project id and source id, letting every DelivererError pass.
+- mark_photo_published: [VALIDATION_ERROR] Without a placement it MUST raise DelivererError with the NOT_PLACED member of = models.RefusalCode; a mark with the same photo_id MUST be answered by _mark_outcome with the REPLAYED member of = models.MarkStatus and that first mark unchanged; a mark with another photo_id MUST raise DelivererError with the PUBLICATION_CONFLICT member; without a mark it MUST write a PublicationMark of the project id, source id, photo_id and the time read from utc_now with the imported write_mark and answer _mark_outcome with the MARKED member. A refused or replayed mark writes nothing.
+- scan_project_photos: [ORCHESTRATION] MUST call _photo_folder, then the imported observe_source_files on that folder, then _observation for each SourceFile in the order observed, and return a ScanResult of the project id, those observations in that order and, in counts, the number of observations of each = models.ScanStatus member that occurs, in the order of its members, no member with zero; it takes no lock, reads no clock and writes nothing, and every DelivererError passes on whole, so no partial scan is answered.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- MarkStatus: omitted because it is an imported runtime model schema
+- PlacementFailure: omitted because it is an imported runtime model schema
+- PlacementStatus: omitted because it is an imported runtime model schema
+- RefusalCode: omitted because it is an imported runtime model schema
+- ScanStatus: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not portal_deliverer.models imports.
+Only import runtime model symbols from portal_deliverer.models when they are explicitly listed in IMPORTS.
+- models.MarkStatus: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+- models.PlacementFailure: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+- models.PlacementStatus: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+- models.RefusalCode: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+- models.ScanStatus: runtime model schema omitted from non-model prompt; exported from portal_deliverer.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from portal_deliverer.models. Use the listed enum member names and model fields exactly.
+- DateSource enum members: EXIF='exif', FILE_MODIFIED='file_modified'
+- DeliveryContext fields (exact, no others exist): binary_root: Path, connections_file: Path, state_dir: Path, timezone: str
+- MarkOutcome fields (exact, no others exist): marked_at: datetime, photo_id: UUID, project_id: UUID, source_id: str, status: MarkStatus
+- MarkStatus enum members: MARKED='marked', REPLAYED='replayed'
+- ObjectConnection fields (exact, no others exist): assignment_confirmed: bool, invoice_subfolder: str, label: str, photo_subfolder: str, project_id: UUID, root: str
+- ObservationFailure fields (exact, no others exist): failure: PlacementFailure, reason: ObservationReason
+- ObservationReason enum members: EMPTY='empty', NOT_A_REGULAR_FILE='not_a_regular_file', TOO_LARGE='too_large', UNREADABLE_FILE='unreadable_file', UNSUPPORTED_FORMAT='unsupported_format'
+- PhotoPlacement fields (exact, no others exist): date_source: DateSource, file_ref: str, media_type: str, name: str, project_id: UUID, publication: PhotoPublication, sha256: str, size: int, source_id: str
+- PhotoPublication fields (exact, no others exist): caption: str | None, client_visible: bool, file_ref: str, intake_id: str, intake_source: str, photo_date: datetime, project_id: UUID, section_id: UUID | None
+- PlacementFailure enum members: EMPTY='empty', NOT_A_REGULAR_FILE='not_a_regular_file', NOT_READY_OR_ABSENT='not_ready_or_absent', SOURCE_CHANGED='source_changed', TOO_LARGE='too_large', TOO_MANY_PIXELS='too_many_pixels', UNREADABLE_FILE='unreadable_file', UNREADABLE_IMAGE='unreadable_image', UNSUPPORTED_FORMAT='unsupported_format'
+- PlacementOutcome fields (exact, no others exist): photo_id: UUID | None, placement: PhotoPlacement | None, reason: PlacementFailure | None, source_id: str, status: PlacementStatus
+- PlacementStatus enum members: FAILED='failed', PLACED='placed', REPLAYED='replayed'
+- PreparedPhoto fields (exact, no others exist): content: bytes, date_source: DateSource, taken_at: datetime
+- PublicationMark fields (exact, no others exist): marked_at: datetime, photo_id: UUID, project_id: UUID, source_id: str
+- Refusal fields (exact, no others exist): code: RefusalCode, detail: str
+- RefusalCode enum members: CONNECTION_NOT_CONFIRMED='connection_not_confirmed', FOLDER_UNAVAILABLE='folder_unavailable', INVALID_REQUEST='invalid_request', INVALID_SOURCE_ID='invalid_source_id', NOT_PLACED='not_placed', PUBLICATION_CONFLICT='publication_conflict', STATE_UNAVAILABLE='state_unavailable', UNAUTHORIZED='unauthorized', UNKNOWN_PROJECT='unknown_project', UNSAFE_REFERENCE='unsafe_reference'
+- ScanResult fields (exact, no others exist): counts: dict[ScanStatus, int], items: list[SourcePhotoObservation], project_id: UUID
+- ScanStatus enum members: PLACED='placed', PUBLISHED='published', READY='ready', REJECTED='rejected'
+- SourceFile fields (exact, no others exist): modified: datetime, name: str, reason: ObservationReason | None, size: int, source_id: str | None, status: ScanStatus
+- SourcePhotoObservation fields (exact, no others exist): file_ref: str | None, name: str, photo_id: UUID | None, reason: ObservationReason | None, size: int, source_id: str | None, status: ScanStatus
+- SourceRead fields (exact, no others exist): content: bytes | None, source: SourceFile
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_failed, _mark_outcome, _observation, _photo_folder, _place, _require_source_id, deliver_project_photo, mark_photo_published, scan_project_photos
+
+MODELS CONTEXT:
+Runtime models live in portal_deliverer.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete photo_delivery.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in portal_deliverer.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and portal_deliverer.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
