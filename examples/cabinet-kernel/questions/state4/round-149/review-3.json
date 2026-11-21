@@ -1,0 +1,142 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "NodeExecution trace cardinality after a refused store write",
+   "kind": "contradiction",
+   "text": "K-09: \"except a function execution during which the kernel stops because the store refused that record: it leaves none\"; A15 rule 1: \"Every concluded attempt at an element ... writes exactly one NodeExecution M23\"",
+   "question": "Is a function execution whose NodeExecution store call is refused a concluded attempt with a required record, or an unrecorded attempt that recovery executes again?",
+   "options": [
+    "The refused write is the K-09 exception: no NodeExecution exists and recovery re-executes the function.",
+    "A15 remains absolute: the kernel must obtain exactly one NodeExecution before treating the attempt as concluded."
+   ],
+   "default_guess": "Apply the new K-09 exception: leave no NodeExecution, stop the kernel, and re-execute during recovery.",
+   "witness": {
+    "initial": "A running run has a ready function element with no concluded record.",
+    "events": [
+     "module:runs executes the function.",
+     "capability:store.record_change refuses the NodeExecution write.",
+     "module:surface stops the kernel after the internal error.",
+     "The host restarts the kernel and module:runs recovers the run."
+    ],
+    "outcomes": [
+     "K-09 permits no NodeExecution and recovery executes the function again.",
+     "A15 requires exactly one NodeExecution for the concluded attempt, so recovery must regard it as already concluded or somehow finish recording it."
+    ],
+    "observer": "The owner reading the trace and the recovery executor deciding whether to run the function again."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "flow:run_read_only_flow cleanup-failure recovery",
+   "kind": "contradiction",
+   "text": "\"module:runs then writes that element's NodeExecution ... The run, left `running`, is advanced at the next start ... with that element concluded failed.\"",
+   "question": "When cleanup is unconfirmed and the store refuses the NodeExecution, does the next start treat the element as concluded failed or execute it again?",
+   "options": [
+    "Treat it as unconcluded and execute it again, as K-09 and A03 rule 7 now require.",
+    "Treat it as concluded failed, as this flow's Errors passage states."
+   ],
+   "default_guess": "Execute it again because no concluded record exists.",
+   "witness": {
+    "initial": "A read-only run is `running` at a function element.",
+    "events": [
+     "module:runs calls capability:sandbox.execute_function.",
+     "module:sandbox reports `crashed` with `cleanup_failed` and `stop_required`.",
+     "The store refuses the NodeExecution record.",
+     "module:surface stops the process.",
+     "The host starts the kernel again."
+    ],
+    "outcomes": [
+     "The changed K-09/A03 rule executes the function again because no concluded record exists.",
+     "The flow's Errors passage advances the run with the element already concluded failed and never executes it again."
+    ],
+    "observer": "The service owner observing whether the function runs again and which downstream branches execute."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "flow:start_and_recover_kernel repeated cleanup failure",
+   "kind": "contradiction",
+   "text": "\"The next start finds that element concluded and does not execute it again ... so a cleanup failure stops the kernel at most once per element and never loops.\"",
+   "question": "If recovery cannot store the re-executed function's `cleanup_failed` NodeExecution, may subsequent starts execute and stop on that same element repeatedly?",
+   "options": [
+    "Yes; every start may execute it again until a concluded record is successfully stored.",
+    "No; the element must somehow become concluded after the first cleanup failure even though its record was refused."
+   ],
+   "default_guess": "Allow repeated start attempts; each re-executes the element until its NodeExecution is stored successfully.",
+   "witness": {
+    "initial": "A run was left `running` with a function element lacking a concluded record.",
+    "events": [
+     "The host starts the kernel.",
+     "module:runs re-executes the function during recovery.",
+     "Cleanup cannot be confirmed.",
+     "The store refuses the `cleanup_failed` NodeExecution.",
+     "module:surface stops the start.",
+     "The host starts the kernel again."
+    ],
+    "outcomes": [
+     "A03 rule 7 and K-09 cause the second start to execute the element again, so the stop can recur.",
+     "This flow says the next start finds the element concluded and that cleanup failure never loops."
+    ],
+    "observer": "The host operator, who sees either repeated failed starts or a single failed start followed by completed recovery."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "admission after an unrecordable cleanup failure",
+   "kind": "unstated failure outcome",
+   "text": "\"module:functions writes that TrialExecution, then executes no further case and writes no verdict and no activation\"",
+   "question": "What exactly happens when the store refuses that TrialExecution: is admission merely abandoned until another submission, or must startup recovery or the interrupted request execute the case again?",
+   "options": [
+    "Stop with no TrialExecution or verdict; startup does not recover admission, and a later submission reruns admission from the beginning.",
+    "Retry or recover the case automatically so the stated TrialExecution is eventually written.",
+    "Treat the failed store call as leaving a concluded trial despite there being no record."
+   ],
+   "default_guess": "Stop with no TrialExecution or verdict; rerun the whole admission only on a later submission of the implementation.",
+   "witness": {
+    "initial": "Submission is admitting an implementation over a non-empty corpus.",
+    "events": [
+     "module:functions executes a case.",
+     "module:sandbox reports unconfirmed cleanup.",
+     "The store refuses the TrialExecution write.",
+     "module:surface stops the kernel.",
+     "The host restarts the kernel without another submission."
+    ],
+    "outcomes": [
+     "The new exception leaves no TrialExecution and startup performs no admission work; admission resumes only after a later submission.",
+     "The flow's unconditional \"writes that TrialExecution\" can be read as requiring recovery or retry to produce it before admission is abandoned."
+    ],
+    "observer": "The submitting agent inspecting trial evidence after restart and deciding whether another submission is necessary."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "claim that re-executing a function \"has no effect\"",
+   "kind": "vague guarantee",
+   "text": "\"recovery executes the function again, which has no effect\"",
+   "question": "Does \"has no effect\" mean only that a function cannot cause an external service effect, or does it promise that re-execution cannot change the run's eventual output despite K-02 allowing undetected time- or chance-dependent code?",
+   "options": [
+    "It means only no external side effect; a re-execution may produce a different output and the retry's recorded output becomes the run result.",
+    "It means observationally identical execution; only input-deterministic implementations may be retried or the earlier result must be preserved.",
+    "It means both executions may occur but the kernel must detect and reject differing outputs."
+   ],
+   "default_guess": "Interpret it as no external side effect only; record the recovery execution's result even if undetected nondeterminism makes it differ.",
+   "witness": {
+    "initial": "An admitted function uses a source of chance not trapped by the kernel, which K-02 says is not detected.",
+    "events": [
+     "The function executes and produces output `A`.",
+     "The store refuses its NodeExecution, so `A` has no trace record.",
+     "Recovery executes the function again and it produces output `B`."
+    ],
+    "outcomes": [
+     "Under the no-external-effect reading, `B` is recorded and may become the run output.",
+     "Under the observational-no-effect reading, the run must retain or reproduce `A`, or refuse the implementation, none of which the texts specify."
+    ],
+    "observer": "The run caller or owner reading the final output and trace."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"NodeExecution trace cardinality after a refused store write\",\"kind\":\"contradiction\",\"text\":\"K-09: \\\"except a function execution during which the kernel stops because the store refused that record: it leaves none\\\"; A15 rule 1: \\\"Every concluded attempt at an element ... writes exactly one NodeExecution M23\\\"\",\"question\":\"Is a function execution whose NodeExecution store call is refused a concluded attempt with a required record, or an unrecorded attempt that recovery executes again?\",\"options\":[\"The refused write is the K-09 exception: no NodeExecution exists and recovery re-executes the function.\",\"A15 remains absolute: the kernel must obtain exactly one NodeExecution before treating the attempt as concluded.\"],\"default_guess\":\"Apply the new K-09 exception: leave no NodeExecution, stop the kernel, and re-execute during recovery.\",\"witness\":{\"initial\":\"A running run has a ready function element with no concluded record.\",\"events\":[\"module:runs executes the function.\",\"capability:store.record_change refuses the NodeExecution write.\",\"module:surface stops the kernel after the internal error.\",\"The host restarts the kernel and module:runs recovers the run.\"],\"outcomes\":[\"K-09 permits no NodeExecution and recovery executes the function again.\",\"A15 requires exactly one NodeExecution for the concluded attempt, so recovery must regard it as already concluded or somehow finish recording it.\"],\"observer\":\"The owner reading the trace and the recovery executor deciding whether to run the function again.\"}},{\"unit\":\"context\",\"subject\":\"flow:run_read_only_flow cleanup-failure recovery\",\"kind\":\"contradiction\",\"text\":\"\\\"module:runs then writes that element's NodeExecution ... The run, left `running`, is advanced at the next start ... with that element concluded failed.\\\"\",\"question\":\"When cleanup is unconfirmed and the store refuses the NodeExecution, does the next start treat the element as concluded failed or execute it again?\",\"options\":[\"Treat it as unconcluded and execute it again, as K-09 and A03 rule 7 now require.\",\"Treat it as concluded failed, as this flow's Errors passage states.\"],\"default_guess\":\"Execute it again because no concluded record exists.\",\"witness\":{\"initial\":\"A read-only run is `running` at a function element.\",\"events\":[\"module:runs calls capability:sandbox.execute_function.\",\"module:sandbox reports `crashed` with `cleanup_failed` and `stop_required`.\",\"The store refuses the NodeExecution record.\",\"module:surface stops the process.\",\"The host starts the kernel again.\"],\"outcomes\":[\"The changed K-09/A03 rule executes the function again because no concluded record exists.\",\"The flow's Errors passage advances the run with the element already concluded failed and never executes it again.\"],\"observer\":\"The service owner observing whether the function runs again and which downstream branches execute.\"}},{\"unit\":\"context\",\"subject\":\"flow:start_and_recover_kernel repeated cleanup failure\",\"kind\":\"contradiction\",\"text\":\"\\\"The next start finds that element concluded and does not execute it again ... so a cleanup failure stops the kernel at most once per element and never loops.\\\"\",\"question\":\"If recovery cannot store the re-executed function's `cleanup_failed` NodeExecution, may subsequent starts execute and stop on that same element repeatedly?\",\"options\":[\"Yes; every start may execute it again until a concluded record is successfully stored.\",\"No; the element must somehow become concluded after the first cleanup failure even though its record was refused.\"],\"default_guess\":\"Allow repeated start attempts; each re-executes the element until its NodeExecution is stored successfully.\",\"witness\":{\"initial\":\"A run was left `running` with a function element lacking a concluded record.\",\"events\":[\"The host starts the kernel.\",\"module:runs re-executes the function during recovery.\",\"Cleanup cannot be confirmed.\",\"The store refuses the `cleanup_failed` NodeExecution.\",\"module:surface stops the start.\",\"The host starts the kernel again.\"],\"outcomes\":[\"A03 rule 7 and K-09 cause the second start to execute the element again, so the stop can recur.\",\"This flow says the next start finds the element concluded and that cleanup failure never loops.\"],\"observer\":\"The host operator, who sees either repeated failed starts or a single failed start followed by completed recovery.\"}},{\"unit\":\"context\",\"subject\":\"admission after an unrecordable cleanup failure\",\"kind\":\"unstated failure outcome\",\"text\":\"\\\"module:functions writes that TrialExecution, then executes no further case and writes no verdict and no activation\\\"\",\"question\":\"What exactly happens when the store refuses that TrialExecution: is admission merely abandoned until another submission, or must startup recovery or the interrupted request execute the case again?\",\"options\":[\"Stop with no TrialExecution or verdict; startup does not recover admission, and a later submission reruns admission from the beginning.\",\"Retry or recover the case automatically so the stated TrialExecution is eventually written.\",\"Treat the failed store call as leaving a concluded trial despite there being no record.\"],\"default_guess\":\"Stop with no TrialExecution or verdict; rerun the whole admission only on a later submission of the implementation.\",\"witness\":{\"initial\":\"Submission is admitting an implementation over a non-empty corpus.\",\"events\":[\"module:functions executes a case.\",\"module:sandbox reports unconfirmed cleanup.\",\"The store refuses the TrialExecution write.\",\"module:surface stops the kernel.\",\"The host restarts the kernel without another submission.\"],\"outcomes\":[\"The new exception leaves no TrialExecution and startup performs no admission work; admission resumes only after a later submission.\",\"The flow's unconditional \\\"writes that TrialExecution\\\" can be read as requiring recovery or retry to produce it before admission is abandoned.\"],\"observer\":\"The submitting agent inspecting trial evidence after restart and deciding whether another submission is necessary.\"}},{\"unit\":\"context\",\"subject\":\"claim that re-executing a function \\\"has no effect\\\"\",\"kind\":\"vague guarantee\",\"text\":\"\\\"recovery executes the function again, which has no effect\\\"\",\"question\":\"Does \\\"has no effect\\\" mean only that a function cannot cause an external service effect, or does it promise that re-execution cannot change the run's eventual output despite K-02 allowing undetected time- or chance-dependent code?\",\"options\":[\"It means only no external side effect; a re-execution may produce a different output and the retry's recorded output becomes the run result.\",\"It means observationally identical execution; only input-deterministic implementations may be retried or the earlier result must be preserved.\",\"It means both executions may occur but the kernel must detect and reject differing outputs.\"],\"default_guess\":\"Interpret it as no external side effect only; record the recovery execution's result even if undetected nondeterminism makes it differ.\",\"witness\":{\"initial\":\"An admitted function uses a source of chance not trapped by the kernel, which K-02 says is not detected.\",\"events\":[\"The function executes and produces output `A`.\",\"The store refuses its NodeExecution, so `A` has no trace record.\",\"Recovery executes the function again and it produces output `B`.\"],\"outcomes\":[\"Under the no-external-effect reading, `B` is recorded and may become the run output.\",\"Under the observational-no-effect reading, the run must retain or reproduce `A`, or refuse the implementation, none of which the texts specify.\"],\"observer\":\"The run caller or owner reading the final output and trace.\"}}]}",
+ "set_aside": []
+}

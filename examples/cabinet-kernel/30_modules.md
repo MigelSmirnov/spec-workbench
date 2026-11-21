@@ -307,7 +307,8 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   `surface` ends the process: during a request after answering it as an
   internal error (A16 rule 7), during the start by stopping the start. The
   run is left `running`; the next start's recovery advances it from there with
-  that element concluded failed, so its dependants conclude `upstream_failed`
+  that element concluded failed (or, if the store refused its record, executes
+  it again, K-09), so its dependants conclude `upstream_failed`
   and independent branches go on (A13 rule 5, A14 rule 5); an interrupted admission has no verdict, so the next
   submission of that implementation runs it again (A04 rule 2).
 - **Nothing copied for a refused capture.** Only `functions`, after every

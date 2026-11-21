@@ -376,7 +376,9 @@ spool, files only as fixtures beyond a run.
 
 1. Every concluded attempt at an element, every skipped node and every
    `upstream_failed` node writes exactly one NodeExecution M23 — an owner's
-   resolution of an unknown outcome writes none (A11). A mapped node's trace is
+   resolution of an unknown outcome writes none (A11), and a function execution
+   whose record the store refused writes none: the kernel stops and recovery
+   executes it again (K-09, A03 rule 7). A mapped node's trace is
    its elements' records; it has a record of its own, without `map_index`, only
    when it ran no element: over an empty list (A13 rule 6), or when it was
    skipped or `upstream_failed` before any element. Records of nodes that become

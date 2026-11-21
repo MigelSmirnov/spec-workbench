@@ -535,7 +535,9 @@ records are the trace and the rest state.
   run status; `module:surface` answers with an internal error and ends the
   process (State 3, "Unconfirmed cleanup"). The run, left `running`, is
   advanced at the next start (`flow:start_and_recover_kernel`) with that
-  element concluded failed. A `failed` run keeps its spool until it is
+  element concluded failed; if the store refused that NodeExecution, the
+  element has no concluded record and the next start executes it again (K-09,
+  A03 rule 7). A `failed` run keeps its spool until it is
   released (`flow:capture_failure_and_repair_slot`).
 
 ## `flow:run_effect_with_approval`
@@ -997,6 +999,9 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 - Cleanup duty: if a re-executed function's cleanup cannot be confirmed,
   `module:runs` writes its NodeExecution `crashed` with `cleanup_failed`,
   advances nothing further, and `module:surface` stops the start (State 3,
-  "Unconfirmed cleanup"). The next start finds that element concluded and does
-  not execute it again: its dependants conclude `upstream_failed`, so a cleanup
-  failure stops the kernel at most once per element and never loops.
+  "Unconfirmed cleanup"). When that NodeExecution is stored, the next start
+  finds the element concluded and does not execute it again: its dependants
+  conclude `upstream_failed`, so a cleanup failure stops the kernel at most once
+  per element. When the store refused it, the next start executes the element
+  again (K-09, A03 rule 7), and the kernel stops on each start for as long as
+  the store refuses its records.
