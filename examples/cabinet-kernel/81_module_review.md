@@ -1094,3 +1094,12 @@ run spool are touched only by their publishers, which contradicted `open_store`,
 `read_value_bytes` and `remove_run_spool`; it now says only that value bytes and spooled files are
 published before the change by their publishers and that `record_change` publishes, rewrites and
 re-checks none of them. Only the `store` packet moved by text. All 19 modules remain PASS.
+
+### Round 152 repair (2026-11-21)
+
+Round 152 asked for the byte rule as a direct prohibition, but a `[FORBIDDEN_ACTION]` note beside
+`record_change`'s `[BEHAVIOR]` note blocks the notes gate (suspicious class pair). The separate
+note is gone; the `[BEHAVIOR]` note now says what `record_change` writes: records only — the value
+bytes and spooled files those records name were published before the call by their publishers,
+and it publishes, rewrites and re-checks none of them. `store` moved by one note fewer; the other
+packets only by global note indices. All 19 modules remain PASS.
