@@ -254,12 +254,15 @@ A03-1: function_executed -> inside(fresh_bubblewrap_environment)
 
 A03-2: network(environment) = own_loopback_only AND env_vars(environment) = {PYTHONHASHSEED=0}
 
-A03-3: trap_raised AND NOT (timeout OR resource_exhausted) -> outcome = sandbox_violation   (even if output conforms)
+A03-3: trap_raised AND NOT (timeout OR resource_exhausted OR cleanup_unconfirmed)
+         -> outcome = sandbox_violation   (even if output conforms)
 
-A03-4: outcome = first_of(timeout, resource_exhausted, sandbox_violation, crashed,
-                          contract_violation, succeeded)
+A03-4: outcome = crashed(cleanup_failed)  IF cleanup_unconfirmed
+                 ELSE first_of(timeout, resource_exhausted, sandbox_violation, crashed,
+                               contract_violation, succeeded)
 
-A03-5: cleanup_unconfirmed -> output_discarded AND kernel_process_stops
+A03-5: cleanup_unconfirmed -> outcome = crashed AND detail = cleanup_failed
+                              AND output_discarded AND kernel_process_stops
 ```
 
 ### Required tests
