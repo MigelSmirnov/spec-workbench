@@ -1047,3 +1047,32 @@ whole. Seventeen packets moved, in three ways and no other.
 
 Code generated from this specification has not been seen by this review. Structural review: 0
 blocks. All 19 modules remain PASS.
+
+## Request of 2026-11-21: three notes codex read the other way
+
+A delta review against the previous stamp (7f333ecd), by comparing each packet with its previous
+form as sets, line numbers and note indices aside. No slice was read again as a whole. Three
+packets moved by one note each; eight others moved only by the global index of the notes after
+the inserted one (`service_invoker`, `run_values`, `functions`, `flows`, `effects`, `run_graph`,
+`runs`, `surface`). No contract, model, decision or import use changed.
+
+- `sandbox` / `probe_sandbox`: a new behaviour note — the probe's code defines a top-level `run`
+  taking its one dict of inputs and returning an empty dict. A03 rule 3 already decides the shape
+  of every implementation; the packet now says it where the probe is written.
+- `store` / `record_change`: the StoredValue note says a StoredValue carries no bytes, its bytes
+  are published by the caller with `put_value_bytes` before the change, and `record_change`
+  writes only records. A18 rule 4 and the durability note already required the bytes to exist
+  before commit; the callers' notes already publish them; this rules out `record_change`
+  publishing them itself.
+- `bindings` / `read_service_record`: the projection note names the `instances` object keyed by
+  instance name and the `required_headers` object of header name to value, as the platform
+  manifest records write them (HANDOFF_20260929, "the kernel reads platform/manifest records as
+  they are"), projected to `HeaderField` entries verbatim in the record's order.
+
+Evidence: Route B with codex gpt-5.6-sol on the accepted spec 425c7dc deployed a kernel that
+failed 136 of 144 verification checks: the probe declared `run()` and the kernel did not start;
+with that patched by hand, 95 of 97 failures were `record_change` publishing the value schema's
+bytes under the value's digest; with both patched, 231 of 232 kernel tests passed and the last
+read `required_headers` as a list. These are measurements of that generated code, not of code
+generated from these notes, which this review has not seen. Structural review: 0 blocks. All 19
+modules remain PASS.
