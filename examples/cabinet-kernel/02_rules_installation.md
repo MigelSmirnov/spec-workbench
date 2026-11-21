@@ -500,6 +500,17 @@ case's design index; an accepted decision is an indexed item of kind `decision`;
 `affected` is review evidence for the reader, and whether a referenced decision
 answers its category is this review's judgement, not a gate's.
 
+- The required categories are the closed set that canonical grammar defines;
+  the record lists each exactly once, and a missing, repeated or unknown
+  category fails the gate.
+- The outcomes are the closed set `APPLICABLE` (references at least one accepted
+  decision), `NOT_APPLICABLE` (a non-empty rationale) and `UNRESOLVED`
+  (references an open question); an `UNRESOLVED` category fails the gate and
+  blocks State 3.
+- That every actor and boundary of State 0 is covered is this review's
+  judgement, shown to the reader by the `affected` evidence of the categories;
+  the gate checks the record, not that coverage.
+
 ### Formal invariants
 
 ```text
@@ -512,7 +523,9 @@ state2_security_gate_pass
 
 ### Required tests
 
-1. `design_lint --state 2` accepts exactly one complete review record.
+1. `design_lint --state 2` accepts exactly one complete review record, and
+   rejects one with a required category missing, repeated or unknown, or with
+   an `UNRESOLVED` category.
    [witness: workbench:state2_rules_decisions]
 2. Every reference resolves to an indexed item, and every APPLICABLE category
    references at least one indexed accepted decision of States 0–2.
