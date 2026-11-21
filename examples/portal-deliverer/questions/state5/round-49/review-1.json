@@ -1,0 +1,307 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "platform_baseline",
+   "text": "The service runs on Linux and on no other host, no version named",
+   "question": "Which Linux kernel, user-space ABI, distribution, architecture and minimum versions are the supported execution baseline?",
+   "options": [
+    "Support every Linux version on which dependencies install",
+    "Name a minimum kernel and user-space baseline",
+    "Name one deployment image and kernel combination"
+   ],
+   "default_guess": "Name and test the deployment image and a minimum supported kernel version.",
+   "witness": {
+    "initial": "Two Linux deployments use different kernel versions.",
+    "events": [
+     "The deployer starts the same service build on each deployment.",
+     "The service reaches a filesystem call whose flags or error behavior differs between the kernels."
+    ],
+    "outcomes": [
+     "Both deployments are supported because both hosts are Linux.",
+     "Only the deployment matching an unstated assumed baseline is supported."
+    ],
+    "observer": "The deployer and API caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "host_boundary",
+   "text": "The service runs on Linux and on no other host",
+   "question": "Does “host” mean the host kernel, the container or VM guest, or the service's user-space image?",
+   "options": [
+    "Require a Linux host kernel even when the service runs in a VM or container",
+    "Require only a Linux guest or container environment",
+    "Require both the host kernel and service environment to be Linux"
+   ],
+   "default_guess": "Treat the kernel visible to the service as the host and require it to be Linux.",
+   "witness": {
+    "initial": "A Linux container runs under a non-Linux desktop through a Linux virtual machine.",
+    "events": [
+     "The deployer starts the service in the container."
+    ],
+    "outcomes": [
+     "The deployment is supported because the service observes a Linux kernel.",
+     "The deployment is unsupported because the physical host is not Linux."
+    ],
+    "observer": "The deployer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "dependency_mapping",
+   "text": "a call these rules rely on",
+   "question": "Which service operations rely on each listed Linux/filesystem call, and what exact syscall or library API realizes each requirement?",
+   "options": [
+    "Specify the operation-to-primitive mapping here",
+    "Let each later module choose its own primitive",
+    "Treat every filesystem operation as relying on every listed property"
+   ],
+   "default_guess": "Specify one operation-to-primitive mapping and the required flags and errors for each primitive.",
+   "witness": {
+    "initial": "Two modules must safely access the same service-managed path.",
+    "events": [
+     "One implementer uses a pathname check followed by an ordinary open.",
+     "Another implementer uses a descriptor-relative open with no-follow flags."
+    ],
+    "outcomes": [
+     "A link substitution between check and open can redirect the first module.",
+     "The second module rejects or avoids the substituted link."
+    ],
+    "observer": "The API caller and filesystem owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "filesystem_support",
+   "text": "a Linux or file system on which a call these rules rely on — opening without following a link, opening a folder as a folder, opening without blocking, creating exclusively, locking, renaming, flushing — does not act as Linux documents it, is unsupported",
+   "question": "Which filesystems, mount configurations and remote or overlay filesystems are supported, and who ensures they provide the required semantics when the service does not test them?",
+   "options": [
+    "Name an allowlist of filesystems and mount constraints",
+    "Make deployment responsible for validating the required capabilities",
+    "Declare all Linux filesystems supported unless a failure is observed"
+   ],
+   "default_guess": "Make deployment responsible for selecting and validating a documented allowlist of filesystem and mount configurations.",
+   "witness": {
+    "initial": "One deployment stores service files on a local filesystem and another on a network-mounted filesystem with different lock or rename guarantees.",
+    "events": [
+     "The deployer starts the service without a capability test.",
+     "Two callers concurrently update the same object."
+    ],
+    "outcomes": [
+     "Both deployments are considered supported and must produce the same result.",
+     "The network-mounted deployment is silently outside support, although no declared check identifies it."
+    ],
+    "observer": "The deployer and concurrent callers"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "symlink_semantics",
+   "text": "opening without following a link",
+   "question": "Must opening reject only a symlink in the final path component, or also prevent symlink traversal in every ancestor component, and what error is produced?",
+   "options": [
+    "Reject only a final-component symlink",
+    "Reject symlinks in every path component",
+    "Permit trusted ancestor symlinks but reject an untrusted final symlink"
+   ],
+   "default_guess": "Resolve relative to a trusted directory descriptor and reject symlinks in every untrusted component.",
+   "witness": {
+    "initial": "A requested regular file has no final-component symlink, but one ancestor directory is replaced by a symlink to another tree.",
+    "events": [
+     "A caller requests the file.",
+     "The service opens the path."
+    ],
+    "outcomes": [
+     "The open succeeds because only the final component is checked.",
+     "The open fails because no path component may be followed through a symlink."
+    ],
+    "observer": "The caller and owner of the other tree"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "directory_open_semantics",
+   "text": "opening a folder as a folder",
+   "question": "What exact directory-open guarantee is required: an atomic directory-only open, a post-open type check, or merely successful enumeration, and how are substitutions and errors handled?",
+   "options": [
+    "Use an atomic directory-only open flag",
+    "Open first and verify the descriptor refers to a directory",
+    "Check the pathname before an ordinary open"
+   ],
+   "default_guess": "Use an atomic directory-only descriptor open and return a defined invalid-path error for non-directories.",
+   "witness": {
+    "initial": "A path initially names a directory and is replaced with a regular file during access.",
+    "events": [
+     "A caller triggers an operation on that path.",
+     "The service attempts to open it as a folder."
+    ],
+    "outcomes": [
+     "The service opens the replacement and rejects it only after inspection.",
+     "The directory-only open fails atomically without accepting the replacement."
+    ],
+    "observer": "The caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "nonblocking_semantics",
+   "text": "opening without blocking",
+   "question": "Which objects must be opened nonblocking, what maximum waiting behavior is allowed, and how are would-block or unsupported errors exposed or retried?",
+   "options": [
+    "Use nonblocking mode for every filesystem open",
+    "Use it only for object types that can block, with defined would-block handling",
+    "Interpret the phrase as requiring only that request handling have a timeout"
+   ],
+   "default_guess": "Use nonblocking open for potentially blocking special objects and map would-block to a defined immediate error without retry.",
+   "witness": {
+    "initial": "An untrusted path names a FIFO with no peer.",
+    "events": [
+     "A caller submits the path.",
+     "The service opens it."
+    ],
+    "outcomes": [
+     "The request waits for a peer or until an unstated timeout.",
+     "The open returns immediately and the request receives an error."
+    ],
+    "observer": "The caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "exclusive_create_semantics",
+   "text": "creating exclusively",
+   "question": "Which objects are created exclusively, what namespace determines exclusivity, and what result is returned when the target already exists?",
+   "options": [
+    "Fail whenever the final name already exists",
+    "Create a unique temporary name and later replace the destination",
+    "Use exclusive creation only for locks, not persisted output"
+   ],
+   "default_guess": "Use atomic exclusive creation for newly named objects and return an explicit conflict when the name already exists.",
+   "witness": {
+    "initial": "No object exists at a target name.",
+    "events": [
+     "Caller A and caller B concurrently request creation at the same name.",
+     "Both service workers attempt creation."
+    ],
+    "outcomes": [
+     "Exactly one creation succeeds and the other receives a conflict.",
+     "Both requests proceed through separate temporary objects and one later replaces the other's result."
+    ],
+    "observer": "Both callers"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "locking_semantics",
+   "text": "locking",
+   "question": "What is locked, whether the lock is advisory or mandatory, shared or exclusive, process- or descriptor-scoped, how long acquisition may wait, and what failure or stale-lock behavior applies?",
+   "options": [
+    "Use blocking exclusive advisory file locks",
+    "Use nonblocking advisory locks and return conflict",
+    "Use lock files created exclusively",
+    "Use an in-process lock only"
+   ],
+   "default_guess": "Use nonblocking exclusive advisory locks held by an open descriptor for the full critical section, returning a defined conflict when unavailable.",
+   "witness": {
+    "initial": "Two service workers can update the same persisted object.",
+    "events": [
+     "Worker A acquires its chosen lock and starts an update.",
+     "Worker B attempts the same update using a different reasonable interpretation of “locking”."
+    ],
+    "outcomes": [
+     "Worker B waits and later performs a serialized update.",
+     "Worker B immediately fails with a conflict or proceeds because its lock scope does not coordinate with worker A."
+    ],
+    "observer": "The two callers"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "rename_semantics",
+   "text": "renaming",
+   "question": "Must rename be atomic, may it overwrite an existing destination, must source and destination share a filesystem, and what state is required after cross-device or collision errors?",
+   "options": [
+    "Require same-filesystem atomic rename with replacement",
+    "Require same-filesystem no-replace rename",
+    "Fall back to copy and delete across filesystems"
+   ],
+   "default_guess": "Require a same-filesystem atomic rename, state explicitly whether replacement is allowed, and reject cross-filesystem moves without copy-and-delete fallback.",
+   "witness": {
+    "initial": "A completed temporary file is ready while a destination with the same name already exists.",
+    "events": [
+     "The service commits the temporary file by rename."
+    ],
+    "outcomes": [
+     "The existing destination is atomically replaced.",
+     "The rename fails and the existing destination remains unchanged."
+    ],
+    "observer": "The caller and any concurrent reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "flush_durability",
+   "text": "flushing",
+   "question": "What must be flushed, with which operation, and what durability guarantee is required before success is returned, including whether the containing directory must be flushed after creation or rename?",
+   "options": [
+    "Flush only language-level buffers",
+    "Flush file contents and metadata",
+    "Flush the file and every affected containing directory",
+    "Do not promise crash durability"
+   ],
+   "default_guess": "Flush file contents and metadata, then flush the affected containing directory after creation or rename before reporting success.",
+   "witness": {
+    "initial": "The service has written and renamed a result but the containing directory entry has not been durably flushed.",
+    "events": [
+     "The service reports success to the caller.",
+     "The machine loses power immediately."
+    ],
+    "outcomes": [
+     "The acknowledged result may be absent after restart because flushing meant only the file or user-space buffer.",
+     "The acknowledged result and its directory entry must survive because success required both file and directory durability."
+    ],
+    "observer": "The caller after restart"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "unsupported_environment_handling",
+   "text": "is unsupported: the service neither tests for it nor defines what it does there",
+   "question": "How does deployment determine that an environment is supported when the service performs no test, and is startup rejection, undefined runtime behavior, or deployment-time prevention required?",
+   "options": [
+    "Enforce the platform and filesystem constraints in the deployment route",
+    "Let operators attest to them manually",
+    "Allow startup everywhere and classify failures afterward as unsupported"
+   ],
+   "default_guess": "Require the deployment route to enforce a named Linux and filesystem capability baseline before the service starts.",
+   "witness": {
+    "initial": "A deployment uses a Linux filesystem whose rename or lock semantics do not meet the unstated assumption.",
+    "events": [
+     "The deployment route installs and starts the service without testing that property.",
+     "A caller performs the affected operation."
+    ],
+    "outcomes": [
+     "The deployment should have been prevented by an external support check.",
+     "The deployment is allowed, and any resulting behavior is outside the specification with no defined signal."
+    ],
+    "observer": "The deployer and caller"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"platform_baseline\",\"text\":\"The service runs on Linux and on no other host, no version named\",\"question\":\"Which Linux kernel, user-space ABI, distribution, architecture and minimum versions are the supported execution baseline?\",\"options\":[\"Support every Linux version on which dependencies install\",\"Name a minimum kernel and user-space baseline\",\"Name one deployment image and kernel combination\"],\"default_guess\":\"Name and test the deployment image and a minimum supported kernel version.\",\"witness\":{\"initial\":\"Two Linux deployments use different kernel versions.\",\"events\":[\"The deployer starts the same service build on each deployment.\",\"The service reaches a filesystem call whose flags or error behavior differs between the kernels.\"],\"outcomes\":[\"Both deployments are supported because both hosts are Linux.\",\"Only the deployment matching an unstated assumed baseline is supported.\"],\"observer\":\"The deployer and API caller\"}},{\"subject\":\"context\",\"kind\":\"host_boundary\",\"text\":\"The service runs on Linux and on no other host\",\"question\":\"Does “host” mean the host kernel, the container or VM guest, or the service's user-space image?\",\"options\":[\"Require a Linux host kernel even when the service runs in a VM or container\",\"Require only a Linux guest or container environment\",\"Require both the host kernel and service environment to be Linux\"],\"default_guess\":\"Treat the kernel visible to the service as the host and require it to be Linux.\",\"witness\":{\"initial\":\"A Linux container runs under a non-Linux desktop through a Linux virtual machine.\",\"events\":[\"The deployer starts the service in the container.\"],\"outcomes\":[\"The deployment is supported because the service observes a Linux kernel.\",\"The deployment is unsupported because the physical host is not Linux.\"],\"observer\":\"The deployer\"}},{\"subject\":\"context\",\"kind\":\"dependency_mapping\",\"text\":\"a call these rules rely on\",\"question\":\"Which service operations rely on each listed Linux/filesystem call, and what exact syscall or library API realizes each requirement?\",\"options\":[\"Specify the operation-to-primitive mapping here\",\"Let each later module choose its own primitive\",\"Treat every filesystem operation as relying on every listed property\"],\"default_guess\":\"Specify one operation-to-primitive mapping and the required flags and errors for each primitive.\",\"witness\":{\"initial\":\"Two modules must safely access the same service-managed path.\",\"events\":[\"One implementer uses a pathname check followed by an ordinary open.\",\"Another implementer uses a descriptor-relative open with no-follow flags.\"],\"outcomes\":[\"A link substitution between check and open can redirect the first module.\",\"The second module rejects or avoids the substituted link.\"],\"observer\":\"The API caller and filesystem owner\"}},{\"subject\":\"context\",\"kind\":\"filesystem_support\",\"text\":\"a Linux or file system on which a call these rules rely on — opening without following a link, opening a folder as a folder, opening without blocking, creating exclusively, locking, renaming, flushing — does not act as Linux documents it, is unsupported\",\"question\":\"Which filesystems, mount configurations and remote or overlay filesystems are supported, and who ensures they provide the required semantics when the service does not test them?\",\"options\":[\"Name an allowlist of filesystems and mount constraints\",\"Make deployment responsible for validating the required capabilities\",\"Declare all Linux filesystems supported unless a failure is observed\"],\"default_guess\":\"Make deployment responsible for selecting and validating a documented allowlist of filesystem and mount configurations.\",\"witness\":{\"initial\":\"One deployment stores service files on a local filesystem and another on a network-mounted filesystem with different lock or rename guarantees.\",\"events\":[\"The deployer starts the service without a capability test.\",\"Two callers concurrently update the same object.\"],\"outcomes\":[\"Both deployments are considered supported and must produce the same result.\",\"The network-mounted deployment is silently outside support, although no declared check identifies it.\"],\"observer\":\"The deployer and concurrent callers\"}},{\"subject\":\"context\",\"kind\":\"symlink_semantics\",\"text\":\"opening without following a link\",\"question\":\"Must opening reject only a symlink in the final path component, or also prevent symlink traversal in every ancestor component, and what error is produced?\",\"options\":[\"Reject only a final-component symlink\",\"Reject symlinks in every path component\",\"Permit trusted ancestor symlinks but reject an untrusted final symlink\"],\"default_guess\":\"Resolve relative to a trusted directory descriptor and reject symlinks in every untrusted component.\",\"witness\":{\"initial\":\"A requested regular file has no final-component symlink, but one ancestor directory is replaced by a symlink to another tree.\",\"events\":[\"A caller requests the file.\",\"The service opens the path.\"],\"outcomes\":[\"The open succeeds because only the final component is checked.\",\"The open fails because no path component may be followed through a symlink.\"],\"observer\":\"The caller and owner of the other tree\"}},{\"subject\":\"context\",\"kind\":\"directory_open_semantics\",\"text\":\"opening a folder as a folder\",\"question\":\"What exact directory-open guarantee is required: an atomic directory-only open, a post-open type check, or merely successful enumeration, and how are substitutions and errors handled?\",\"options\":[\"Use an atomic directory-only open flag\",\"Open first and verify the descriptor refers to a directory\",\"Check the pathname before an ordinary open\"],\"default_guess\":\"Use an atomic directory-only descriptor open and return a defined invalid-path error for non-directories.\",\"witness\":{\"initial\":\"A path initially names a directory and is replaced with a regular file during access.\",\"events\":[\"A caller triggers an operation on that path.\",\"The service attempts to open it as a folder.\"],\"outcomes\":[\"The service opens the replacement and rejects it only after inspection.\",\"The directory-only open fails atomically without accepting the replacement.\"],\"observer\":\"The caller\"}},{\"subject\":\"context\",\"kind\":\"nonblocking_semantics\",\"text\":\"opening without blocking\",\"question\":\"Which objects must be opened nonblocking, what maximum waiting behavior is allowed, and how are would-block or unsupported errors exposed or retried?\",\"options\":[\"Use nonblocking mode for every filesystem open\",\"Use it only for object types that can block, with defined would-block handling\",\"Interpret the phrase as requiring only that request handling have a timeout\"],\"default_guess\":\"Use nonblocking open for potentially blocking special objects and map would-block to a defined immediate error without retry.\",\"witness\":{\"initial\":\"An untrusted path names a FIFO with no peer.\",\"events\":[\"A caller submits the path.\",\"The service opens it.\"],\"outcomes\":[\"The request waits for a peer or until an unstated timeout.\",\"The open returns immediately and the request receives an error.\"],\"observer\":\"The caller\"}},{\"subject\":\"context\",\"kind\":\"exclusive_create_semantics\",\"text\":\"creating exclusively\",\"question\":\"Which objects are created exclusively, what namespace determines exclusivity, and what result is returned when the target already exists?\",\"options\":[\"Fail whenever the final name already exists\",\"Create a unique temporary name and later replace the destination\",\"Use exclusive creation only for locks, not persisted output\"],\"default_guess\":\"Use atomic exclusive creation for newly named objects and return an explicit conflict when the name already exists.\",\"witness\":{\"initial\":\"No object exists at a target name.\",\"events\":[\"Caller A and caller B concurrently request creation at the same name.\",\"Both service workers attempt creation.\"],\"outcomes\":[\"Exactly one creation succeeds and the other receives a conflict.\",\"Both requests proceed through separate temporary objects and one later replaces the other's result.\"],\"observer\":\"Both callers\"}},{\"subject\":\"context\",\"kind\":\"locking_semantics\",\"text\":\"locking\",\"question\":\"What is locked, whether the lock is advisory or mandatory, shared or exclusive, process- or descriptor-scoped, how long acquisition may wait, and what failure or stale-lock behavior applies?\",\"options\":[\"Use blocking exclusive advisory file locks\",\"Use nonblocking advisory locks and return conflict\",\"Use lock files created exclusively\",\"Use an in-process lock only\"],\"default_guess\":\"Use nonblocking exclusive advisory locks held by an open descriptor for the full critical section, returning a defined conflict when unavailable.\",\"witness\":{\"initial\":\"Two service workers can update the same persisted object.\",\"events\":[\"Worker A acquires its chosen lock and starts an update.\",\"Worker B attempts the same update using a different reasonable interpretation of “locking”.\"],\"outcomes\":[\"Worker B waits and later performs a serialized update.\",\"Worker B immediately fails with a conflict or proceeds because its lock scope does not coordinate with worker A.\"],\"observer\":\"The two callers\"}},{\"subject\":\"context\",\"kind\":\"rename_semantics\",\"text\":\"renaming\",\"question\":\"Must rename be atomic, may it overwrite an existing destination, must source and destination share a filesystem, and what state is required after cross-device or collision errors?\",\"options\":[\"Require same-filesystem atomic rename with replacement\",\"Require same-filesystem no-replace rename\",\"Fall back to copy and delete across filesystems\"],\"default_guess\":\"Require a same-filesystem atomic rename, state explicitly whether replacement is allowed, and reject cross-filesystem moves without copy-and-delete fallback.\",\"witness\":{\"initial\":\"A completed temporary file is ready while a destination with the same name already exists.\",\"events\":[\"The service commits the temporary file by rename.\"],\"outcomes\":[\"The existing destination is atomically replaced.\",\"The rename fails and the existing destination remains unchanged.\"],\"observer\":\"The caller and any concurrent reader\"}},{\"subject\":\"context\",\"kind\":\"flush_durability\",\"text\":\"flushing\",\"question\":\"What must be flushed, with which operation, and what durability guarantee is required before success is returned, including whether the containing directory must be flushed after creation or rename?\",\"options\":[\"Flush only language-level buffers\",\"Flush file contents and metadata\",\"Flush the file and every affected containing directory\",\"Do not promise crash durability\"],\"default_guess\":\"Flush file contents and metadata, then flush the affected containing directory after creation or rename before reporting success.\",\"witness\":{\"initial\":\"The service has written and renamed a result but the containing directory entry has not been durably flushed.\",\"events\":[\"The service reports success to the caller.\",\"The machine loses power immediately.\"],\"outcomes\":[\"The acknowledged result may be absent after restart because flushing meant only the file or user-space buffer.\",\"The acknowledged result and its directory entry must survive because success required both file and directory durability.\"],\"observer\":\"The caller after restart\"}},{\"subject\":\"context\",\"kind\":\"unsupported_environment_handling\",\"text\":\"is unsupported: the service neither tests for it nor defines what it does there\",\"question\":\"How does deployment determine that an environment is supported when the service performs no test, and is startup rejection, undefined runtime behavior, or deployment-time prevention required?\",\"options\":[\"Enforce the platform and filesystem constraints in the deployment route\",\"Let operators attest to them manually\",\"Allow startup everywhere and classify failures afterward as unsupported\"],\"default_guess\":\"Require the deployment route to enforce a named Linux and filesystem capability baseline before the service starts.\",\"witness\":{\"initial\":\"A deployment uses a Linux filesystem whose rename or lock semantics do not meet the unstated assumption.\",\"events\":[\"The deployment route installs and starts the service without testing that property.\",\"A caller performs the affected operation.\"],\"outcomes\":[\"The deployment should have been prevented by an external support check.\",\"The deployment is allowed, and any resulting behavior is outside the specification with no defined signal.\"],\"observer\":\"The deployer and caller\"}}]}",
+ "set_aside": []
+}

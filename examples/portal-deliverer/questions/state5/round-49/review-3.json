@@ -1,0 +1,213 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "platform_baseline",
+   "text": "The service runs on Linux and on no other host, no version named (owner, 2026-11-21).",
+   "question": "Which Linux kernel, userspace and system-call baseline is the minimum supported platform, and what does the parenthetical owner/date mean?",
+   "options": [
+    "Support every Linux version on which dependencies install",
+    "Name a minimum kernel and userspace baseline",
+    "Support only the exact deployment-image platform"
+   ],
+   "default_guess": "Support only the tested deployment-image kernel/userspace combination and record their minimum versions.",
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "dependency_scope",
+   "text": "a call these rules rely on",
+   "question": "Which service operations rely on each listed filesystem call or guarantee?",
+   "options": [
+    "Every operation that accesses storage",
+    "Only operations later identified explicitly",
+    "A fixed mapping from each public operation to the primitives it requires"
+   ],
+   "default_guess": "Require a fixed mapping from each storage-related public operation to the primitives and guarantees it uses.",
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "conformance_criterion",
+   "text": "does not act as Linux documents it",
+   "question": "Which Linux documentation and which exact documented guarantees determine whether a host or filesystem is supported?",
+   "options": [
+    "The current man-pages project",
+    "The documentation shipped with the deployment image",
+    "Explicit guarantees copied into the specification"
+   ],
+   "default_guess": "State the required guarantees explicitly and cite the documentation version shipped with the deployment image.",
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "symlink_semantics",
+   "text": "opening without following a link",
+   "question": "Must link following be prevented only for the final path component or for every component, and which API and flags establish that guarantee?",
+   "options": [
+    "Reject a symlink only at the final component",
+    "Reject symlinks in every path component",
+    "Resolve beneath a trusted directory while preventing escapes and links"
+   ],
+   "default_guess": "Resolve beneath a trusted directory and reject symlinks in every component.",
+   "witness": {
+    "initial": "A trusted upload directory contains a normal subdirectory that is later replaced by a symlink to a directory outside it.",
+    "events": [
+     "A client submits a path through that intermediate component.",
+     "The service opens the final file without following a link."
+    ],
+    "outcomes": [
+     "An implementation using O_NOFOLLOW on only the final component opens the file outside the trusted directory.",
+     "An implementation that rejects links in every component refuses the request."
+    ],
+    "observer": "The client and the operator responsible for files outside the upload directory"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "directory_open_semantics",
+   "text": "opening a folder as a folder",
+   "question": "What exact behavior is required when opening a directory, including handling of non-directories, symlinks, mount points and subsequent relative operations?",
+   "options": [
+    "Use a directory-only open flag and reject non-directories",
+    "Accept any path that resolves to a directory",
+    "Open a directory descriptor and perform all child access relative to it"
+   ],
+   "default_guess": "Open a directory descriptor with directory-only and no-follow protections, then perform child access relative to that descriptor.",
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "nonblocking_semantics",
+   "text": "opening without blocking",
+   "question": "Which file types must be opened non-blockingly, which API or flag is required, and what result is expected when immediate opening is impossible?",
+   "options": [
+    "Apply O_NONBLOCK to every open",
+    "Apply nonblocking behavior only to special files that can block",
+    "Prohibit special files and require ordinary regular files or directories"
+   ],
+   "default_guess": "Prohibit special files and accept only expected regular files or directories; treat an unexpected file type as an error.",
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "exclusive_create_semantics",
+   "text": "creating exclusively",
+   "question": "What must exclusive creation guarantee about existing paths, symlinks, concurrent creators, permissions and cleanup after failure?",
+   "options": [
+    "Fail whenever any directory entry already exists",
+    "Replace an existing regular file but reject links",
+    "Create a temporary file exclusively and publish it later by rename"
+   ],
+   "default_guess": "Fail if any entry already exists, reject links, and clean up an unpublished temporary file after failure.",
+   "witness": {
+    "initial": "No output exists at a requested path and two workers receive requests for that same path.",
+    "events": [
+     "Worker A attempts exclusive creation.",
+     "Worker B attempts exclusive creation concurrently."
+    ],
+    "outcomes": [
+     "Exactly one worker creates the path and the other receives a collision error.",
+     "Both workers proceed because exclusivity was interpreted as a pre-check followed by ordinary creation, and one result overwrites the other."
+    ],
+    "observer": "The two clients and the reader of the resulting file"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "locking_semantics",
+   "text": "locking",
+   "question": "Which locking mechanism, lock scope, shared/exclusive modes, blocking policy, ownership lifetime and contention result are required?",
+   "options": [
+    "BSD flock on a dedicated lock file",
+    "POSIX record locks on the data file",
+    "Linux open-file-description locks",
+    "No advisory lock; rely on exclusive creation and atomic rename"
+   ],
+   "default_guess": "Use a dedicated lock file with a nonblocking exclusive lock, held for the complete critical section, and return a defined contention error.",
+   "witness": {
+    "initial": "Two service processes can modify the same stored object.",
+    "events": [
+     "Process A acquires the kind of lock it selected and begins an update.",
+     "Process B uses a different locking interpretation and begins an update to the same object."
+    ],
+    "outcomes": [
+     "Both implementations use the same process-independent lock protocol, so B waits or fails predictably.",
+     "The selected lock mechanisms or lock targets do not contend, so both updates proceed and one is lost."
+    ],
+    "observer": "A client reading the stored object after both updates"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "rename_semantics",
+   "text": "renaming",
+   "question": "Must rename replace an existing destination, must source and destination be on the same filesystem, and which atomicity guarantees are required for concurrent readers and writers?",
+   "options": [
+    "Atomic replacement on one filesystem",
+    "No-replace rename that fails if the destination exists",
+    "Cross-filesystem move with copy-and-delete fallback"
+   ],
+   "default_guess": "Require same-filesystem atomic replacement and reject cross-filesystem moves.",
+   "witness": {
+    "initial": "An old complete output exists and a new complete temporary output is ready on the same filesystem.",
+    "events": [
+     "A writer publishes the new output by renaming it over the old path.",
+     "A reader opens the destination during publication."
+    ],
+    "outcomes": [
+     "With atomic replacement, the reader sees either the complete old output or the complete new output.",
+     "With a no-replace or copy-and-delete interpretation, publication fails or the reader can observe an absent or partial destination."
+    ],
+    "observer": "The reader and the client awaiting publication"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "durability_semantics",
+   "text": "flushing",
+   "question": "What must be flushed, in what order, and what durability point may the service report as success: buffered language data, the file, file metadata, the containing directory, or the filesystem?",
+   "options": [
+    "Flush only language-level buffers",
+    "fsync the file before success",
+    "fsync the file and containing directory after rename",
+    "No crash-durability guarantee"
+   ],
+   "default_guess": "Flush and fsync the completed file, rename it atomically, then fsync the containing directory before reporting durable success.",
+   "witness": {
+    "initial": "A request has produced a complete temporary file and the service is about to publish it.",
+    "events": [
+     "The service flushes according to its interpretation and reports success.",
+     "The host loses power immediately afterward.",
+     "The host restarts and the client reads the published path."
+    ],
+    "outcomes": [
+     "If the file and containing directory were durably synchronized, the reported result remains present and complete.",
+     "If flushing meant only a language buffer or only the file, the reported path or its latest contents may be missing after restart."
+    ],
+    "observer": "The client that received success"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "support_boundary",
+   "text": "is unsupported: the service neither tests for it nor defines what it does there.",
+   "question": "Who establishes that a deployment satisfies the filesystem assumptions, and how is that prerequisite represented or enforced if the service performs no test?",
+   "options": [
+    "The deployment route verifies and records compatibility",
+    "The operator is responsible under a documented prerequisite",
+    "Only a named deployment image and filesystem are supported, without capability detection"
+   ],
+   "default_guess": "Limit support to a named deployment image and filesystem configuration verified by the deployment route.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"platform_baseline\",\"text\":\"The service runs on Linux and on no other host, no version named (owner, 2026-11-21).\",\"question\":\"Which Linux kernel, userspace and system-call baseline is the minimum supported platform, and what does the parenthetical owner/date mean?\",\"options\":[\"Support every Linux version on which dependencies install\",\"Name a minimum kernel and userspace baseline\",\"Support only the exact deployment-image platform\"],\"default_guess\":\"Support only the tested deployment-image kernel/userspace combination and record their minimum versions.\"},{\"subject\":\"context\",\"kind\":\"dependency_scope\",\"text\":\"a call these rules rely on\",\"question\":\"Which service operations rely on each listed filesystem call or guarantee?\",\"options\":[\"Every operation that accesses storage\",\"Only operations later identified explicitly\",\"A fixed mapping from each public operation to the primitives it requires\"],\"default_guess\":\"Require a fixed mapping from each storage-related public operation to the primitives and guarantees it uses.\"},{\"subject\":\"context\",\"kind\":\"conformance_criterion\",\"text\":\"does not act as Linux documents it\",\"question\":\"Which Linux documentation and which exact documented guarantees determine whether a host or filesystem is supported?\",\"options\":[\"The current man-pages project\",\"The documentation shipped with the deployment image\",\"Explicit guarantees copied into the specification\"],\"default_guess\":\"State the required guarantees explicitly and cite the documentation version shipped with the deployment image.\"},{\"subject\":\"context\",\"kind\":\"symlink_semantics\",\"text\":\"opening without following a link\",\"question\":\"Must link following be prevented only for the final path component or for every component, and which API and flags establish that guarantee?\",\"options\":[\"Reject a symlink only at the final component\",\"Reject symlinks in every path component\",\"Resolve beneath a trusted directory while preventing escapes and links\"],\"default_guess\":\"Resolve beneath a trusted directory and reject symlinks in every component.\",\"witness\":{\"initial\":\"A trusted upload directory contains a normal subdirectory that is later replaced by a symlink to a directory outside it.\",\"events\":[\"A client submits a path through that intermediate component.\",\"The service opens the final file without following a link.\"],\"outcomes\":[\"An implementation using O_NOFOLLOW on only the final component opens the file outside the trusted directory.\",\"An implementation that rejects links in every component refuses the request.\"],\"observer\":\"The client and the operator responsible for files outside the upload directory\"}},{\"subject\":\"context\",\"kind\":\"directory_open_semantics\",\"text\":\"opening a folder as a folder\",\"question\":\"What exact behavior is required when opening a directory, including handling of non-directories, symlinks, mount points and subsequent relative operations?\",\"options\":[\"Use a directory-only open flag and reject non-directories\",\"Accept any path that resolves to a directory\",\"Open a directory descriptor and perform all child access relative to it\"],\"default_guess\":\"Open a directory descriptor with directory-only and no-follow protections, then perform child access relative to that descriptor.\"},{\"subject\":\"context\",\"kind\":\"nonblocking_semantics\",\"text\":\"opening without blocking\",\"question\":\"Which file types must be opened non-blockingly, which API or flag is required, and what result is expected when immediate opening is impossible?\",\"options\":[\"Apply O_NONBLOCK to every open\",\"Apply nonblocking behavior only to special files that can block\",\"Prohibit special files and require ordinary regular files or directories\"],\"default_guess\":\"Prohibit special files and accept only expected regular files or directories; treat an unexpected file type as an error.\"},{\"subject\":\"context\",\"kind\":\"exclusive_create_semantics\",\"text\":\"creating exclusively\",\"question\":\"What must exclusive creation guarantee about existing paths, symlinks, concurrent creators, permissions and cleanup after failure?\",\"options\":[\"Fail whenever any directory entry already exists\",\"Replace an existing regular file but reject links\",\"Create a temporary file exclusively and publish it later by rename\"],\"default_guess\":\"Fail if any entry already exists, reject links, and clean up an unpublished temporary file after failure.\",\"witness\":{\"initial\":\"No output exists at a requested path and two workers receive requests for that same path.\",\"events\":[\"Worker A attempts exclusive creation.\",\"Worker B attempts exclusive creation concurrently.\"],\"outcomes\":[\"Exactly one worker creates the path and the other receives a collision error.\",\"Both workers proceed because exclusivity was interpreted as a pre-check followed by ordinary creation, and one result overwrites the other.\"],\"observer\":\"The two clients and the reader of the resulting file\"}},{\"subject\":\"context\",\"kind\":\"locking_semantics\",\"text\":\"locking\",\"question\":\"Which locking mechanism, lock scope, shared/exclusive modes, blocking policy, ownership lifetime and contention result are required?\",\"options\":[\"BSD flock on a dedicated lock file\",\"POSIX record locks on the data file\",\"Linux open-file-description locks\",\"No advisory lock; rely on exclusive creation and atomic rename\"],\"default_guess\":\"Use a dedicated lock file with a nonblocking exclusive lock, held for the complete critical section, and return a defined contention error.\",\"witness\":{\"initial\":\"Two service processes can modify the same stored object.\",\"events\":[\"Process A acquires the kind of lock it selected and begins an update.\",\"Process B uses a different locking interpretation and begins an update to the same object.\"],\"outcomes\":[\"Both implementations use the same process-independent lock protocol, so B waits or fails predictably.\",\"The selected lock mechanisms or lock targets do not contend, so both updates proceed and one is lost.\"],\"observer\":\"A client reading the stored object after both updates\"}},{\"subject\":\"context\",\"kind\":\"rename_semantics\",\"text\":\"renaming\",\"question\":\"Must rename replace an existing destination, must source and destination be on the same filesystem, and which atomicity guarantees are required for concurrent readers and writers?\",\"options\":[\"Atomic replacement on one filesystem\",\"No-replace rename that fails if the destination exists\",\"Cross-filesystem move with copy-and-delete fallback\"],\"default_guess\":\"Require same-filesystem atomic replacement and reject cross-filesystem moves.\",\"witness\":{\"initial\":\"An old complete output exists and a new complete temporary output is ready on the same filesystem.\",\"events\":[\"A writer publishes the new output by renaming it over the old path.\",\"A reader opens the destination during publication.\"],\"outcomes\":[\"With atomic replacement, the reader sees either the complete old output or the complete new output.\",\"With a no-replace or copy-and-delete interpretation, publication fails or the reader can observe an absent or partial destination.\"],\"observer\":\"The reader and the client awaiting publication\"}},{\"subject\":\"context\",\"kind\":\"durability_semantics\",\"text\":\"flushing\",\"question\":\"What must be flushed, in what order, and what durability point may the service report as success: buffered language data, the file, file metadata, the containing directory, or the filesystem?\",\"options\":[\"Flush only language-level buffers\",\"fsync the file before success\",\"fsync the file and containing directory after rename\",\"No crash-durability guarantee\"],\"default_guess\":\"Flush and fsync the completed file, rename it atomically, then fsync the containing directory before reporting durable success.\",\"witness\":{\"initial\":\"A request has produced a complete temporary file and the service is about to publish it.\",\"events\":[\"The service flushes according to its interpretation and reports success.\",\"The host loses power immediately afterward.\",\"The host restarts and the client reads the published path.\"],\"outcomes\":[\"If the file and containing directory were durably synchronized, the reported result remains present and complete.\",\"If flushing meant only a language buffer or only the file, the reported path or its latest contents may be missing after restart.\"],\"observer\":\"The client that received success\"}},{\"subject\":\"context\",\"kind\":\"support_boundary\",\"text\":\"is unsupported: the service neither tests for it nor defines what it does there.\",\"question\":\"Who establishes that a deployment satisfies the filesystem assumptions, and how is that prerequisite represented or enforced if the service performs no test?\",\"options\":[\"The deployment route verifies and records compatibility\",\"The operator is responsible under a documented prerequisite\",\"Only a named deployment image and filesystem are supported, without capability detection\"],\"default_guess\":\"Limit support to a named deployment image and filesystem configuration verified by the deployment route.\"}]}",
+ "set_aside": []
+}
