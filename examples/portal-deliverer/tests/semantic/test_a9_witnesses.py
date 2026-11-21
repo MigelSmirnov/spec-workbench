@@ -14,7 +14,7 @@ MODIFIED = datetime(2026, 11, 18, 11, tzinfo=timezone.utc).timestamp()
 
 def jpeg(color=(200, 30, 30), exif=None, **metadata):
     out = BytesIO()
-    Image.new("RGB", (3000, 1500), color).save(out, "JPEG", exif=exif or Image.Exif(), **metadata)
+    Image.new("RGB", (3000, 1500), color).save(out, "JPEG", exif=Image.Exif() if exif is None else exif, **metadata)
     return out.getvalue()
 
 
