@@ -1086,3 +1086,11 @@ that writes StoredValues already publishes their bytes with `put_value_bytes` in
 `read_service_record` now projects an empty `required_headers` object to the empty tuple and an
 absent member to None. The `store` and `bindings` packets moved by these notes; the others only by
 global note indices. Structural review: 0 blocks. All 19 modules remain PASS.
+
+### Round 151 repair (2026-11-21)
+
+The `record_change` path-policy note lost its tail claiming the content-addressed area and the
+run spool are touched only by their publishers, which contradicted `open_store`,
+`read_value_bytes` and `remove_run_spool`; it now says only that value bytes and spooled files are
+published before the change by their publishers and that `record_change` publishes, rewrites and
+re-checks none of them. Only the `store` packet moved by text. All 19 modules remain PASS.
