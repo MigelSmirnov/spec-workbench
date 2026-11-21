@@ -95,43 +95,46 @@ edges into one input, of flow outputs under guards, and of proving again later.
 ### Formal invariants
 
 ```text
-proof = first_failure(phases[1..9], fixed_order) OR proven
-order(identifiers) = unicode_codepoint_order
+A05-1: proof = first_failure(phases[1..9], fixed_order) OR proven
 
-can_both_deliver(e1, e2) <-> NOT (guarded_same_port(e1, e2) AND e1.guard_value != e2.guard_value)
-for_all port: count(can_both_deliver edges into port) <= 1
+A05-2: order(identifiers) = unicode_codepoint_order
 
-highest_effect_class = max(operation_nodes.effect_class) OR read
-proof(version) recomputed_on_demand   (not persisted)
+A05-3: can_both_deliver(e1, e2) <-> NOT (guarded_same_port(e1, e2) AND e1.guard_value != e2.guard_value)
+
+A05-4: for_all port: count(can_both_deliver edges into port) <= 1
+
+A05-5: highest_effect_class = max(operation_nodes.effect_class) OR read
+
+A05-6: proof(version) recomputed_on_demand   (not persisted)
 ```
 
 ### Required tests
 
-1. A flow with a cycle and an edge between different schemas fails in phase 3 at
+1. A05-1: A flow with a cycle and an edge between different schemas fails in phase 3 at
    that edge, not at the cycle.
    [witness: verification:kernel_a05_first_failure_by_phase_order]
-2. Two failing edges report the one first in edge order, every time.
+2. A05-1, A05-2: Two failing edges report the one first in edge order, every time.
    [witness: verification:kernel_a05_first_failure_in_edge_order]
-3. Two unguarded edges into one `many` input are refused in phase 6.
+3. A05-4: Two unguarded edges into one `many` input are refused in phase 6.
    [witness: verification:kernel_a05_fan_in_one_delivering_edge_per_port]
-4. Two edges guarded on the same port with values `new` and `duplicate` into one
+4. A05-3, A05-4: Two edges guarded on the same port with values `new` and `duplicate` into one
    input are proven.
    [witness: verification:kernel_a05_exclusive_guards_share_input_port]
-5. A version refused because its binding is `proposed` is proven after the owner
+5. A05-6: A version refused because its binding is `proposed` is proven after the owner
    accepts the binding, with the same `flow_version_id`.
    [witness: verification:kernel_a05_proof_recomputed_on_demand]
 6. A function node whose output reaches nothing is refused in phase 9.
 7. A constant whose value does not fit the schema declared with it is refused
    at composition and records nothing; one whose declared schema differs from
    its port's stored schema is kept and fails in phase 2.
-8. An edge into node `Z` and an edge into node `a`, each between different
+8. A05-1, A05-2: An edge into node `Z` and an edge into node `a`, each between different
    schemas, fail in phase 3 at the edge into `Z`; with a third such edge into a
    flow output added, the proof fails at that edge instead.
    [witness: verification:kernel_a05_codepoint_identifier_order]
-9. A proven version with no operation node has `highest_effect_class` `read`;
+9. A05-5: A proven version with no operation node has `highest_effect_class` `read`;
    one with a `read` and a `draft-write` operation node has `draft-write`.
    [witness: verification:kernel_a05_highest_effect_class_max_or_read]
-10. Two edges guarded on the same port with the same value into one input are
+10. A05-3, A05-4: Two edges guarded on the same port with the same value into one input are
     refused in phase 6.
     [witness: verification:kernel_a05_same_guard_value_edges_refused]
 

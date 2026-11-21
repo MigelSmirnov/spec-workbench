@@ -249,28 +249,31 @@ and no detection promises the runtime cannot keep.
 ### Formal invariants
 
 ```text
-function_executed -> inside(fresh_bubblewrap_environment)
-environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}
-network(environment) = own_loopback_only AND env_vars(environment) = {PYTHONHASHSEED=0}
+A03-1: function_executed -> inside(fresh_bubblewrap_environment)
+       environment = {python_stdlib_runtime, code, inputs, exchange_dir, own_proc}
 
-trap_raised -> outcome = sandbox_violation   (even if output conforms)
-outcome = first_of(timeout, resource_exhausted, sandbox_violation, crashed,
-                   contract_violation, succeeded)
-cleanup_unconfirmed -> output_discarded AND kernel_process_stops
+A03-2: network(environment) = own_loopback_only AND env_vars(environment) = {PYTHONHASHSEED=0}
+
+A03-3: trap_raised -> outcome = sandbox_violation   (even if output conforms)
+
+A03-4: outcome = first_of(timeout, resource_exhausted, sandbox_violation, crashed,
+                          contract_violation, succeeded)
+
+A03-5: cleanup_unconfirmed -> output_discarded AND kernel_process_stops
 ```
 
 ### Required tests
 
-1. Code that calls `time.time()`, `os.urandom`, opens a socket or reads `/etc`
+1. A03-3: Code that calls `time.time()`, `os.urandom`, opens a socket or reads `/etc`
    concludes `sandbox_violation`, also when it swallows the error and returns a
    conforming output.
    [witness: verification:kernel_a03_trap_hit_is_sandbox_violation]
-2. A busy loop ends `timeout`; an allocation loop and a fork loop end
+2. A03-4: A busy loop ends `timeout`; an allocation loop and a fork loop end
    `resource_exhausted`; no process survives.
    [witness: verification:kernel_a03_deadline_and_limits_classified]
-3. An output one byte over `output_bytes` is `resource_exhausted`, not truncated.
+3. A03-4: An output one byte over `output_bytes` is `resource_exhausted`, not truncated.
    [witness: verification:kernel_a03_output_over_bound_not_truncated]
-4. A module without `run`, and one with a syntax error, are `crashed`; neither
+4. A03-4: A module without `run`, and one with a syntax error, are `crashed`; neither
    raises inside the kernel process. Submitting code never compiles, imports
    or parses it — the kernel process never interprets agent text (A16 rule 5)
    — so a module that cannot load is stored as an implementation like any
@@ -278,32 +281,32 @@ cleanup_unconfirmed -> output_discarded AND kernel_process_stops
    rule 3). State 0's "invalid … code refused" is the refusal of the request
    itself: code over its bound or a request off its schema (A16 rule 4).
    [witness: verification:kernel_a03_unloadable_module_is_crashed]
-5. A returned dict with an extra key is `contract_violation`.
+5. A03-4: A returned dict with an extra key is `contract_violation`.
    [witness: verification:kernel_a03_extra_output_key_contract_violation]
 6. An implementation whose outputs depend only on its inputs yields the same output
    digest twice on the same input.
-7. With `bubblewrap` absent the kernel does not start and names the missing
+7. A03-1: With `bubblewrap` absent the kernel does not start and names the missing
    sandbox.
    [witness: verification:kernel_a03_kernel_refuses_start_without_sandbox]
-8. Code that calls `time.time()`, swallows the error and then busy-loops ends
+8. A03-4: Code that calls `time.time()`, swallows the error and then busy-loops ends
    `timeout`, not `sandbox_violation`; code that hits a trap and returns a dict
    with an extra key ends `sandbox_violation`, not `contract_violation`.
    [witness: verification:kernel_a03_outcome_precedence_order]
-9. An implementation whose `run` returns `dict(os.environ)` on a `value` output
+9. A03-2: An implementation whose `run` returns `dict(os.environ)` on a `value` output
    port succeeds with exactly `{"PYTHONHASHSEED": "0"}`.
    [witness: verification:kernel_a03_env_holds_only_hash_seed]
-10. Inspected from outside it, each execution's environment has no network
+10. A03-1, A03-2: Inspected from outside it, each execution's environment has no network
     interface but its own loopback, mounts no host directory except the read-only runtime and its
     exchange directory, and has an exchange directory no other execution used.
     [witness: verification:kernel_a03_fresh_env_no_network_no_host_mounts]
-11. When removal of the exchange directory cannot be confirmed, the execution is
+11. A03-5: When removal of the exchange directory cannot be confirmed, the execution is
     recorded `crashed` with detail `cleanup_failed`, its output is discarded and
     the kernel process stops.
     [witness: verification:kernel_a03_unconfirmed_cleanup_stops_kernel]
-12. A module using `dataclasses` under `from __future__ import annotations`, and
+12. A03-4: A module using `dataclasses` under `from __future__ import annotations`, and
     one reading its own entry in `sys.modules`, load and conclude `passed`.
     [witness: verification:kernel_a03_module_loaded_as_by_import]
-13. `datetime.datetime.now`, `datetime.date.today`, `time.clock_gettime`,
+13. A03-3: `datetime.datetime.now`, `datetime.date.today`, `time.clock_gettime`,
     `time.thread_time` and `os.times` each conclude `sandbox_violation`.
     [witness: verification:kernel_a03_clock_entry_points_trapped]
 
@@ -395,49 +398,54 @@ admission order and of resubmitting an equal implementation.
 ### Formal invariants
 
 ```text
-corpus_order = order_first_added
-admitted <-> corpus != empty AND for_all case IN corpus: passed(case)
-refused.reason = empty_corpus OR first_in_corpus_order(not passed)
+A04-1: corpus_order = order_first_added
 
-submit(impl) AND verdict(impl, current_corpus) = admitted
-  AND current_activation != impl  -> new Activation(by kernel)
-rollback(impl) -> exists verdict(impl, current_corpus) = admitted
-verdict -> set_only_by_kernel
-capture(unknown_implementation, any_inputs) -> unknown_reference
-capture(contract_mismatch, any_inputs) -> refused_before_input_checks
-capture(matching_implementation, inputs_containing_FileFactsRef)
-  -> refused AND no_input_lookup AND no_input_byte_read AND no_publication AND no_change
+A04-2: admitted <-> corpus != empty AND for_all case IN corpus: passed(case)
+
+A04-3: refused.reason = empty_corpus OR first_in_corpus_order(not passed)
+
+A04-4: submit(impl) AND verdict(impl, current_corpus) = admitted
+         AND current_activation != impl  -> new Activation(by kernel)
+
+A04-5: rollback(impl) -> exists verdict(impl, current_corpus) = admitted
+
+A04-6: verdict -> set_only_by_kernel
+
+A04-7: capture(unknown_implementation, any_inputs) -> unknown_reference
+       capture(contract_mismatch, any_inputs) -> refused_before_input_checks
+       capture(matching_implementation, inputs_containing_FileFactsRef)
+         -> refused AND no_input_lookup AND no_input_byte_read AND no_publication AND no_change
 ```
 
 ### Required tests
 
-1. An implementation for a contract version with no cases is refused as
+1. A04-2, A04-3: An implementation for a contract version with no cases is refused as
    `empty_corpus` and nothing is activated.
    [witness: verification:kernel_a04_empty_corpus_refused]
-2. With cases c1, c2, c3 added in that order and c2, c3 failing, the reason names
+2. A04-1, A04-2, A04-3: With cases c1, c2, c3 added in that order and c2, c3 failing, the reason names
    c2; the verdict still records three executions.
    [witness: verification:kernel_a04_refusal_names_first_failing_case]
-3. Submitting an admitted implementation activates it, the Activation recorded by
+3. A04-2, A04-4: Submitting an admitted implementation activates it, the Activation recorded by
    the kernel; submitting it again changes nothing.
    [witness: verification:kernel_a04_admitted_submission_activates_once]
-4. After a failed run is captured, submitting the earlier implementation again runs
+4. A04-2, A04-4: After a failed run is captured, submitting the earlier implementation again runs
    admission over the grown corpus; it is activated only when it passes.
    [witness: verification:kernel_a04_resubmission_readmits_grown_corpus]
-5. A rollback to an implementation with no verdict over the current corpus is
+5. A04-5: A rollback to an implementation with no verdict over the current corpus is
    refused.
    [witness: verification:kernel_a04_rollback_requires_current_verdict]
-6. No operation lets the owner or an agent set a verdict.
+6. A04-6: No operation lets the owner or an agent set a verdict.
    [witness: verification:kernel_a04_verdict_set_only_by_kernel]
-7. Adding a case equal to c1 after c3 returns c1, keeps it first in the corpus,
+7. A04-1: Adding a case equal to c1 after c3 returns c1, keeps it first in the corpus,
    and leaves the corpus digest unchanged.
    [witness: verification:kernel_a04_corpus_order_is_first_added]
-8. An implementation whose output for a case differs from the expected value,
+8. A04-2, A04-3: An implementation whose output for a case differs from the expected value,
    and is a value the store has never held, is refused `failing_case` with
    outcome `output_mismatch` naming that case — never answered as an unknown
    reference.
    [witness: verification:kernel_a04_mismatch_with_unstored_output_refused]
 
-9. Calling the capture capability with a matching implementation and any
+9. A04-7: Calling the capture capability with a matching implementation and any
    facts-only file reference, empty or non-empty, alone or among readable
    refs, refuses naming its port and FileFactsRef without looking up inputs,
    reading input bytes, publishing bytes or recording a change. An unknown

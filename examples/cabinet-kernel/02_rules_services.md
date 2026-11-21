@@ -250,43 +250,49 @@ outcomes map to NodeExecution statuses.
 ### Formal invariants
 
 ```text
-attempt -> exactly_one_http_request
-redirect_followed -> never
-http_without_tls -> instance.class IN {local_dev, disposable_rig} OR loopback(host)
+A09-1: attempt -> exactly_one_http_request
 
-non_read AND (possibly_sent AND no_valid_answer) -> outcome_unknown
-non_read AND 4xx -> not_applied
-non_read AND 2xx -> applied
-read AND (not_sent OR no_answer OR 5xx) -> service_unreachable
-credential_bytes IN body -> failure_detail = withheld_note AND outputs = none
+A09-2: redirect_followed -> never
+
+A09-3: http_without_tls -> instance.class IN {local_dev, disposable_rig} OR loopback(host)
+
+A09-4: non_read AND (possibly_sent AND no_valid_answer) -> outcome_unknown
+
+A09-5: non_read AND 4xx -> not_applied
+
+A09-6: non_read AND 2xx -> applied
+
+A09-7: read AND (not_sent OR no_answer OR 5xx) -> service_unreachable
+
+A09-8: credential_bytes IN body -> failure_detail = withheld_note AND outputs = none
 ```
 
 ### Required tests
 
-1. A `POST` whose connection drops after the request was written concludes
+1. A09-1, A09-4: A `POST` whose connection drops after the request was written concludes
    `outcome_unknown` and no second request is sent.
    [witness: verification:kernel_a09_possibly_sent_outcome_unknown_no_retry]
-2. A `read` answered 503 rests the run `pending` with `service_unreachable`.
+2. A09-7: A `read` answered 503 rests the run `pending` with `service_unreachable`.
    [witness: verification:kernel_a09_read_5xx_service_unreachable]
-3. A `draft-write` answered 409 concludes `operation_refused` with the attempt
+3. A09-5: A `draft-write` answered 409 concludes `operation_refused` with the attempt
    `not_applied`.
    [witness: verification:kernel_a09_non_read_4xx_not_applied]
-4. A 2xx body missing an output port's member concludes `contract_violation`, and
+4. A09-6: A 2xx body missing an output port's member concludes `contract_violation`, and
    for a non-read operation the attempt is `applied`.
    [witness: verification:kernel_a09_non_read_2xx_applied_even_if_invalid]
-5. A redirect to another host is not followed and a production `http` target on a
+5. A09-2, A09-3: A redirect to another host is not followed and a production `http` target on a
    non-loopback host is refused before sending.
    [witness: verification:kernel_a09_no_redirect_plain_http_restricted]
 6. A proxy variable in the environment does not change where the request goes.
-7. A 401 whose body echoes the credential value keeps `failure_detail` exactly
+7. A09-5, A09-8: A 401 whose body echoes the credential value keeps `failure_detail` exactly
    `error body withheld: it contained the credential`, and the credential
    appears in no record.
    [witness: verification:kernel_a09_credential_echo_error_body_withheld]
-8. A 2xx JSON body that echoes the credential value in a member an output port
+8. A09-6, A09-8: A 2xx JSON body that echoes the credential value in a member an output port
    takes concludes `contract_violation` with that same `failure_detail`, and
    no StoredValue holds the credential.
    [witness: verification:kernel_a09_credential_echo_2xx_no_output_stored]
-9. A `read` whose connection is refused before the first byte of the request is
+9. A09-1, A09-7: A `read` whose connection is refused before the first byte of the request is
    written, and a `read` whose connection drops after the request was written,
    each conclude `service_unreachable`, and no second request is sent.
    [witness: verification:kernel_a09_read_unsent_or_unanswered_unreachable]

@@ -194,48 +194,53 @@ worker.
 ### Formal invariants
 
 ```text
-advance(run) -> inside(start | approve | resolve | resume | startup_recovery)
-next_node = min(node_id, ready_nodes)
-executing_nodes_at_once <= 1
+A13-1: advance(run) -> inside(start | approve | resolve | resume | startup_recovery)
 
-port_unreachable_by_guard -> skipped_by_guard   (transitive)
-input_from(failed | upstream_failed) -> upstream_failed   (wins over skip)
-conclusion(element) = status(node_execution) unless resolved(outcome_unknown) -> A11
-run.succeeded <-> for_all node: conclusion IN {succeeded, skipped_by_guard}
+A13-2: next_node = min(node_id, ready_nodes)
+
+A13-3: executing_nodes_at_once <= 1
+
+A13-4: port_unreachable_by_guard -> skipped_by_guard   (transitive)
+
+A13-5: input_from(failed | upstream_failed) -> upstream_failed   (wins over skip)
+
+A13-6: conclusion(element) = status(node_execution) unless resolved(outcome_unknown) -> A11
+
+A13-7: run.succeeded <-> for_all node: conclusion IN {succeeded, skipped_by_guard}
 ```
 
 ```text
-edge.disabled <-> source_concluded_succeeded AND guard_present AND guard_value_mismatch
-edge.enabled <-> source_concluded_succeeded AND (guard_absent OR guard_value_match)
-edge.undecided <-> NOT source_concluded_succeeded
+A13-8: edge.disabled <-> source_concluded_succeeded AND guard_present AND guard_value_mismatch
+       edge.enabled <-> source_concluded_succeeded AND (guard_absent OR guard_value_match)
+       edge.undecided <-> NOT source_concluded_succeeded
 ```
 
 ### Required tests
 
-1. Two ready nodes `b` and `a` execute `a` first, every time.
+1. A13-2, A13-3: Two ready nodes `b` and `a` execute `a` first, every time.
    [witness: verification:kernel_a13_next_node_min_node_id]
-2. A duplicate-check guard that disables the save branch yields `skipped_by_guard`
+2. A13-4, A13-7, A13-8: A duplicate-check guard that disables the save branch yields `skipped_by_guard`
    on the save node and on the flow output behind it, and a `succeeded` run.
    [witness: verification:kernel_a13_guard_skip_transitive_run_succeeds]
-3. One failing element of three fails the mapped node, keeps three records, and
+3. A13-5, A13-7: One failing element of three fails the mapped node, keeps three records, and
    concludes its dependants `upstream_failed`.
    [witness: verification:kernel_a13_failed_input_gives_upstream_failed]
-4. With two independent branches, a failure in one lets the other finish; the run
+4. A13-7: With two independent branches, a failure in one lets the other finish; the run
    ends `failed` with the other branch's output marked produced.
    [witness: verification:kernel_a13_any_failure_ends_run_failed]
 5. Starting a run whose first operation node needs approval returns the run
    `awaiting_approval` after executing every function it could.
-6. Between two requests a resting run gains no NodeExecution and no status
+6. A13-1: Between two requests a resting run gains no NodeExecution and no status
    change; the next approval, resolution or resume advances it inside that
    request, which returns only when no node can execute.
    [witness: verification:kernel_a13_advance_only_inside_request]
-7. In one run of a flow with two independent function nodes, the second node's
+7. A13-3: In one run of a flow with two independent function nodes, the second node's
    NodeExecution starts no earlier than the first one's ended.
    [witness: verification:kernel_a13_one_node_executes_at_a_time]
-8. A node with one input from a failed node and another whose only edge is
+8. A13-5, A13-7, A13-8: A node with one input from a failed node and another whose only edge is
    disabled by its guard concludes `upstream_failed`, not `skipped_by_guard`.
    [witness: verification:kernel_a13_upstream_failed_wins_over_skip]
-9. An element recorded `outcome_unknown` keeps its dependants waiting while its
+9. A13-6: An element recorded `outcome_unknown` keeps its dependants waiting while its
    EffectAttempt is `unknown`; resolved `applied` for a binding without output
    ports — which has no dependants, since an edge starts only at an output port
    — the element counts succeeded and the run continues to its end; resolved
@@ -243,7 +248,7 @@ edge.undecided <-> NOT source_concluded_succeeded
    `upstream_failed`; its NodeExecution keeps `outcome_unknown` throughout.
    [witness: verification:kernel_a13_resolved_unknown_conclusion]
 
-10. An edge from a failed, `upstream_failed` or `skipped_by_guard` source is
+10. A13-4, A13-5, A13-8: An edge from a failed, `upstream_failed` or `skipped_by_guard` source is
     reported `undecided`, never `disabled`; the first two leave an ended flow
     output `not_produced`, while the skipped source leaves it
     `skipped_by_guard` by rule 7.
