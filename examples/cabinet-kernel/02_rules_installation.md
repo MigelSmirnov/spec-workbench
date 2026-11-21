@@ -494,9 +494,9 @@ code, the microservices the kernel calls over their HTTP APIs, the platform
 manifest, and the host that holds the installation. Each category below was
 determined from those boundaries.
 
-The record follows the canonical grammar of `SECURITY_REVIEW_EVIDENCE.md`: a
-reference is an entry of a record's `references` field and names a key of the
-case's design index; an accepted decision is an indexed item of kind `decision`;
+The record follows the Workbench's canonical security-review grammar, a design
+fact of authoring that no generated code reads: a reference is an entry of a
+record's `references` field and names a key of the case's design index; an accepted decision is an indexed item of kind `decision`;
 `affected` is review evidence for the reader, and whether a referenced decision
 answers its category is this review's judgement, not a gate's.
 
