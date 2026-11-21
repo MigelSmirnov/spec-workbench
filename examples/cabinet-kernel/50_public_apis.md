@@ -115,7 +115,10 @@ Python signatures are State 6's.
   the separate internal result `stop_required`, returned up the call chain
   after the caller wrote its record; `module:surface` answers
   `internal_error` — here, unlike any other internal error, that record was
-  written — and ends the process (State 3, "Unconfirmed cleanup").
+  written — and ends the process (State 3, "Unconfirmed cleanup"). If the
+  store refused that record, the caller's store failure is the internal error
+  instead, answered and followed by the same end of the process, and the next
+  start executes the element again (K-09, A03 rule 7).
 
 ## Closed set of refusal codes
 
