@@ -1017,3 +1017,33 @@ independent derivation from the emitted `models.py`, and agrees on all 30 operat
 derivation is now part of `test_tools_list_serves_every_operation`. Code generated from this
 specification has not been seen by this review. Structural review: 0 blocks. All 19 modules remain
 PASS.
+
+## Request of 2026-11-21: decision 59, invariant identifiers, the K-09 exception, imports
+
+A delta review against the previous stamp, by comparing each packet with its previous form. The
+previous packets were rebuilt from the case at `a6a126b3` with the current tools, so that a change
+of the packet format brought by the merge of `main` is not mistaken for a change of the design;
+packets were compared as sets, line numbers and note indices aside. No slice was read again as a
+whole. Seventeen packets moved, in three ways and no other.
+
+- `sandbox_runner` (decision 59): gains the internal contract
+  `read_runner_messages(message: bytes) -> tuple[RunnerWireMessage, ...]` and three notes
+  (BEHAVIOR, DEPENDENCY_BOUNDARY, RETURN_SHAPE) that take over from `read_runner_report` the
+  acceptance of a channel line: framing, strict validation against `RunnerWireMessage`, base64
+  validity and the second returned message. `read_runner_report` keeps its signature and projects
+  the accepted messages. The two notes name the same models and do not contradict each other; that
+  `read_runner_report` decodes already validated base64 "with validation enabled" again is an
+  admissible internal variation, not an ambiguity. The writing side, `runner_source`, is unchanged.
+- Dependencies (imports closure): `sandbox` loses `ReturnedOutput`; `service_invoker` loses
+  `BytesContent` and `FileListPayload` and with them their model definitions in its packet;
+  `functions` loses `AdmissionRefusalReason`, `DisclosureClass` and `SpooledFileKey`; `surface`
+  loses `ShownFailureDetail`. The Factory's current code names none of these in any function, and
+  no note of these modules names them.
+- Accepted evidence: only the decisions and flows changed today — A03, A04, A05, A09, A13
+  (invariant identifiers; A03-3 to A03-5 and rules 5 and 7 on the unconfirmed cleanup), A15 (K-09's
+  exception), `run_read_only_flow` and `start_and_recover_kernel` (the cleanup duty when the store
+  refuses the record). Each change was closed by its own question rounds (State 0 to 5, rounds of
+  2026-11-21) before this review; no packet carries evidence of any other decision that moved.
+
+Code generated from this specification has not been seen by this review. Structural review: 0
+blocks. All 19 modules remain PASS.
