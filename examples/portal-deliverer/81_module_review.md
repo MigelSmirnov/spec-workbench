@@ -28,6 +28,16 @@ bound, which had no home.
 The repairs went through State 7 rounds 4 to 6, State 2 round 80 (A8), State 3 round 51, State 4 round 35
 and State 5 round 48; all closed. Assembly 15/15.
 
+## Re-review of `source_folder` (2026-11-21)
+
+Route B on accepted spec `e44c34ef` rejected the generated `source_folder`: the Factory's stub gate takes a
+contract whose whole body is one unconditional `raise` for a placeholder, and the note of `_unlisted_folder`
+asked for exactly that body. The helper now returns the `DelivererError` with `FOLDER_UNAVAILABLE` and
+`_source_files` raises it from the `OSError`, the shape of `delivery_store._state_unavailable`; A1 is
+unchanged. State 7 round 7 on the new text was clear. Packet review: `None`, a raise, or another refusal code
+each contradicts the `_unlisted_folder` note, and a walk failure that is not raised contradicts
+`_source_files`. PASS; the ledger holds the new slice hash.
+
 ## Open for the Workbench tools
 
 The packet of `runtime_settings` does not carry `config.runtime_environment_variables`, the 6.11 table the
