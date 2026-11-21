@@ -1,0 +1,308 @@
+{
+ "open_points": [
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "kernel actor",
+   "kind": "unnamed actor",
+   "text": "The kernel reaches it",
+   "question": "What system or process is “the kernel,” and is it the calling flow named in R0-07 and R0-15 or a separate actor?",
+   "options": [
+    "The kernel is the calling flow",
+    "The kernel hosts the calling flow",
+    "The kernel is a separate client of the calling flow"
+   ],
+   "default_guess": "Treat the kernel as the process that implements the calling flow.",
+   "witness": {
+    "initial": "The deliverer is running and a delivery has been selected.",
+    "events": [
+     "The calling flow asks the kernel to deliver a photo.",
+     "The kernel calls the deliverer."
+    ],
+    "outcomes": [
+     "The calling flow itself authenticates to and calls the deliverer.",
+     "A separate kernel component authenticates to the deliverer on the calling flow's behalf."
+    ],
+    "observer": "The operator configuring credentials and auditing requests"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Portal front",
+   "kind": "unnamed external system",
+   "text": "through the Portal's own front",
+   "question": "What concrete component is the Portal's front, and which configuration and trust boundary does it own?",
+   "options": [
+    "The Portal web server",
+    "A reverse proxy shared with the Portal",
+    "An ingress or load balancer in front of the VPS"
+   ],
+   "default_guess": "Use the reverse proxy that currently terminates HTTPS for the Portal."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "deliverer route",
+   "kind": "unspecified endpoint",
+   "text": "under a route of its own",
+   "question": "Is the route a path on the Portal origin, a separate hostname, or another endpoint, and what exact route is reserved for it?",
+   "options": [
+    "A path on the Portal origin",
+    "A dedicated hostname",
+    "A dedicated port exposed only through the front"
+   ],
+   "default_guess": "Use a reserved path prefix on the Portal's existing HTTPS origin.",
+   "witness": {
+    "initial": "The Portal is available at its production HTTPS origin.",
+    "events": [
+     "A deployer exposes the deliverer through the Portal front.",
+     "The kernel constructs the deliverer URL."
+    ],
+    "outcomes": [
+     "The kernel calls a path such as /deliverer on the Portal origin.",
+     "The kernel calls a dedicated deliverer hostname."
+    ],
+    "observer": "The deployer and the kernel operator"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "front-to-deliverer connection",
+   "kind": "unspecified trust boundary",
+   "text": "The kernel reaches it over HTTPS through the Portal's own front",
+   "question": "After HTTPS reaches the Portal front, how does the front reach the deliverer, and where is TLS terminated?",
+   "options": [
+    "TLS terminates at the front and it proxies over loopback HTTP",
+    "TLS terminates at the front and it proxies over local HTTPS",
+    "The front proxies through a Unix-domain socket"
+   ],
+   "default_guess": "Terminate TLS at the Portal front and proxy to a loopback-only HTTP listener.",
+   "witness": {
+    "initial": "The kernel sends a valid HTTPS request to the Portal front.",
+    "events": [
+     "The front terminates the HTTPS connection.",
+     "The front forwards the request to the deliverer."
+    ],
+    "outcomes": [
+     "The forwarded request crosses loopback as plaintext HTTP.",
+     "The forwarded request remains protected by TLS or a Unix-domain socket."
+    ],
+    "observer": "A security reviewer inspecting the VPS trust boundary"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "network exposure",
+   "kind": "vague guarantee",
+   "text": "the deliverer is not reachable from the network in any other way",
+   "question": "Which interfaces and callers count as “the network,” and what concrete listener or access rule makes the Portal front the only reachable path?",
+   "options": [
+    "Listen only on loopback",
+    "Listen on a Unix-domain socket",
+    "Listen on a private interface restricted by firewall rules"
+   ],
+   "default_guess": "Bind the deliverer to loopback and allow access only from the local Portal front.",
+   "witness": {
+    "initial": "The deliverer and Portal front run on the VPS.",
+    "events": [
+     "Another process or host attempts to connect directly to the deliverer's upstream endpoint."
+    ],
+    "outcomes": [
+     "Direct access is impossible because the deliverer listens only on loopback or a Unix socket.",
+     "Direct access is possible on a private interface but blocked selectively by firewall policy."
+    ],
+    "observer": "The security operator and any caller on the private network"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "deliverer authentication",
+   "kind": "unspecified credential",
+   "text": "with the deliverer's own credential",
+   "question": "What credential type and authentication protocol does the kernel use, and how does the deliverer validate it?",
+   "options": [
+    "A static bearer token",
+    "Mutual TLS client credentials",
+    "A signed short-lived service token"
+   ],
+   "default_guess": "Use a randomly generated static bearer token sent in an Authorization header and compared by the deliverer."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "service credential and project token",
+   "kind": "ambiguous authorization",
+   "text": "with the deliverer's own credential",
+   "question": "Is the deliverer's credential additional to the per-project token required by R0-15, or is it that token?",
+   "options": [
+    "Require both a service credential and a project token",
+    "Use the service credential as the project token",
+    "Use the service credential at the front and the project token only at the deliverer"
+   ],
+   "default_guess": "Require both: one authenticates the kernel service and one authorizes the operation on a project.",
+   "witness": {
+    "initial": "The kernel has the deliverer's credential but has no valid token for project P.",
+    "events": [
+     "The kernel calls a deliverer operation for project P through the Portal front."
+    ],
+    "outcomes": [
+     "The call is rejected because every project operation also requires its project token.",
+     "The call succeeds because the deliverer's credential is treated as the required token."
+    ],
+    "observer": "The owner attempting the delivery and the security auditor"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "credential lifecycle",
+   "kind": "deferred unknown",
+   "text": "How the route and the credential are installed belongs to the deployment.",
+   "question": "Who creates, distributes, stores, rotates and revokes the credential, and what happens during rotation?",
+   "options": [
+    "Deployment creates a shared secret and installs it in both services",
+    "An external secret manager issues and rotates it",
+    "An operator creates and installs it manually"
+   ],
+   "default_guess": "Have deployment generate a shared secret, inject it into both processes through protected configuration, and support overlap during rotation.",
+   "witness": {
+    "initial": "The kernel and deliverer are using credential A.",
+    "events": [
+     "The deployer rotates the credential to B.",
+     "A request occurs while the two processes are being updated."
+    ],
+    "outcomes": [
+     "A and B overlap temporarily, so the request succeeds.",
+     "Only one credential is valid, so the request fails during the rollout."
+    ],
+    "observer": "The owner performing a delivery during deployment"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "route installation",
+   "kind": "deferred unknown",
+   "text": "How the route and the credential are installed belongs to the deployment.",
+   "question": "What deployment action creates the route, validates that it targets only the deliverer, and removes or rolls it back safely?",
+   "options": [
+    "Manage the route in versioned reverse-proxy configuration",
+    "Create it dynamically during deployment",
+    "Configure it manually on the VPS"
+   ],
+   "default_guess": "Manage the route as versioned reverse-proxy configuration deployed and health-checked with the service."
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Syncthing folder access",
+   "kind": "unspecified input boundary",
+   "text": "where it sees the Syncthing folders",
+   "question": "How are the object folders located and exposed to the deliverer, under which filesystem identity and permissions?",
+   "options": [
+    "Host paths read directly by a dedicated service user",
+    "Read-only bind mounts into a container",
+    "Access through a separate filesystem service"
+   ],
+   "default_guess": "Run under a dedicated service user with read-only filesystem access to explicitly configured host paths.",
+   "witness": {
+    "initial": "A confirmed object record names a photo folder on the VPS.",
+    "events": [
+     "The owner starts a delivery.",
+     "The deliverer scans the configured folder."
+    ],
+    "outcomes": [
+     "The deliverer reads the host path directly under its service account.",
+     "The path must first be mapped into a container or translated by another service."
+    ],
+    "observer": "The owner, who sees either a photo list or an access failure"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "Portal store access",
+   "kind": "unspecified external interface",
+   "text": "where it sees the Syncthing folders and the Portal store",
+   "question": "What is the Portal store, what data may the deliverer access there, and does it access it directly or only through a Portal interface?",
+   "options": [
+    "Direct access to the Portal database",
+    "Access to a shared object or file store",
+    "Access through the Portal's internal API"
+   ],
+   "default_guess": "Use a defined Portal API or narrowly scoped storage interface rather than direct unrestricted database access.",
+   "witness": {
+    "initial": "A chosen photo is ready to be placed and published.",
+    "events": [
+     "The deliverer needs to place the binary and obtain a reference.",
+     "The deliverer accesses what R0-16 calls the Portal store."
+    ],
+    "outcomes": [
+     "The deliverer writes directly to the Portal database or shared storage.",
+     "The deliverer calls a Portal-owned interface that performs the write."
+    ],
+    "observer": "The Portal maintainer and the owner if the placement behaves differently"
+   }
+  },
+  {
+   "unit": "00_product.md:Decisions",
+   "subject": "infrastructure failure reporting",
+   "kind": "missing failure behavior",
+   "text": "The kernel reaches it over HTTPS through the Portal's own front",
+   "question": "What observable result must the owner receive when the route, TLS, credential, folder access or Portal-store access fails, and which failures are safe to retry?",
+   "options": [
+    "Return a per-photo failed result with a stable reason and retry classification",
+    "Fail the whole delivery before processing photos",
+    "Expose only the underlying HTTP or transport error"
+   ],
+   "default_guess": "Return a per-photo failure with a stable reason, mark authentication and configuration failures as non-temporary, and mark transient transport failures as retryable.",
+   "witness": {
+    "initial": "The owner selects two ready photos and the deliverer route is unavailable.",
+    "events": [
+     "The owner starts delivery.",
+     "The calling flow attempts the first HTTPS request."
+    ],
+    "outcomes": [
+     "Both photos receive individual failed results with an infrastructure reason.",
+     "The delivery aborts as one request-level error without per-photo results."
+    ],
+    "observer": "The owner in the workplace"
+   }
+  },
+  {
+   "unit": "00_product.md:Status",
+   "subject": "closure of OQ-07",
+   "kind": "closure contradiction",
+   "text": "OQ-07 was decided by the owner on 2026-11-21 as R0-16; no question stays open.",
+   "question": "Does deciding OQ-07 also decide route and credential installation, or are those matters intentionally carried to a named later unit despite the assertion that no question remains?",
+   "options": [
+    "R0-16 must fully decide installation now",
+    "Installation is carried explicitly to a named deployment unit",
+    "Deployment may choose installation silently"
+   ],
+   "default_guess": "Carry the installation questions explicitly to a named deployment unit with stated required outcomes.",
+   "witness": {
+    "initial": "R0-16 is accepted and implementation has not begun.",
+    "events": [
+     "One careful deployer reads that no question stays open.",
+     "Another careful deployer reads that installation belongs to deployment.",
+     "Each prepares the service deployment."
+    ],
+    "outcomes": [
+     "The first treats route and credential installation as already constrained and seeks missing specifications.",
+     "The second independently chooses route and credential mechanisms during deployment."
+    ],
+    "observer": "The owner reviewing two different deployments"
+   }
+  },
+  {
+   "unit": "00_product.md:Open questions",
+   "subject": "OQ-07 disposition",
+   "kind": "hidden open question",
+   "text": "None. OQ-07 is decided as R0-16.",
+   "question": "Where are the installation, credential lifecycle, upstream connection and reachability choices left by R0-16 recorded for later decision?",
+   "options": [
+    "They are additional State 0 open questions",
+    "They are explicitly carried to a named deployment state",
+    "They are fixed implementation details with stated constraints"
+   ],
+   "default_guess": "Record them as explicit questions carried to a named deployment state."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"00_product.md:Decisions\",\"subject\":\"kernel actor\",\"kind\":\"unnamed actor\",\"text\":\"The kernel reaches it\",\"question\":\"What system or process is “the kernel,” and is it the calling flow named in R0-07 and R0-15 or a separate actor?\",\"options\":[\"The kernel is the calling flow\",\"The kernel hosts the calling flow\",\"The kernel is a separate client of the calling flow\"],\"default_guess\":\"Treat the kernel as the process that implements the calling flow.\",\"witness\":{\"initial\":\"The deliverer is running and a delivery has been selected.\",\"events\":[\"The calling flow asks the kernel to deliver a photo.\",\"The kernel calls the deliverer.\"],\"outcomes\":[\"The calling flow itself authenticates to and calls the deliverer.\",\"A separate kernel component authenticates to the deliverer on the calling flow's behalf.\"],\"observer\":\"The operator configuring credentials and auditing requests\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Portal front\",\"kind\":\"unnamed external system\",\"text\":\"through the Portal's own front\",\"question\":\"What concrete component is the Portal's front, and which configuration and trust boundary does it own?\",\"options\":[\"The Portal web server\",\"A reverse proxy shared with the Portal\",\"An ingress or load balancer in front of the VPS\"],\"default_guess\":\"Use the reverse proxy that currently terminates HTTPS for the Portal.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"deliverer route\",\"kind\":\"unspecified endpoint\",\"text\":\"under a route of its own\",\"question\":\"Is the route a path on the Portal origin, a separate hostname, or another endpoint, and what exact route is reserved for it?\",\"options\":[\"A path on the Portal origin\",\"A dedicated hostname\",\"A dedicated port exposed only through the front\"],\"default_guess\":\"Use a reserved path prefix on the Portal's existing HTTPS origin.\",\"witness\":{\"initial\":\"The Portal is available at its production HTTPS origin.\",\"events\":[\"A deployer exposes the deliverer through the Portal front.\",\"The kernel constructs the deliverer URL.\"],\"outcomes\":[\"The kernel calls a path such as /deliverer on the Portal origin.\",\"The kernel calls a dedicated deliverer hostname.\"],\"observer\":\"The deployer and the kernel operator\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"front-to-deliverer connection\",\"kind\":\"unspecified trust boundary\",\"text\":\"The kernel reaches it over HTTPS through the Portal's own front\",\"question\":\"After HTTPS reaches the Portal front, how does the front reach the deliverer, and where is TLS terminated?\",\"options\":[\"TLS terminates at the front and it proxies over loopback HTTP\",\"TLS terminates at the front and it proxies over local HTTPS\",\"The front proxies through a Unix-domain socket\"],\"default_guess\":\"Terminate TLS at the Portal front and proxy to a loopback-only HTTP listener.\",\"witness\":{\"initial\":\"The kernel sends a valid HTTPS request to the Portal front.\",\"events\":[\"The front terminates the HTTPS connection.\",\"The front forwards the request to the deliverer.\"],\"outcomes\":[\"The forwarded request crosses loopback as plaintext HTTP.\",\"The forwarded request remains protected by TLS or a Unix-domain socket.\"],\"observer\":\"A security reviewer inspecting the VPS trust boundary\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"network exposure\",\"kind\":\"vague guarantee\",\"text\":\"the deliverer is not reachable from the network in any other way\",\"question\":\"Which interfaces and callers count as “the network,” and what concrete listener or access rule makes the Portal front the only reachable path?\",\"options\":[\"Listen only on loopback\",\"Listen on a Unix-domain socket\",\"Listen on a private interface restricted by firewall rules\"],\"default_guess\":\"Bind the deliverer to loopback and allow access only from the local Portal front.\",\"witness\":{\"initial\":\"The deliverer and Portal front run on the VPS.\",\"events\":[\"Another process or host attempts to connect directly to the deliverer's upstream endpoint.\"],\"outcomes\":[\"Direct access is impossible because the deliverer listens only on loopback or a Unix socket.\",\"Direct access is possible on a private interface but blocked selectively by firewall policy.\"],\"observer\":\"The security operator and any caller on the private network\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"deliverer authentication\",\"kind\":\"unspecified credential\",\"text\":\"with the deliverer's own credential\",\"question\":\"What credential type and authentication protocol does the kernel use, and how does the deliverer validate it?\",\"options\":[\"A static bearer token\",\"Mutual TLS client credentials\",\"A signed short-lived service token\"],\"default_guess\":\"Use a randomly generated static bearer token sent in an Authorization header and compared by the deliverer.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"service credential and project token\",\"kind\":\"ambiguous authorization\",\"text\":\"with the deliverer's own credential\",\"question\":\"Is the deliverer's credential additional to the per-project token required by R0-15, or is it that token?\",\"options\":[\"Require both a service credential and a project token\",\"Use the service credential as the project token\",\"Use the service credential at the front and the project token only at the deliverer\"],\"default_guess\":\"Require both: one authenticates the kernel service and one authorizes the operation on a project.\",\"witness\":{\"initial\":\"The kernel has the deliverer's credential but has no valid token for project P.\",\"events\":[\"The kernel calls a deliverer operation for project P through the Portal front.\"],\"outcomes\":[\"The call is rejected because every project operation also requires its project token.\",\"The call succeeds because the deliverer's credential is treated as the required token.\"],\"observer\":\"The owner attempting the delivery and the security auditor\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"credential lifecycle\",\"kind\":\"deferred unknown\",\"text\":\"How the route and the credential are installed belongs to the deployment.\",\"question\":\"Who creates, distributes, stores, rotates and revokes the credential, and what happens during rotation?\",\"options\":[\"Deployment creates a shared secret and installs it in both services\",\"An external secret manager issues and rotates it\",\"An operator creates and installs it manually\"],\"default_guess\":\"Have deployment generate a shared secret, inject it into both processes through protected configuration, and support overlap during rotation.\",\"witness\":{\"initial\":\"The kernel and deliverer are using credential A.\",\"events\":[\"The deployer rotates the credential to B.\",\"A request occurs while the two processes are being updated.\"],\"outcomes\":[\"A and B overlap temporarily, so the request succeeds.\",\"Only one credential is valid, so the request fails during the rollout.\"],\"observer\":\"The owner performing a delivery during deployment\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"route installation\",\"kind\":\"deferred unknown\",\"text\":\"How the route and the credential are installed belongs to the deployment.\",\"question\":\"What deployment action creates the route, validates that it targets only the deliverer, and removes or rolls it back safely?\",\"options\":[\"Manage the route in versioned reverse-proxy configuration\",\"Create it dynamically during deployment\",\"Configure it manually on the VPS\"],\"default_guess\":\"Manage the route as versioned reverse-proxy configuration deployed and health-checked with the service.\"},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Syncthing folder access\",\"kind\":\"unspecified input boundary\",\"text\":\"where it sees the Syncthing folders\",\"question\":\"How are the object folders located and exposed to the deliverer, under which filesystem identity and permissions?\",\"options\":[\"Host paths read directly by a dedicated service user\",\"Read-only bind mounts into a container\",\"Access through a separate filesystem service\"],\"default_guess\":\"Run under a dedicated service user with read-only filesystem access to explicitly configured host paths.\",\"witness\":{\"initial\":\"A confirmed object record names a photo folder on the VPS.\",\"events\":[\"The owner starts a delivery.\",\"The deliverer scans the configured folder.\"],\"outcomes\":[\"The deliverer reads the host path directly under its service account.\",\"The path must first be mapped into a container or translated by another service.\"],\"observer\":\"The owner, who sees either a photo list or an access failure\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"Portal store access\",\"kind\":\"unspecified external interface\",\"text\":\"where it sees the Syncthing folders and the Portal store\",\"question\":\"What is the Portal store, what data may the deliverer access there, and does it access it directly or only through a Portal interface?\",\"options\":[\"Direct access to the Portal database\",\"Access to a shared object or file store\",\"Access through the Portal's internal API\"],\"default_guess\":\"Use a defined Portal API or narrowly scoped storage interface rather than direct unrestricted database access.\",\"witness\":{\"initial\":\"A chosen photo is ready to be placed and published.\",\"events\":[\"The deliverer needs to place the binary and obtain a reference.\",\"The deliverer accesses what R0-16 calls the Portal store.\"],\"outcomes\":[\"The deliverer writes directly to the Portal database or shared storage.\",\"The deliverer calls a Portal-owned interface that performs the write.\"],\"observer\":\"The Portal maintainer and the owner if the placement behaves differently\"}},{\"unit\":\"00_product.md:Decisions\",\"subject\":\"infrastructure failure reporting\",\"kind\":\"missing failure behavior\",\"text\":\"The kernel reaches it over HTTPS through the Portal's own front\",\"question\":\"What observable result must the owner receive when the route, TLS, credential, folder access or Portal-store access fails, and which failures are safe to retry?\",\"options\":[\"Return a per-photo failed result with a stable reason and retry classification\",\"Fail the whole delivery before processing photos\",\"Expose only the underlying HTTP or transport error\"],\"default_guess\":\"Return a per-photo failure with a stable reason, mark authentication and configuration failures as non-temporary, and mark transient transport failures as retryable.\",\"witness\":{\"initial\":\"The owner selects two ready photos and the deliverer route is unavailable.\",\"events\":[\"The owner starts delivery.\",\"The calling flow attempts the first HTTPS request.\"],\"outcomes\":[\"Both photos receive individual failed results with an infrastructure reason.\",\"The delivery aborts as one request-level error without per-photo results.\"],\"observer\":\"The owner in the workplace\"}},{\"unit\":\"00_product.md:Status\",\"subject\":\"closure of OQ-07\",\"kind\":\"closure contradiction\",\"text\":\"OQ-07 was decided by the owner on 2026-11-21 as R0-16; no question stays open.\",\"question\":\"Does deciding OQ-07 also decide route and credential installation, or are those matters intentionally carried to a named later unit despite the assertion that no question remains?\",\"options\":[\"R0-16 must fully decide installation now\",\"Installation is carried explicitly to a named deployment unit\",\"Deployment may choose installation silently\"],\"default_guess\":\"Carry the installation questions explicitly to a named deployment unit with stated required outcomes.\",\"witness\":{\"initial\":\"R0-16 is accepted and implementation has not begun.\",\"events\":[\"One careful deployer reads that no question stays open.\",\"Another careful deployer reads that installation belongs to deployment.\",\"Each prepares the service deployment.\"],\"outcomes\":[\"The first treats route and credential installation as already constrained and seeks missing specifications.\",\"The second independently chooses route and credential mechanisms during deployment.\"],\"observer\":\"The owner reviewing two different deployments\"}},{\"unit\":\"00_product.md:Open questions\",\"subject\":\"OQ-07 disposition\",\"kind\":\"hidden open question\",\"text\":\"None. OQ-07 is decided as R0-16.\",\"question\":\"Where are the installation, credential lifecycle, upstream connection and reachability choices left by R0-16 recorded for later decision?\",\"options\":[\"They are additional State 0 open questions\",\"They are explicitly carried to a named deployment state\",\"They are fixed implementation details with stated constraints\"],\"default_guess\":\"Record them as explicit questions carried to a named deployment state.\"}]}",
+ "set_aside": []
+}

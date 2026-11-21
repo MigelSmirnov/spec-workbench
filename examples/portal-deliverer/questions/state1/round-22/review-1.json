@@ -1,0 +1,235 @@
+{
+ "open_points": [
+  {
+   "subject": "Project",
+   "kind": "missing_model_identity",
+   "text": "scan a project's folder",
+   "question": "What is a project in this service, is it a value or entity, who mints its identity, and is that identity the Client Portal project identity or a deliverer-local identity?",
+   "options": [
+    "A Project entity identified by an existing Client Portal project ID",
+    "A deliverer-local Project entity mapped to a Client Portal project",
+    "No Project model; operations receive an opaque project identifier"
+   ],
+   "default_guess": "Use an entity whose identity is the existing Client Portal project ID.",
+   "witness": {
+    "initial": "A Portal project exists and has a synchronized folder.",
+    "events": [
+     "The kernel asks the deliverer to scan using a project reference.",
+     "The deliverer resolves the folder and later records publication against the Portal store."
+    ],
+    "outcomes": [
+     "The reference is the Portal project ID and directly identifies the project in both systems.",
+     "The reference is a deliverer-local ID that must first be mapped to a Portal project."
+    ],
+    "observer": "The kernel and the deliverer repository implementation"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "project token",
+   "kind": "missing_model_identity",
+   "text": "every operation on a project needs the token",
+   "question": "What model the token represents, whether it is a value or entity, who mints it and from what, and whether it is uniquely bound to one project are not defined.",
+   "options": [
+    "An opaque value minted per project by the deliverer",
+    "An entity minted and stored by the deliverer with lifecycle such as active or revoked",
+    "A Portal-minted credential passed through to the deliverer",
+    "A single service token accompanied by a separate project ID"
+   ],
+   "default_guess": "Treat it as an opaque deliverer-minted value uniquely bound to one project.",
+   "witness": {
+    "initial": "Projects A and B exist and the kernel holds a token obtained for A.",
+    "events": [
+     "The kernel invokes scan for project B with A's token."
+    ],
+    "outcomes": [
+     "The token is project-bound, so the operation is rejected.",
+     "The token authenticates the caller generally, so the operation may scan B."
+    ],
+    "observer": "The kernel and the owner of project B"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "project token and deliverer credential",
+   "kind": "undefined_identity_relationship",
+   "text": "with the deliverer's own credential",
+   "question": "Is the deliverer's HTTPS credential a model distinct from the per-project token, and which actor mints and owns each credential?",
+   "options": [
+    "Two distinct values: a deployment-managed service credential plus a deliverer-managed project token",
+    "The HTTPS credential is also the project token",
+    "The service credential identifies the kernel while the project token is a Portal-issued project capability"
+   ],
+   "default_guess": "Model them as distinct values: deployment owns the service credential and the deliverer owns a project-bound token.",
+   "witness": {
+    "initial": "The HTTPS route is installed and the kernel has the deliverer's credential but no project token.",
+    "events": [
+     "The kernel invokes scan for a project using only the HTTPS credential."
+    ],
+    "outcomes": [
+     "The request is authenticated at the route but fails because the separate project token is absent.",
+     "The HTTPS credential is the token, so the project operation proceeds."
+    ],
+    "observer": "The kernel"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "project folder",
+   "kind": "missing_model_and_status",
+   "text": "only a confirmed folder is used",
+   "question": "What model owns folder identity and the confirmed state, who establishes that identity and confirmation, and which product action creates or changes the confirmation?",
+   "options": [
+    "A Folder entity with a confirmation status changed by an administrative action",
+    "A Project entity containing an immutable confirmed-folder reference",
+    "A configuration value supplied by deployment, with no runtime folder entity",
+    "Confirmation is derived on every scan from filesystem state"
+   ],
+   "default_guess": "Use a Folder entity mapped to a project, with an explicit confirmation status set by an administrative action.",
+   "witness": {
+    "initial": "A project has two Syncthing directories, one previously used and one newly synchronized.",
+    "events": [
+     "An operator associates the new directory with the project.",
+     "The kernel invokes scan."
+    ],
+    "outcomes": [
+     "Association alone makes the directory confirmed, so the scan reads it.",
+     "Confirmation is a separate state transition, so the scan continues to use the old directory or refuses to scan."
+    ],
+    "observer": "The operator and the kernel"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "source photo",
+   "kind": "missing_model_identity",
+   "text": "deliver one photo",
+   "question": "What identifies the source photo, whether it is a value or entity, who mints that identity, and whether renames, moves, or identical bytes denote the same photo?",
+   "options": [
+    "An entity identified by project plus stable relative path",
+    "A value identified by a content hash",
+    "An entity with a deliverer-minted ID created during scan",
+    "A filesystem entry identified by inode or equivalent filesystem identity"
+   ],
+   "default_guess": "Create a deliverer-minted entity during scan and retain its project, path, and content fingerprint as facts.",
+   "witness": {
+    "initial": "A photo is scanned at one name and is then renamed without changing its bytes.",
+    "events": [
+     "The kernel asks to scan again.",
+     "The kernel asks to deliver the discovered photo."
+    ],
+    "outcomes": [
+     "The renamed entry is the same photo and retains its delivery history.",
+     "The renamed entry is a new photo and can produce a second delivery."
+    ],
+    "observer": "The owner reviewing hidden Portal photos"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "delivered photo and source photo",
+   "kind": "undefined_model_relationship",
+   "text": "A delivered photo arrives hidden",
+   "question": "Is a delivered photo the source Photo entity in a later lifecycle state, or a distinct Portal-side entity created from the source photo, and who mints its identity?",
+   "options": [
+    "One Photo entity changes from discovered to delivered and stores a Portal object ID",
+    "A distinct DeliveredPhoto entity is minted by the deliverer from a SourcePhoto",
+    "A Portal media entity is minted by the Portal store and linked to a source-photo value"
+   ],
+   "default_guess": "Use a distinct delivered-photo entity linked to the source photo and identified by the Portal-side object ID.",
+   "witness": {
+    "initial": "A source photo has been discovered but not delivered.",
+    "events": [
+     "The kernel invokes deliver one photo.",
+     "The deliverer strips metadata and writes the hidden photo to the Portal store."
+    ],
+    "outcomes": [
+     "The existing Photo entity changes status and gains Portal facts.",
+     "A new DeliveredPhoto or Portal-media entity is created while the source Photo remains unchanged."
+    ],
+    "observer": "The kernel reading the delivery result and the owner viewing the Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "delivery identity",
+   "kind": "missing_idempotency_identity",
+   "text": "a repeated delivery creates nothing new",
+   "question": "Which model represents a delivery, what makes two delivery attempts the same, and from which facts its identity or idempotency identity is minted are not defined.",
+   "options": [
+    "One Delivery entity per source-photo identity",
+    "One Delivery entity per project and content hash",
+    "No Delivery entity; the delivered Portal photo is uniquely keyed by the source-photo identity",
+    "The caller supplies an idempotency identity"
+   ],
+   "default_guess": "Use one Delivery entity per project and source-photo identity, minted on the first successful delivery.",
+   "witness": {
+    "initial": "A source photo was delivered successfully and the kernel did not receive the response.",
+    "events": [
+     "The kernel repeats deliver for the same source photo.",
+     "The deliverer checks existing state and returns a result."
+    ],
+    "outcomes": [
+     "The existing delivery and hidden Portal photo are returned.",
+     "A second delivery is considered distinct because the retry has no shared identity and another hidden photo is created."
+    ],
+    "observer": "The owner reviewing hidden photos and the kernel"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "publication",
+   "kind": "missing_model_lifecycle",
+   "text": "record its publication",
+   "question": "Does recording publication create a Publication entity, change a DeliveredPhoto or Delivery status, or both; who supplies or mints the publication identity; and which Portal action is the authoritative publication event?",
+   "options": [
+    "Create an immutable Publication entity after the Portal show operation",
+    "Change DeliveredPhoto status from hidden to published",
+    "Change Delivery status and retain publication time as fields",
+    "Record a caller assertion without reading or linking to a Portal publication event"
+   ],
+   "default_guess": "Create an immutable Publication entity linked to the delivered photo after the Portal show operation is confirmed.",
+   "witness": {
+    "initial": "A delivered photo exists hidden in the Portal.",
+    "events": [
+     "The owner uses the Portal operation to show the photo to the client.",
+     "The kernel invokes record its publication twice."
+    ],
+    "outcomes": [
+     "One Publication entity is created and the repeat returns that same entity.",
+     "No publication entity exists; the delivered photo merely remains in a published status after both calls."
+    ],
+    "observer": "The kernel and any later reader of publication history"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "delivered photo lifecycle",
+   "kind": "missing_status_semantics",
+   "text": "The owner reviews a delivered photo and shows it to the client with the Portal's own operation.",
+   "question": "Which lifecycle statuses exist for the delivered photo, which system owns them, and whether the Portal show operation or the deliverer's record-publication operation performs the transition to published are not defined.",
+   "options": [
+    "The Portal owns hidden and visible status; record publication only mirrors the completed transition",
+    "The deliverer owns delivered and published status; record publication performs the transition after the Portal action",
+    "Both systems hold statuses with an explicitly defined synchronization relationship"
+   ],
+   "default_guess": "The Portal owns visibility, while the deliverer records a separate publication fact only after the Portal operation succeeds.",
+   "witness": {
+    "initial": "A delivered photo is hidden.",
+    "events": [
+     "The owner successfully shows it through the Portal.",
+     "Before record publication is called, the kernel reads the deliverer's state."
+    ],
+    "outcomes": [
+     "The photo is already published because the Portal operation is authoritative.",
+     "The deliverer's model still says delivered or hidden until record publication changes it."
+    ],
+    "observer": "The kernel and the owner"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Project\",\"kind\":\"missing_model_identity\",\"text\":\"scan a project's folder\",\"question\":\"What is a project in this service, is it a value or entity, who mints its identity, and is that identity the Client Portal project identity or a deliverer-local identity?\",\"options\":[\"A Project entity identified by an existing Client Portal project ID\",\"A deliverer-local Project entity mapped to a Client Portal project\",\"No Project model; operations receive an opaque project identifier\"],\"default_guess\":\"Use an entity whose identity is the existing Client Portal project ID.\",\"witness\":{\"initial\":\"A Portal project exists and has a synchronized folder.\",\"events\":[\"The kernel asks the deliverer to scan using a project reference.\",\"The deliverer resolves the folder and later records publication against the Portal store.\"],\"outcomes\":[\"The reference is the Portal project ID and directly identifies the project in both systems.\",\"The reference is a deliverer-local ID that must first be mapped to a Portal project.\"],\"observer\":\"The kernel and the deliverer repository implementation\"}},{\"subject\":\"project token\",\"kind\":\"missing_model_identity\",\"text\":\"every operation on a project needs the token\",\"question\":\"What model the token represents, whether it is a value or entity, who mints it and from what, and whether it is uniquely bound to one project are not defined.\",\"options\":[\"An opaque value minted per project by the deliverer\",\"An entity minted and stored by the deliverer with lifecycle such as active or revoked\",\"A Portal-minted credential passed through to the deliverer\",\"A single service token accompanied by a separate project ID\"],\"default_guess\":\"Treat it as an opaque deliverer-minted value uniquely bound to one project.\",\"witness\":{\"initial\":\"Projects A and B exist and the kernel holds a token obtained for A.\",\"events\":[\"The kernel invokes scan for project B with A's token.\"],\"outcomes\":[\"The token is project-bound, so the operation is rejected.\",\"The token authenticates the caller generally, so the operation may scan B.\"],\"observer\":\"The kernel and the owner of project B\"}},{\"subject\":\"project token and deliverer credential\",\"kind\":\"undefined_identity_relationship\",\"text\":\"with the deliverer's own credential\",\"question\":\"Is the deliverer's HTTPS credential a model distinct from the per-project token, and which actor mints and owns each credential?\",\"options\":[\"Two distinct values: a deployment-managed service credential plus a deliverer-managed project token\",\"The HTTPS credential is also the project token\",\"The service credential identifies the kernel while the project token is a Portal-issued project capability\"],\"default_guess\":\"Model them as distinct values: deployment owns the service credential and the deliverer owns a project-bound token.\",\"witness\":{\"initial\":\"The HTTPS route is installed and the kernel has the deliverer's credential but no project token.\",\"events\":[\"The kernel invokes scan for a project using only the HTTPS credential.\"],\"outcomes\":[\"The request is authenticated at the route but fails because the separate project token is absent.\",\"The HTTPS credential is the token, so the project operation proceeds.\"],\"observer\":\"The kernel\"}},{\"subject\":\"project folder\",\"kind\":\"missing_model_and_status\",\"text\":\"only a confirmed folder is used\",\"question\":\"What model owns folder identity and the confirmed state, who establishes that identity and confirmation, and which product action creates or changes the confirmation?\",\"options\":[\"A Folder entity with a confirmation status changed by an administrative action\",\"A Project entity containing an immutable confirmed-folder reference\",\"A configuration value supplied by deployment, with no runtime folder entity\",\"Confirmation is derived on every scan from filesystem state\"],\"default_guess\":\"Use a Folder entity mapped to a project, with an explicit confirmation status set by an administrative action.\",\"witness\":{\"initial\":\"A project has two Syncthing directories, one previously used and one newly synchronized.\",\"events\":[\"An operator associates the new directory with the project.\",\"The kernel invokes scan.\"],\"outcomes\":[\"Association alone makes the directory confirmed, so the scan reads it.\",\"Confirmation is a separate state transition, so the scan continues to use the old directory or refuses to scan.\"],\"observer\":\"The operator and the kernel\"}},{\"subject\":\"source photo\",\"kind\":\"missing_model_identity\",\"text\":\"deliver one photo\",\"question\":\"What identifies the source photo, whether it is a value or entity, who mints that identity, and whether renames, moves, or identical bytes denote the same photo?\",\"options\":[\"An entity identified by project plus stable relative path\",\"A value identified by a content hash\",\"An entity with a deliverer-minted ID created during scan\",\"A filesystem entry identified by inode or equivalent filesystem identity\"],\"default_guess\":\"Create a deliverer-minted entity during scan and retain its project, path, and content fingerprint as facts.\",\"witness\":{\"initial\":\"A photo is scanned at one name and is then renamed without changing its bytes.\",\"events\":[\"The kernel asks to scan again.\",\"The kernel asks to deliver the discovered photo.\"],\"outcomes\":[\"The renamed entry is the same photo and retains its delivery history.\",\"The renamed entry is a new photo and can produce a second delivery.\"],\"observer\":\"The owner reviewing hidden Portal photos\"}},{\"subject\":\"delivered photo and source photo\",\"kind\":\"undefined_model_relationship\",\"text\":\"A delivered photo arrives hidden\",\"question\":\"Is a delivered photo the source Photo entity in a later lifecycle state, or a distinct Portal-side entity created from the source photo, and who mints its identity?\",\"options\":[\"One Photo entity changes from discovered to delivered and stores a Portal object ID\",\"A distinct DeliveredPhoto entity is minted by the deliverer from a SourcePhoto\",\"A Portal media entity is minted by the Portal store and linked to a source-photo value\"],\"default_guess\":\"Use a distinct delivered-photo entity linked to the source photo and identified by the Portal-side object ID.\",\"witness\":{\"initial\":\"A source photo has been discovered but not delivered.\",\"events\":[\"The kernel invokes deliver one photo.\",\"The deliverer strips metadata and writes the hidden photo to the Portal store.\"],\"outcomes\":[\"The existing Photo entity changes status and gains Portal facts.\",\"A new DeliveredPhoto or Portal-media entity is created while the source Photo remains unchanged.\"],\"observer\":\"The kernel reading the delivery result and the owner viewing the Portal\"}},{\"subject\":\"delivery identity\",\"kind\":\"missing_idempotency_identity\",\"text\":\"a repeated delivery creates nothing new\",\"question\":\"Which model represents a delivery, what makes two delivery attempts the same, and from which facts its identity or idempotency identity is minted are not defined.\",\"options\":[\"One Delivery entity per source-photo identity\",\"One Delivery entity per project and content hash\",\"No Delivery entity; the delivered Portal photo is uniquely keyed by the source-photo identity\",\"The caller supplies an idempotency identity\"],\"default_guess\":\"Use one Delivery entity per project and source-photo identity, minted on the first successful delivery.\",\"witness\":{\"initial\":\"A source photo was delivered successfully and the kernel did not receive the response.\",\"events\":[\"The kernel repeats deliver for the same source photo.\",\"The deliverer checks existing state and returns a result.\"],\"outcomes\":[\"The existing delivery and hidden Portal photo are returned.\",\"A second delivery is considered distinct because the retry has no shared identity and another hidden photo is created.\"],\"observer\":\"The owner reviewing hidden photos and the kernel\"}},{\"subject\":\"publication\",\"kind\":\"missing_model_lifecycle\",\"text\":\"record its publication\",\"question\":\"Does recording publication create a Publication entity, change a DeliveredPhoto or Delivery status, or both; who supplies or mints the publication identity; and which Portal action is the authoritative publication event?\",\"options\":[\"Create an immutable Publication entity after the Portal show operation\",\"Change DeliveredPhoto status from hidden to published\",\"Change Delivery status and retain publication time as fields\",\"Record a caller assertion without reading or linking to a Portal publication event\"],\"default_guess\":\"Create an immutable Publication entity linked to the delivered photo after the Portal show operation is confirmed.\",\"witness\":{\"initial\":\"A delivered photo exists hidden in the Portal.\",\"events\":[\"The owner uses the Portal operation to show the photo to the client.\",\"The kernel invokes record its publication twice.\"],\"outcomes\":[\"One Publication entity is created and the repeat returns that same entity.\",\"No publication entity exists; the delivered photo merely remains in a published status after both calls.\"],\"observer\":\"The kernel and any later reader of publication history\"}},{\"subject\":\"delivered photo lifecycle\",\"kind\":\"missing_status_semantics\",\"text\":\"The owner reviews a delivered photo and shows it to the client with the Portal's own operation.\",\"question\":\"Which lifecycle statuses exist for the delivered photo, which system owns them, and whether the Portal show operation or the deliverer's record-publication operation performs the transition to published are not defined.\",\"options\":[\"The Portal owns hidden and visible status; record publication only mirrors the completed transition\",\"The deliverer owns delivered and published status; record publication performs the transition after the Portal action\",\"Both systems hold statuses with an explicitly defined synchronization relationship\"],\"default_guess\":\"The Portal owns visibility, while the deliverer records a separate publication fact only after the Portal operation succeeds.\",\"witness\":{\"initial\":\"A delivered photo is hidden.\",\"events\":[\"The owner successfully shows it through the Portal.\",\"Before record publication is called, the kernel reads the deliverer's state.\"],\"outcomes\":[\"The photo is already published because the Portal operation is authoritative.\",\"The deliverer's model still says delivered or hidden until record publication changes it.\"],\"observer\":\"The kernel and the owner\"}}]}",
+ "set_aside": []
+}

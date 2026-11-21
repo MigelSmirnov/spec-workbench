@@ -1,0 +1,262 @@
+{
+ "open_points": [
+  {
+   "subject": "ProjectToken and deliverer credential",
+   "kind": "identity_relationship",
+   "text": "every operation on a project needs the token. The kernel reaches it over HTTPS through the Portal's own front, under a route of its own, with the deliverer's own credential",
+   "question": "Are the per-project token and the deliverer's HTTPS credential two distinct models and credentials, or is the token also the credential used to reach the route?",
+   "options": [
+    "Two credentials: a route-level service credential plus a project token on every operation",
+    "One credential: the project token authenticates access to the route",
+    "One credential model with distinct scoped instances"
+   ],
+   "default_guess": "Model them as distinct credentials and require both for every project operation.",
+   "witness": {
+    "initial": "A project exists and the kernel can reach the Portal front.",
+    "events": [
+     "The kernel calls the scan operation for the project and supplies the deliverer's credential but no project token."
+    ],
+    "outcomes": [
+     "The call is authenticated at the route but rejected because the separate project token is missing.",
+     "The call is accepted because the deliverer's credential is interpreted as the required token."
+    ],
+    "observer": "The kernel caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "DelivererCredential",
+   "kind": "missing_identity",
+   "text": "with the deliverer's own credential",
+   "question": "What model represents this credential, who mints it, from what authority or source, and which party owns or presents it?",
+   "options": [
+    "A client credential minted by deployment and held by the kernel",
+    "A shared secret minted by deployment and held by both kernel and deliverer",
+    "A certificate or token identifying the deliverer even though the kernel presents authentication material"
+   ],
+   "default_guess": "Treat it as a deployment-minted client credential held by the kernel, with verifier material held by the deliverer.",
+   "unit": "?"
+  },
+  {
+   "subject": "DelivererCredential",
+   "kind": "missing_lifecycle",
+   "text": "How the route and the credential are installed belongs to the deployment.",
+   "question": "Does deferring installation also defer the credential's lifecycle, or must State 1 define credential statuses such as active, rotated and revoked and their effect on requests?",
+   "options": [
+    "Credential lifecycle is entirely deployment-owned and is not a State 1 runtime model",
+    "State 1 defines credential identity and statuses while deployment only installs its material",
+    "The credential has identity but no represented lifecycle or statuses"
+   ],
+   "default_guess": "Keep its operational lifecycle in deployment and declare that it is not a State 1 runtime model.",
+   "unit": "?"
+  },
+  {
+   "subject": "Project",
+   "kind": "missing_identity",
+   "text": "The deliverer runs on the VPS that holds the Client Portal, where it sees the Syncthing folders and the Portal store.",
+   "question": "What is a project to the deliverer, who mints its identity, and is that identity obtained from the Portal store, a Syncthing-folder association, or deliverer-owned configuration?",
+   "options": [
+    "A Portal entity whose identifier is minted by the Portal",
+    "A deliverer entity minted when a Syncthing folder is associated",
+    "A value joining an existing Portal project identifier to a folder"
+   ],
+   "default_guess": "Use the Portal-minted project entity and represent the folder association separately.",
+   "witness": {
+    "initial": "A Portal project and a Syncthing folder both exist on the VPS.",
+    "events": [
+     "An operator associates the folder with work for that project.",
+     "The kernel calls scan using a project identifier."
+    ],
+    "outcomes": [
+     "The identifier is accepted because the Portal project is the authoritative entity.",
+     "A separate deliverer project must first be created and its identifier supplied."
+    ],
+    "observer": "The kernel caller and operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ConfirmedFolder",
+   "kind": "missing_model",
+   "text": "only a confirmed folder is used",
+   "question": "Is folder confirmation a status of a persistent folder-association entity, a property of Project, or an unmodelled check performed on each operation; who creates the fact and what identifies the folder?",
+   "options": [
+    "A persistent FolderAssociation entity with a confirmation status",
+    "A confirmed-folder field on Project",
+    "A value computed for each call with no persistent lifecycle"
+   ],
+   "default_guess": "Create a persistent FolderAssociation entity, minted by the deliverer from a Portal project identifier and canonical folder reference, with an explicit confirmation status.",
+   "witness": {
+    "initial": "A project exists and its Syncthing folder is present but has not been confirmed.",
+    "events": [
+     "An operator confirms the folder.",
+     "The kernel later requests delivery for a file in it."
+    ],
+    "outcomes": [
+     "Confirmation changed a stored FolderAssociation status and the delivery is allowed.",
+     "No confirmation entity exists; the service recomputes or infers confirmation and may reach a different result."
+    ],
+    "observer": "The operator and kernel caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "SourcePhoto and delivered photo",
+   "kind": "model_boundary",
+   "text": "The owner reviews a delivered photo and shows it to the client with the Portal's own operation. A wrong photo in the folder therefore never reaches a client by itself.",
+   "question": "Are the file found in the Syncthing folder and the delivered hidden photo one model across lifecycle stages, or distinct models connected by provenance?",
+   "options": [
+    "Distinct SourcePhoto value and PortalPhoto entity linked by a delivery record",
+    "One Photo entity whose location and visibility change",
+    "A source-file value and no State 1 model for the Portal object"
+   ],
+   "default_guess": "Use distinct SourcePhoto and PortalPhoto models connected by a Delivery entity.",
+   "unit": "?"
+  },
+  {
+   "subject": "SourcePhoto",
+   "kind": "missing_identity",
+   "text": "a repeated delivery creates nothing new",
+   "question": "What facts make two delivery attempts refer to the same source photo for idempotency: project and path, file content, filesystem identity, or a previously minted source identifier?",
+   "options": [
+    "Project identifier plus relative path",
+    "Content hash independent of path",
+    "Filesystem identity such as device and inode",
+    "A deliverer-minted SourcePhoto identifier recorded at scan time"
+   ],
+   "default_guess": "Identify the source within a project by stable relative path plus content hash, and record that provenance on delivery.",
+   "witness": {
+    "initial": "A photo has already been delivered for a project.",
+    "events": [
+     "The file is renamed without changing its bytes.",
+     "The kernel requests delivery using the new path."
+    ],
+    "outcomes": [
+     "No new object is created because content identity makes this a repeated delivery.",
+     "A new object is created because project-relative path is the identity."
+    ],
+    "observer": "The owner reviewing hidden Portal photos"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "deliver one photo",
+   "kind": "missing_action_effect",
+   "text": "The deliverer offers three operations: scan a project's folder, deliver one photo, and record its publication.",
+   "question": "Which model does delivery create or change, who mints its identity, and does the operation write a Portal-native photo in the Portal store, a deliverer-owned delivery record, or both?",
+   "options": [
+    "Create a PortalPhoto and a Delivery record",
+    "Create only a PortalPhoto",
+    "Create only a Delivery record that refers to photo data stored elsewhere",
+    "Change an existing PortalPhoto rather than creating one"
+   ],
+   "default_guess": "Create a PortalPhoto through direct store integration and a deliverer-owned Delivery entity linking it to the source.",
+   "unit": "?"
+  },
+  {
+   "subject": "Portal store access",
+   "kind": "vague_action_boundary",
+   "text": "where it sees the Syncthing folders and the Portal store",
+   "question": "Does seeing the Portal store authorize the deliverer to read and write Portal models directly, or merely establish colocation while all Portal-store mutation remains outside the deliverer?",
+   "options": [
+    "Direct reads and writes of specified Portal records",
+    "Read-only access to Portal records",
+    "No store access by product actions; only filesystem visibility or deployment access",
+    "Access through a dedicated local adapter with a separately defined model boundary"
+   ],
+   "default_guess": "Allow direct access only through a dedicated store adapter, with the exact readable and writable models declared.",
+   "witness": {
+    "initial": "A source photo is ready for delivery and no hidden Portal photo exists.",
+    "events": [
+     "The kernel invokes deliver one photo."
+    ],
+    "outcomes": [
+     "The deliverer writes a new hidden photo record directly into the Portal store.",
+     "The deliverer cannot mutate the Portal store and only produces data for another component to persist."
+    ],
+    "observer": "The owner looking for the hidden photo in the Portal"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "scan a project's folder",
+   "kind": "missing_action_effect",
+   "text": "scan a project's folder",
+   "question": "Does scanning only return value results derived from the current folder, or does it mint or update persistent photo-candidate entities and their lifecycle statuses?",
+   "options": [
+    "Return an ephemeral ScanResult containing source-photo values",
+    "Create persistent SourcePhoto or CandidatePhoto entities",
+    "Update an existing project or folder entity with scan state",
+    "Both return results and persist candidate entities"
+   ],
+   "default_guess": "Return an ephemeral value result and do not mint persistent photo entities during scan.",
+   "witness": {
+    "initial": "A confirmed project folder contains one previously unseen photo.",
+    "events": [
+     "The kernel scans the folder twice without delivering the photo."
+    ],
+    "outcomes": [
+     "Both scans return equivalent values and create no stored model.",
+     "The first scan creates a candidate entity and the second reads or updates it."
+    ],
+    "observer": "The kernel caller and any operator inspecting service state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "record its publication",
+   "kind": "missing_action_effect",
+   "text": "record its publication",
+   "question": "What model is changed or created when publication is recorded, who supplies and mints its identity, and what status transition does the operation represent?",
+   "options": [
+    "Change a Delivery entity from delivered to published",
+    "Create an immutable Publication record linked to a Delivery",
+    "Change the PortalPhoto visibility status",
+    "Create a Publication record and also update Delivery status"
+   ],
+   "default_guess": "Create an immutable Publication record linked to the Delivery and derive the delivery's published state from it.",
+   "witness": {
+    "initial": "A delivered photo exists hidden in the Portal and has no recorded publication.",
+    "events": [
+     "The owner shows the photo using the Portal's operation.",
+     "The kernel calls record its publication."
+    ],
+    "outcomes": [
+     "An immutable Publication entity is created while the delivery remains otherwise unchanged.",
+     "The existing Delivery entity changes from delivered to published with no new entity."
+    ],
+    "observer": "The kernel caller and service-state reader"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "photo visibility lifecycle",
+   "kind": "missing_status_ownership",
+   "text": "The owner reviews a delivered photo and shows it to the client with the Portal's own operation.",
+   "question": "Is hidden versus shown a lifecycle status of the Portal photo, a lifecycle status of the deliverer's delivery model, or two separately owned facts that must be correlated?",
+   "options": [
+    "A PortalPhoto status owned entirely by the Portal",
+    "A Delivery status owned by the deliverer",
+    "Separate Portal visibility and delivery-publication facts",
+    "No represented status; publication is only an event"
+   ],
+   "default_guess": "Treat Portal visibility and the deliverer's recorded publication as separate facts correlated by the delivered photo identifier.",
+   "witness": {
+    "initial": "A delivered photo is hidden and its delivery is recorded.",
+    "events": [
+     "The owner shows it using the Portal operation.",
+     "The publication-recording call has not yet occurred."
+    ],
+    "outcomes": [
+     "The Portal photo is shown while the deliverer's delivery remains unrecorded as published.",
+     "Showing the Portal photo is interpreted as the same model transition, so the delivery is already published."
+    ],
+    "observer": "The owner and kernel caller"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"ProjectToken and deliverer credential\",\"kind\":\"identity_relationship\",\"text\":\"every operation on a project needs the token. The kernel reaches it over HTTPS through the Portal's own front, under a route of its own, with the deliverer's own credential\",\"question\":\"Are the per-project token and the deliverer's HTTPS credential two distinct models and credentials, or is the token also the credential used to reach the route?\",\"options\":[\"Two credentials: a route-level service credential plus a project token on every operation\",\"One credential: the project token authenticates access to the route\",\"One credential model with distinct scoped instances\"],\"default_guess\":\"Model them as distinct credentials and require both for every project operation.\",\"witness\":{\"initial\":\"A project exists and the kernel can reach the Portal front.\",\"events\":[\"The kernel calls the scan operation for the project and supplies the deliverer's credential but no project token.\"],\"outcomes\":[\"The call is authenticated at the route but rejected because the separate project token is missing.\",\"The call is accepted because the deliverer's credential is interpreted as the required token.\"],\"observer\":\"The kernel caller\"}},{\"subject\":\"DelivererCredential\",\"kind\":\"missing_identity\",\"text\":\"with the deliverer's own credential\",\"question\":\"What model represents this credential, who mints it, from what authority or source, and which party owns or presents it?\",\"options\":[\"A client credential minted by deployment and held by the kernel\",\"A shared secret minted by deployment and held by both kernel and deliverer\",\"A certificate or token identifying the deliverer even though the kernel presents authentication material\"],\"default_guess\":\"Treat it as a deployment-minted client credential held by the kernel, with verifier material held by the deliverer.\"},{\"subject\":\"DelivererCredential\",\"kind\":\"missing_lifecycle\",\"text\":\"How the route and the credential are installed belongs to the deployment.\",\"question\":\"Does deferring installation also defer the credential's lifecycle, or must State 1 define credential statuses such as active, rotated and revoked and their effect on requests?\",\"options\":[\"Credential lifecycle is entirely deployment-owned and is not a State 1 runtime model\",\"State 1 defines credential identity and statuses while deployment only installs its material\",\"The credential has identity but no represented lifecycle or statuses\"],\"default_guess\":\"Keep its operational lifecycle in deployment and declare that it is not a State 1 runtime model.\"},{\"subject\":\"Project\",\"kind\":\"missing_identity\",\"text\":\"The deliverer runs on the VPS that holds the Client Portal, where it sees the Syncthing folders and the Portal store.\",\"question\":\"What is a project to the deliverer, who mints its identity, and is that identity obtained from the Portal store, a Syncthing-folder association, or deliverer-owned configuration?\",\"options\":[\"A Portal entity whose identifier is minted by the Portal\",\"A deliverer entity minted when a Syncthing folder is associated\",\"A value joining an existing Portal project identifier to a folder\"],\"default_guess\":\"Use the Portal-minted project entity and represent the folder association separately.\",\"witness\":{\"initial\":\"A Portal project and a Syncthing folder both exist on the VPS.\",\"events\":[\"An operator associates the folder with work for that project.\",\"The kernel calls scan using a project identifier.\"],\"outcomes\":[\"The identifier is accepted because the Portal project is the authoritative entity.\",\"A separate deliverer project must first be created and its identifier supplied.\"],\"observer\":\"The kernel caller and operator\"}},{\"subject\":\"ConfirmedFolder\",\"kind\":\"missing_model\",\"text\":\"only a confirmed folder is used\",\"question\":\"Is folder confirmation a status of a persistent folder-association entity, a property of Project, or an unmodelled check performed on each operation; who creates the fact and what identifies the folder?\",\"options\":[\"A persistent FolderAssociation entity with a confirmation status\",\"A confirmed-folder field on Project\",\"A value computed for each call with no persistent lifecycle\"],\"default_guess\":\"Create a persistent FolderAssociation entity, minted by the deliverer from a Portal project identifier and canonical folder reference, with an explicit confirmation status.\",\"witness\":{\"initial\":\"A project exists and its Syncthing folder is present but has not been confirmed.\",\"events\":[\"An operator confirms the folder.\",\"The kernel later requests delivery for a file in it.\"],\"outcomes\":[\"Confirmation changed a stored FolderAssociation status and the delivery is allowed.\",\"No confirmation entity exists; the service recomputes or infers confirmation and may reach a different result.\"],\"observer\":\"The operator and kernel caller\"}},{\"subject\":\"SourcePhoto and delivered photo\",\"kind\":\"model_boundary\",\"text\":\"The owner reviews a delivered photo and shows it to the client with the Portal's own operation. A wrong photo in the folder therefore never reaches a client by itself.\",\"question\":\"Are the file found in the Syncthing folder and the delivered hidden photo one model across lifecycle stages, or distinct models connected by provenance?\",\"options\":[\"Distinct SourcePhoto value and PortalPhoto entity linked by a delivery record\",\"One Photo entity whose location and visibility change\",\"A source-file value and no State 1 model for the Portal object\"],\"default_guess\":\"Use distinct SourcePhoto and PortalPhoto models connected by a Delivery entity.\"},{\"subject\":\"SourcePhoto\",\"kind\":\"missing_identity\",\"text\":\"a repeated delivery creates nothing new\",\"question\":\"What facts make two delivery attempts refer to the same source photo for idempotency: project and path, file content, filesystem identity, or a previously minted source identifier?\",\"options\":[\"Project identifier plus relative path\",\"Content hash independent of path\",\"Filesystem identity such as device and inode\",\"A deliverer-minted SourcePhoto identifier recorded at scan time\"],\"default_guess\":\"Identify the source within a project by stable relative path plus content hash, and record that provenance on delivery.\",\"witness\":{\"initial\":\"A photo has already been delivered for a project.\",\"events\":[\"The file is renamed without changing its bytes.\",\"The kernel requests delivery using the new path.\"],\"outcomes\":[\"No new object is created because content identity makes this a repeated delivery.\",\"A new object is created because project-relative path is the identity.\"],\"observer\":\"The owner reviewing hidden Portal photos\"}},{\"subject\":\"deliver one photo\",\"kind\":\"missing_action_effect\",\"text\":\"The deliverer offers three operations: scan a project's folder, deliver one photo, and record its publication.\",\"question\":\"Which model does delivery create or change, who mints its identity, and does the operation write a Portal-native photo in the Portal store, a deliverer-owned delivery record, or both?\",\"options\":[\"Create a PortalPhoto and a Delivery record\",\"Create only a PortalPhoto\",\"Create only a Delivery record that refers to photo data stored elsewhere\",\"Change an existing PortalPhoto rather than creating one\"],\"default_guess\":\"Create a PortalPhoto through direct store integration and a deliverer-owned Delivery entity linking it to the source.\"},{\"subject\":\"Portal store access\",\"kind\":\"vague_action_boundary\",\"text\":\"where it sees the Syncthing folders and the Portal store\",\"question\":\"Does seeing the Portal store authorize the deliverer to read and write Portal models directly, or merely establish colocation while all Portal-store mutation remains outside the deliverer?\",\"options\":[\"Direct reads and writes of specified Portal records\",\"Read-only access to Portal records\",\"No store access by product actions; only filesystem visibility or deployment access\",\"Access through a dedicated local adapter with a separately defined model boundary\"],\"default_guess\":\"Allow direct access only through a dedicated store adapter, with the exact readable and writable models declared.\",\"witness\":{\"initial\":\"A source photo is ready for delivery and no hidden Portal photo exists.\",\"events\":[\"The kernel invokes deliver one photo.\"],\"outcomes\":[\"The deliverer writes a new hidden photo record directly into the Portal store.\",\"The deliverer cannot mutate the Portal store and only produces data for another component to persist.\"],\"observer\":\"The owner looking for the hidden photo in the Portal\"}},{\"subject\":\"scan a project's folder\",\"kind\":\"missing_action_effect\",\"text\":\"scan a project's folder\",\"question\":\"Does scanning only return value results derived from the current folder, or does it mint or update persistent photo-candidate entities and their lifecycle statuses?\",\"options\":[\"Return an ephemeral ScanResult containing source-photo values\",\"Create persistent SourcePhoto or CandidatePhoto entities\",\"Update an existing project or folder entity with scan state\",\"Both return results and persist candidate entities\"],\"default_guess\":\"Return an ephemeral value result and do not mint persistent photo entities during scan.\",\"witness\":{\"initial\":\"A confirmed project folder contains one previously unseen photo.\",\"events\":[\"The kernel scans the folder twice without delivering the photo.\"],\"outcomes\":[\"Both scans return equivalent values and create no stored model.\",\"The first scan creates a candidate entity and the second reads or updates it.\"],\"observer\":\"The kernel caller and any operator inspecting service state\"}},{\"subject\":\"record its publication\",\"kind\":\"missing_action_effect\",\"text\":\"record its publication\",\"question\":\"What model is changed or created when publication is recorded, who supplies and mints its identity, and what status transition does the operation represent?\",\"options\":[\"Change a Delivery entity from delivered to published\",\"Create an immutable Publication record linked to a Delivery\",\"Change the PortalPhoto visibility status\",\"Create a Publication record and also update Delivery status\"],\"default_guess\":\"Create an immutable Publication record linked to the Delivery and derive the delivery's published state from it.\",\"witness\":{\"initial\":\"A delivered photo exists hidden in the Portal and has no recorded publication.\",\"events\":[\"The owner shows the photo using the Portal's operation.\",\"The kernel calls record its publication.\"],\"outcomes\":[\"An immutable Publication entity is created while the delivery remains otherwise unchanged.\",\"The existing Delivery entity changes from delivered to published with no new entity.\"],\"observer\":\"The kernel caller and service-state reader\"}},{\"subject\":\"photo visibility lifecycle\",\"kind\":\"missing_status_ownership\",\"text\":\"The owner reviews a delivered photo and shows it to the client with the Portal's own operation.\",\"question\":\"Is hidden versus shown a lifecycle status of the Portal photo, a lifecycle status of the deliverer's delivery model, or two separately owned facts that must be correlated?\",\"options\":[\"A PortalPhoto status owned entirely by the Portal\",\"A Delivery status owned by the deliverer\",\"Separate Portal visibility and delivery-publication facts\",\"No represented status; publication is only an event\"],\"default_guess\":\"Treat Portal visibility and the deliverer's recorded publication as separate facts correlated by the delivered photo identifier.\",\"witness\":{\"initial\":\"A delivered photo is hidden and its delivery is recorded.\",\"events\":[\"The owner shows it using the Portal operation.\",\"The publication-recording call has not yet occurred.\"],\"outcomes\":[\"The Portal photo is shown while the deliverer's delivery remains unrecorded as published.\",\"Showing the Portal photo is interpreted as the same model transition, so the delivery is already published.\"],\"observer\":\"The owner and kernel caller\"}}]}",
+ "set_aside": []
+}

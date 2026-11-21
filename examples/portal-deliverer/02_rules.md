@@ -600,8 +600,7 @@ A stored image can always be read back by the Portal.
 
 ### Consequence
 
-A deployment of this service is admitted only through the Factory's deployment route for it, the route
-the Client Portal follows, with this service's own advisory policy.
+The check of rule 2 is built: it is the deployment route of this service, as it is the Client Portal's.
 
 ## Accepted decision A11 — Old photo dates stop a delivery
 

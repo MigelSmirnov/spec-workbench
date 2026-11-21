@@ -1,0 +1,181 @@
+{
+ "open_points": [
+  {
+   "subject": "A9 direct dependency versions",
+   "kind": "missing_decision",
+   "text": "The direct libraries are pinned to exact versions: pillow, fastapi, pydantic and uvicorn.",
+   "question": "What exact version of each distribution is pinned, and where are those four decided values supplied to the deployment build?",
+   "options": [
+    "Name four exact versions in A9 and deliver them through a policy constant consumed by the build.",
+    "Name an already-decided lock or manifest that supplies the exact versions.",
+    "Leave the versions to the image builder, which would make them unpinned in practice."
+   ],
+   "default_guess": "Use a checked-in lock file containing current exact versions of Pillow, FastAPI, Pydantic and Uvicorn.",
+   "unit": "?"
+  },
+  {
+   "subject": "A2 deterministic JPEG versus A9 dependency boundary",
+   "kind": "insufficient_determinism",
+   "text": "With one library version one source gives the same bytes.",
+   "question": "Does “one library version” mean only the pinned Pillow version, or must the native JPEG implementation and every other encoding-affecting build dependency also be fixed?",
+   "options": [
+    "Pillow alone is the determinism boundary.",
+    "The complete Pillow build, native JPEG library and encoding-affecting platform dependencies are pinned.",
+    "Byte equality is guaranteed only within one deployment image, not across every installation using the same Pillow version."
+   ],
+   "default_guess": "Guarantee identical bytes only for the same fully pinned deployment image, including the native JPEG implementation.",
+   "witness": {
+    "initial": "Two deployment images contain the same pinned Pillow version but Pillow is linked to different compatible native JPEG library builds.",
+    "events": [
+     "The owner chooses one source image for delivery through the first image.",
+     "The same source bytes are prepared through the second image."
+    ],
+    "outcomes": [
+     "Both deployments produce byte-for-byte identical JPEGs because the Pillow version alone determines the result.",
+     "The deployments produce different valid JPEG byte streams because the native encoder is part of the effective implementation."
+    ],
+    "observer": "The calling flow or an operator comparing the returned sha256 values sees the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 installed-distribution scope",
+   "kind": "ambiguous_scope",
+   "text": "Before each deployment every distribution installed in the image is checked against a snapshot of the OSV database, ecosystem PyPI, that the deployment route accepts as current.",
+   "question": "Does “every distribution” mean every installed Python distribution represented in the PyPI ecosystem, every OS package and native library in the image, or another precisely defined inventory?",
+   "options": [
+    "Check every installed Python distribution discoverable from its distribution metadata.",
+    "Check both Python distributions and operating-system packages using their respective OSV ecosystems.",
+    "Check only the four direct libraries named by rule 1."
+   ],
+   "default_guess": "Check every installed Python distribution, including transitive dependencies, and state explicitly that non-PyPI operating-system packages are outside this invariant.",
+   "witness": {
+    "initial": "An image contains the four direct Python libraries, their transitive Python distributions and a vulnerable native image-codec package.",
+    "events": [
+     "The Factory deployment route inventories the image.",
+     "The route checks only records in the PyPI ecosystem."
+    ],
+    "outcomes": [
+     "Deployment is admitted because “distribution” means Python distribution and the native package is outside the rule.",
+     "Deployment is refused because “every distribution installed in the image” includes the native package."
+    ],
+    "observer": "The deployment operator sees whether the image is admitted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 OSV vulnerability matching",
+   "kind": "undefined_refusal_condition",
+   "text": "Any known vulnerability listed for an installed version blocks the deployment, whatever its severity, and a check that cannot complete does not pass.",
+   "question": "What exact OSV matching rules determine that an advisory is “listed for” an installed version, including normalized package names and versions, ranges, prereleases, withdrawn records, aliases and malformed records?",
+   "options": [
+    "Use the canonical OSV schema matching algorithm and ignore withdrawn advisories.",
+    "Treat every returned advisory, including a withdrawn one, as blocking.",
+    "Define a smaller explicit matching algorithm owned by the Factory route."
+   ],
+   "default_guess": "Use canonical OSV PyPI package/version matching, normalize names under Python packaging rules, ignore withdrawn advisories and fail closed on malformed records.",
+   "witness": {
+    "initial": "The accepted snapshot contains an OSV record that once affected the installed version but is now marked withdrawn.",
+    "events": [
+     "The Factory route checks the image against the snapshot."
+    ],
+    "outcomes": [
+     "The route admits the image because withdrawn records no longer describe known vulnerabilities.",
+     "The route refuses the image because the record is still listed for the installed version and severity is irrelevant."
+    ],
+    "observer": "The deployment operator sees admission or refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 current-snapshot time decision",
+   "kind": "missing_time_semantics",
+   "text": "that the deployment route accepts as current. That route owns the age limit, and no code of this service reads it.",
+   "question": "From what clock is snapshot age measured, what timestamps and representation are compared, which instant on the snapshot is authoritative, and how many clock readings does one deployment check take?",
+   "options": [
+    "The Factory route reads an injected UTC clock once and compares it with the snapshot's UTC creation timestamp.",
+    "The route uses the host wall clock whenever it performs each comparison.",
+    "Freshness is asserted by the snapshot supplier and no timestamp comparison is made locally."
+   ],
+   "default_guess": "Read the Factory route's injected UTC clock once per admission check and compare it with an authenticated UTC snapshot-created timestamp.",
+   "witness": {
+    "initial": "A snapshot is close to the age limit while the wall clock crosses that limit during an image check.",
+    "events": [
+     "The Factory route begins the check and reads the time.",
+     "The route scans the installed distributions.",
+     "The route reads the time again after the age limit has passed."
+    ],
+    "outcomes": [
+     "The image is admitted because snapshot freshness is decided from one instant captured at the start.",
+     "The image is refused because freshness is re-evaluated at the later instant."
+    ],
+    "observer": "The deployment operator sees whether the same image and snapshot are admitted."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 incomplete advisory check",
+   "kind": "undefined_refusal_condition",
+   "text": "a check that cannot complete does not pass.",
+   "question": "Which conditions count as inability to complete, and must each cause a refusal rather than a retry, infrastructure error or unavailable admission decision?",
+   "options": [
+    "Any missing inventory, unreadable metadata, unavailable or invalid snapshot, matcher error or interrupted scan is a deployment refusal.",
+    "Only failure to query the accepted snapshot is a refusal; other failures are deployment-route errors.",
+    "The route retries specified transient failures and refuses only after a defined retry budget."
+   ],
+   "default_guess": "Fail closed for every incomplete inventory, invalid or unavailable snapshot and matcher error, while reporting a distinct infrastructure refusal reason.",
+   "unit": "?"
+  },
+  {
+   "subject": "INV-15 Required tests",
+   "kind": "invariant_test_gap",
+   "text": "INV-15: the deployment route refuses an image holding a distribution with a known vulnerability, and refuses when the check cannot complete.",
+   "question": "What must the witness show to establish the universal invariant for every installed distribution and the rule that severity is irrelevant, rather than only one unspecified vulnerable example?",
+   "options": [
+    "The witness must cover a direct dependency, a transitive dependency, multiple severities including the lowest, and each defined incomplete-check class.",
+    "One representative vulnerable distribution and one generic check failure are sufficient.",
+    "The witness uses a parameterized policy-table test covering all inventory and advisory cases defined by A9."
+   ],
+   "default_guess": "Require a parameterized policy-table test covering direct and transitive distributions, severity-independent refusal and every defined incomplete-check condition.",
+   "unit": "?"
+  },
+  {
+   "subject": "A10 dependency security-review scope",
+   "kind": "scope_conflict",
+   "text": "dependencies: APPLICABLE; references: A9; affected: image library, web framework, validation library, web server",
+   "question": "Does this affected list intentionally cover only the four direct libraries, or must it also name the transitive distributions and deployment admission route that A9 now places inside the dependency policy?",
+   "options": [
+    "The four labels stand for the complete dependency closures and the Factory admission route implicitly.",
+    "The affected list must explicitly include transitive distributions and the Factory deployment route.",
+    "A10 reviews only direct dependencies even though INV-15 covers every installed distribution."
+   ],
+   "default_guess": "Expand the affected list to include all installed Python distributions and the Factory deployment admission route.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9 Factory deployment integration",
+   "kind": "undefined_authority",
+   "text": "A deployment of this service is admitted only through the Factory's deployment route for it, the route\nthe Client Portal follows, with this service's own advisory policy.",
+   "question": "Which existing Factory route is authoritative, how this service is associated with it, and what distinguishes this service's advisory policy from the Client Portal's policy must be specified so deployment does not invent those bindings.",
+   "options": [
+    "Name an existing Factory route, its service identifier and an imported policy symbol.",
+    "Define a new route and policy in a later deployment design.",
+    "Reuse the Client Portal policy unchanged, despite calling this service's policy its own."
+   ],
+   "default_guess": "Name the existing Client Portal Factory route contract, register this service by an explicit service identifier and supply a separately named imported advisory-policy constant.",
+   "unit": "?"
+  },
+  {
+   "subject": "A9 Consequence",
+   "kind": "standard_violation",
+   "text": "A deployment of this service is admitted only through the Factory's deployment route for it, the route\nthe Client Portal follows, with this service's own advisory policy.",
+   "rule": "Такая политика законна, только если её `kind` перечислен в декларации фабрики `tools/gate_rules_reads.py` (`GATE_RULES_READS`: гейт, функция, которая читает политику, и поля, которые она читает).",
+   "section": "15.3.1",
+   "question": "Replace the prose-only Factory-policy claim with a policy whose declared `kind`, gate reader function, read fields and applicable module or deployment artifact are present in `GATE_RULES_READS`, and name that declared policy in the design.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A9 direct dependency versions\",\"kind\":\"missing_decision\",\"text\":\"The direct libraries are pinned to exact versions: pillow, fastapi, pydantic and uvicorn.\",\"question\":\"What exact version of each distribution is pinned, and where are those four decided values supplied to the deployment build?\",\"options\":[\"Name four exact versions in A9 and deliver them through a policy constant consumed by the build.\",\"Name an already-decided lock or manifest that supplies the exact versions.\",\"Leave the versions to the image builder, which would make them unpinned in practice.\"],\"default_guess\":\"Use a checked-in lock file containing current exact versions of Pillow, FastAPI, Pydantic and Uvicorn.\"},{\"subject\":\"A2 deterministic JPEG versus A9 dependency boundary\",\"kind\":\"insufficient_determinism\",\"text\":\"With one library version one source gives the same bytes.\",\"question\":\"Does “one library version” mean only the pinned Pillow version, or must the native JPEG implementation and every other encoding-affecting build dependency also be fixed?\",\"options\":[\"Pillow alone is the determinism boundary.\",\"The complete Pillow build, native JPEG library and encoding-affecting platform dependencies are pinned.\",\"Byte equality is guaranteed only within one deployment image, not across every installation using the same Pillow version.\"],\"default_guess\":\"Guarantee identical bytes only for the same fully pinned deployment image, including the native JPEG implementation.\",\"witness\":{\"initial\":\"Two deployment images contain the same pinned Pillow version but Pillow is linked to different compatible native JPEG library builds.\",\"events\":[\"The owner chooses one source image for delivery through the first image.\",\"The same source bytes are prepared through the second image.\"],\"outcomes\":[\"Both deployments produce byte-for-byte identical JPEGs because the Pillow version alone determines the result.\",\"The deployments produce different valid JPEG byte streams because the native encoder is part of the effective implementation.\"],\"observer\":\"The calling flow or an operator comparing the returned sha256 values sees the difference.\"}},{\"subject\":\"A9 installed-distribution scope\",\"kind\":\"ambiguous_scope\",\"text\":\"Before each deployment every distribution installed in the image is checked against a snapshot of the OSV database, ecosystem PyPI, that the deployment route accepts as current.\",\"question\":\"Does “every distribution” mean every installed Python distribution represented in the PyPI ecosystem, every OS package and native library in the image, or another precisely defined inventory?\",\"options\":[\"Check every installed Python distribution discoverable from its distribution metadata.\",\"Check both Python distributions and operating-system packages using their respective OSV ecosystems.\",\"Check only the four direct libraries named by rule 1.\"],\"default_guess\":\"Check every installed Python distribution, including transitive dependencies, and state explicitly that non-PyPI operating-system packages are outside this invariant.\",\"witness\":{\"initial\":\"An image contains the four direct Python libraries, their transitive Python distributions and a vulnerable native image-codec package.\",\"events\":[\"The Factory deployment route inventories the image.\",\"The route checks only records in the PyPI ecosystem.\"],\"outcomes\":[\"Deployment is admitted because “distribution” means Python distribution and the native package is outside the rule.\",\"Deployment is refused because “every distribution installed in the image” includes the native package.\"],\"observer\":\"The deployment operator sees whether the image is admitted.\"}},{\"subject\":\"A9 OSV vulnerability matching\",\"kind\":\"undefined_refusal_condition\",\"text\":\"Any known vulnerability listed for an installed version blocks the deployment, whatever its severity, and a check that cannot complete does not pass.\",\"question\":\"What exact OSV matching rules determine that an advisory is “listed for” an installed version, including normalized package names and versions, ranges, prereleases, withdrawn records, aliases and malformed records?\",\"options\":[\"Use the canonical OSV schema matching algorithm and ignore withdrawn advisories.\",\"Treat every returned advisory, including a withdrawn one, as blocking.\",\"Define a smaller explicit matching algorithm owned by the Factory route.\"],\"default_guess\":\"Use canonical OSV PyPI package/version matching, normalize names under Python packaging rules, ignore withdrawn advisories and fail closed on malformed records.\",\"witness\":{\"initial\":\"The accepted snapshot contains an OSV record that once affected the installed version but is now marked withdrawn.\",\"events\":[\"The Factory route checks the image against the snapshot.\"],\"outcomes\":[\"The route admits the image because withdrawn records no longer describe known vulnerabilities.\",\"The route refuses the image because the record is still listed for the installed version and severity is irrelevant.\"],\"observer\":\"The deployment operator sees admission or refusal.\"}},{\"subject\":\"A9 current-snapshot time decision\",\"kind\":\"missing_time_semantics\",\"text\":\"that the deployment route accepts as current. That route owns the age limit, and no code of this service reads it.\",\"question\":\"From what clock is snapshot age measured, what timestamps and representation are compared, which instant on the snapshot is authoritative, and how many clock readings does one deployment check take?\",\"options\":[\"The Factory route reads an injected UTC clock once and compares it with the snapshot's UTC creation timestamp.\",\"The route uses the host wall clock whenever it performs each comparison.\",\"Freshness is asserted by the snapshot supplier and no timestamp comparison is made locally.\"],\"default_guess\":\"Read the Factory route's injected UTC clock once per admission check and compare it with an authenticated UTC snapshot-created timestamp.\",\"witness\":{\"initial\":\"A snapshot is close to the age limit while the wall clock crosses that limit during an image check.\",\"events\":[\"The Factory route begins the check and reads the time.\",\"The route scans the installed distributions.\",\"The route reads the time again after the age limit has passed.\"],\"outcomes\":[\"The image is admitted because snapshot freshness is decided from one instant captured at the start.\",\"The image is refused because freshness is re-evaluated at the later instant.\"],\"observer\":\"The deployment operator sees whether the same image and snapshot are admitted.\"}},{\"subject\":\"A9 incomplete advisory check\",\"kind\":\"undefined_refusal_condition\",\"text\":\"a check that cannot complete does not pass.\",\"question\":\"Which conditions count as inability to complete, and must each cause a refusal rather than a retry, infrastructure error or unavailable admission decision?\",\"options\":[\"Any missing inventory, unreadable metadata, unavailable or invalid snapshot, matcher error or interrupted scan is a deployment refusal.\",\"Only failure to query the accepted snapshot is a refusal; other failures are deployment-route errors.\",\"The route retries specified transient failures and refuses only after a defined retry budget.\"],\"default_guess\":\"Fail closed for every incomplete inventory, invalid or unavailable snapshot and matcher error, while reporting a distinct infrastructure refusal reason.\"},{\"subject\":\"INV-15 Required tests\",\"kind\":\"invariant_test_gap\",\"text\":\"INV-15: the deployment route refuses an image holding a distribution with a known vulnerability, and refuses when the check cannot complete.\",\"question\":\"What must the witness show to establish the universal invariant for every installed distribution and the rule that severity is irrelevant, rather than only one unspecified vulnerable example?\",\"options\":[\"The witness must cover a direct dependency, a transitive dependency, multiple severities including the lowest, and each defined incomplete-check class.\",\"One representative vulnerable distribution and one generic check failure are sufficient.\",\"The witness uses a parameterized policy-table test covering all inventory and advisory cases defined by A9.\"],\"default_guess\":\"Require a parameterized policy-table test covering direct and transitive distributions, severity-independent refusal and every defined incomplete-check condition.\"},{\"subject\":\"A10 dependency security-review scope\",\"kind\":\"scope_conflict\",\"text\":\"dependencies: APPLICABLE; references: A9; affected: image library, web framework, validation library, web server\",\"question\":\"Does this affected list intentionally cover only the four direct libraries, or must it also name the transitive distributions and deployment admission route that A9 now places inside the dependency policy?\",\"options\":[\"The four labels stand for the complete dependency closures and the Factory admission route implicitly.\",\"The affected list must explicitly include transitive distributions and the Factory deployment route.\",\"A10 reviews only direct dependencies even though INV-15 covers every installed distribution.\"],\"default_guess\":\"Expand the affected list to include all installed Python distributions and the Factory deployment admission route.\"},{\"subject\":\"A9 Factory deployment integration\",\"kind\":\"undefined_authority\",\"text\":\"A deployment of this service is admitted only through the Factory's deployment route for it, the route\\nthe Client Portal follows, with this service's own advisory policy.\",\"question\":\"Which existing Factory route is authoritative, how this service is associated with it, and what distinguishes this service's advisory policy from the Client Portal's policy must be specified so deployment does not invent those bindings.\",\"options\":[\"Name an existing Factory route, its service identifier and an imported policy symbol.\",\"Define a new route and policy in a later deployment design.\",\"Reuse the Client Portal policy unchanged, despite calling this service's policy its own.\"],\"default_guess\":\"Name the existing Client Portal Factory route contract, register this service by an explicit service identifier and supply a separately named imported advisory-policy constant.\"},{\"subject\":\"A9 Consequence\",\"kind\":\"standard_violation\",\"text\":\"A deployment of this service is admitted only through the Factory's deployment route for it, the route\\nthe Client Portal follows, with this service's own advisory policy.\",\"rule\":\"Такая политика законна, только если её `kind` перечислен в декларации фабрики `tools/gate_rules_reads.py` (`GATE_RULES_READS`: гейт, функция, которая читает политику, и поля, которые она читает).\",\"section\":\"15.3.1\",\"question\":\"Replace the prose-only Factory-policy claim with a policy whose declared `kind`, gate reader function, read fields and applicable module or deployment artifact are present in `GATE_RULES_READS`, and name that declared policy in the design.\"}]}",
+ "set_aside": []
+}

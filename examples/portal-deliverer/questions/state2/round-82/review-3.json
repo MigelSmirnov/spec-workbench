@@ -1,0 +1,169 @@
+{
+ "open_points": [
+  {
+   "subject": "M07 PublicationMark marked_at",
+   "kind": "missing_time_source",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "Which authority supplies the instant written to `marked_at` when the first publication mark is created?",
+   "options": [
+    "The service's injected system clock",
+    "The persistence backend's clock",
+    "An instant supplied by the calling flow"
+   ],
+   "default_guess": "Use an injected UTC system clock owned by the service.",
+   "witness": {
+    "initial": "A placement exists without a publication mark, and the calling flow has just received a Portal photo id.",
+    "events": [
+     "The calling flow asks the deliverer to record the publication.",
+     "The service creates the first PublicationMark."
+    ],
+    "outcomes": [
+     "One implementation writes the instant from its injected system clock.",
+     "Another implementation writes the database server's current time."
+    ],
+    "observer": "An operator or test reading the stored PublicationMark sees different `marked_at` values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark marked_at",
+   "kind": "missing_time_representation",
+   "text": "**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.",
+   "question": "In which representation is `marked_at` stored and compared: timezone-aware UTC, UTC without an offset, or another representation?",
+   "options": [
+    "Timezone-aware UTC datetime",
+    "UTC datetime without an offset",
+    "Backend-native timestamp representation"
+   ],
+   "default_guess": "Store a timezone-aware UTC datetime.",
+   "witness": {
+    "initial": "The service is ready to create a first publication mark at 2026-11-21T10:00:00Z.",
+    "events": [
+     "The calling flow records the publication.",
+     "The persistence layer serializes `marked_at`."
+    ],
+    "outcomes": [
+     "One implementation stores `2026-11-21T10:00:00+00:00`.",
+     "Another stores `2026-11-21T10:00:00` without an offset."
+    ],
+    "observer": "Persistence code, migrations, and tests see different values and comparison rules."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M07 PublicationMark marked_at",
+   "kind": "undefined_instant_meaning",
+   "text": "The calling flow reports the `photo_id` right after `photo.publish` answers, and the deliverer creates the mark.",
+   "question": "What event does `marked_at` denote: receipt of the request, creation of the record, successful persistence, or some other boundary?",
+   "options": [
+    "Instant the record-publication request is accepted",
+    "Instant immediately before the mark is inserted",
+    "Instant at which the transaction commits successfully"
+   ],
+   "default_guess": "Use the instant immediately before inserting the mark in the successful transaction.",
+   "witness": {
+    "initial": "A record-publication request begins, then waits before its transaction commits.",
+    "events": [
+     "The calling flow submits the Portal photo id.",
+     "The request waits for a persistence lock.",
+     "The transaction writes and commits the mark."
+    ],
+    "outcomes": [
+     "One implementation records the request-start instant.",
+     "Another records an instant immediately before the eventual write."
+    ],
+    "observer": "An operator comparing request logs with the stored mark sees materially different publication times."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "record-publication operation",
+   "kind": "unspecified_clock_read_count",
+   "text": "The same `photo_id` again returns the first mark; another `photo_id` is refused.",
+   "question": "How many clock readings may one record-publication operation take, including retries, and must a replay or refusal read the clock at all?",
+   "options": [
+    "Exactly one reading only when a new mark is created",
+    "One reading at the start of every call",
+    "A fresh reading for every transaction attempt"
+   ],
+   "default_guess": "Read the clock exactly once, only for the successful creation of a new mark; replays and refusals do not read it.",
+   "witness": {
+    "initial": "No mark exists, and the first insert attempt encounters a retryable transaction conflict.",
+    "events": [
+     "The calling flow asks to record a publication.",
+     "The service reads the clock and attempts the transaction.",
+     "The transaction retries after the clock advances."
+    ],
+    "outcomes": [
+     "One implementation preserves the first reading across the retry.",
+     "Another reads again and stores the later instant."
+    ],
+    "observer": "A persistence test or operator sees a different `marked_at` for the same history."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A2 photo modification time",
+   "kind": "unspecified_instant_snapshot",
+   "text": "A modification time is an absolute instant converted to UTC.",
+   "question": "During one preparation or delivery, is the file modification time read exactly once and reused for camera-time validation and fallback, or may it be read separately for those decisions?",
+   "options": [
+    "Read once and use one snapshot throughout the operation",
+    "Read separately whenever validation or fallback needs it"
+   ],
+   "default_guess": "Read the modification time once and reuse that absolute instant throughout the operation.",
+   "witness": {
+    "initial": "A source has no usable camera time and initially has modification time T1.",
+    "events": [
+     "The owner starts delivery.",
+     "The deliverer reads file metadata.",
+     "Syncthing or another filesystem actor changes the modification time to T2 without changing the selected content.",
+     "The deliverer determines the fallback photo moment."
+    ],
+    "outcomes": [
+     "An implementation that snapshots metadata once delivers T1.",
+     "An implementation that rereads modification time delivers T2."
+    ],
+    "observer": "The owner and client see a different `photo_date` for the same delivered content."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 OSV snapshot acceptance",
+   "kind": "undefined_refusal_threshold",
+   "text": "Before each deployment every distribution installed in the image is checked against a snapshot of the OSV database, ecosystem PyPI, that the deployment route accepts as current. That route owns the age limit, and no code of this service reads it.",
+   "question": "What exact maximum snapshot age, reference instant, time source, and boundary condition make the OSV snapshot current enough to admit deployment?",
+   "options": [
+    "A fixed service policy with an explicit maximum age and inclusive boundary",
+    "A shared Factory policy whose exact symbol and value are named",
+    "An opaque decision made independently by each deployment route"
+   ],
+   "default_guess": "Use a named Factory policy constant, measure age once at deployment-check start using the Factory's UTC clock, and reject when age exceeds the stated maximum.",
+   "witness": {
+    "initial": "The deployment image passes all vulnerability matches, but its OSV snapshot has an age close to an unstated limit.",
+    "events": [
+     "A deployer submits the image through the Factory deployment route.",
+     "The route evaluates whether the snapshot is current."
+    ],
+    "outcomes": [
+     "One careful implementation accepts a 48-hour-old snapshot.",
+     "Another careful implementation refuses the same deployment because it permits at most 24 hours."
+    ],
+    "observer": "The deployer sees the image admitted by one implementation and refused by the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A9 dependency advisory policy",
+   "kind": "standard_violation",
+   "text": "Before each deployment every distribution installed in the image is checked against a snapshot of the OSV database, ecosystem PyPI, that the deployment route accepts as current. That route owns the age limit, and no code of this service reads it.",
+   "rule": "Такая политика законна, только если её `kind` перечислен в декларации фабрики `tools/gate_rules_reads.py` (`GATE_RULES_READS`: гейт, функция, которая читает политику, и поля, которые она читает).",
+   "section": "15.3.1",
+   "question": "The passage must identify a gate policy whose `kind`, reader function, read fields, and applicable modules are declared in `GATE_RULES_READS`, or keep the advisory rule outside the generated specification as a deployment design fact.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M07 PublicationMark marked_at\",\"kind\":\"missing_time_source\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"Which authority supplies the instant written to `marked_at` when the first publication mark is created?\",\"options\":[\"The service's injected system clock\",\"The persistence backend's clock\",\"An instant supplied by the calling flow\"],\"default_guess\":\"Use an injected UTC system clock owned by the service.\",\"witness\":{\"initial\":\"A placement exists without a publication mark, and the calling flow has just received a Portal photo id.\",\"events\":[\"The calling flow asks the deliverer to record the publication.\",\"The service creates the first PublicationMark.\"],\"outcomes\":[\"One implementation writes the instant from its injected system clock.\",\"Another implementation writes the database server's current time.\"],\"observer\":\"An operator or test reading the stored PublicationMark sees different `marked_at` values.\"}},{\"subject\":\"M07 PublicationMark marked_at\",\"kind\":\"missing_time_representation\",\"text\":\"**Fields:** `project_id: UUID`, `source_id: str`, `photo_id: UUID`, `marked_at: datetime`.\",\"question\":\"In which representation is `marked_at` stored and compared: timezone-aware UTC, UTC without an offset, or another representation?\",\"options\":[\"Timezone-aware UTC datetime\",\"UTC datetime without an offset\",\"Backend-native timestamp representation\"],\"default_guess\":\"Store a timezone-aware UTC datetime.\",\"witness\":{\"initial\":\"The service is ready to create a first publication mark at 2026-11-21T10:00:00Z.\",\"events\":[\"The calling flow records the publication.\",\"The persistence layer serializes `marked_at`.\"],\"outcomes\":[\"One implementation stores `2026-11-21T10:00:00+00:00`.\",\"Another stores `2026-11-21T10:00:00` without an offset.\"],\"observer\":\"Persistence code, migrations, and tests see different values and comparison rules.\"}},{\"subject\":\"M07 PublicationMark marked_at\",\"kind\":\"undefined_instant_meaning\",\"text\":\"The calling flow reports the `photo_id` right after `photo.publish` answers, and the deliverer creates the mark.\",\"question\":\"What event does `marked_at` denote: receipt of the request, creation of the record, successful persistence, or some other boundary?\",\"options\":[\"Instant the record-publication request is accepted\",\"Instant immediately before the mark is inserted\",\"Instant at which the transaction commits successfully\"],\"default_guess\":\"Use the instant immediately before inserting the mark in the successful transaction.\",\"witness\":{\"initial\":\"A record-publication request begins, then waits before its transaction commits.\",\"events\":[\"The calling flow submits the Portal photo id.\",\"The request waits for a persistence lock.\",\"The transaction writes and commits the mark.\"],\"outcomes\":[\"One implementation records the request-start instant.\",\"Another records an instant immediately before the eventual write.\"],\"observer\":\"An operator comparing request logs with the stored mark sees materially different publication times.\"}},{\"subject\":\"record-publication operation\",\"kind\":\"unspecified_clock_read_count\",\"text\":\"The same `photo_id` again returns the first mark; another `photo_id` is refused.\",\"question\":\"How many clock readings may one record-publication operation take, including retries, and must a replay or refusal read the clock at all?\",\"options\":[\"Exactly one reading only when a new mark is created\",\"One reading at the start of every call\",\"A fresh reading for every transaction attempt\"],\"default_guess\":\"Read the clock exactly once, only for the successful creation of a new mark; replays and refusals do not read it.\",\"witness\":{\"initial\":\"No mark exists, and the first insert attempt encounters a retryable transaction conflict.\",\"events\":[\"The calling flow asks to record a publication.\",\"The service reads the clock and attempts the transaction.\",\"The transaction retries after the clock advances.\"],\"outcomes\":[\"One implementation preserves the first reading across the retry.\",\"Another reads again and stores the later instant.\"],\"observer\":\"A persistence test or operator sees a different `marked_at` for the same history.\"}},{\"subject\":\"A2 photo modification time\",\"kind\":\"unspecified_instant_snapshot\",\"text\":\"A modification time is an absolute instant converted to UTC.\",\"question\":\"During one preparation or delivery, is the file modification time read exactly once and reused for camera-time validation and fallback, or may it be read separately for those decisions?\",\"options\":[\"Read once and use one snapshot throughout the operation\",\"Read separately whenever validation or fallback needs it\"],\"default_guess\":\"Read the modification time once and reuse that absolute instant throughout the operation.\",\"witness\":{\"initial\":\"A source has no usable camera time and initially has modification time T1.\",\"events\":[\"The owner starts delivery.\",\"The deliverer reads file metadata.\",\"Syncthing or another filesystem actor changes the modification time to T2 without changing the selected content.\",\"The deliverer determines the fallback photo moment.\"],\"outcomes\":[\"An implementation that snapshots metadata once delivers T1.\",\"An implementation that rereads modification time delivers T2.\"],\"observer\":\"The owner and client see a different `photo_date` for the same delivered content.\"}},{\"subject\":\"A9 OSV snapshot acceptance\",\"kind\":\"undefined_refusal_threshold\",\"text\":\"Before each deployment every distribution installed in the image is checked against a snapshot of the OSV database, ecosystem PyPI, that the deployment route accepts as current. That route owns the age limit, and no code of this service reads it.\",\"question\":\"What exact maximum snapshot age, reference instant, time source, and boundary condition make the OSV snapshot current enough to admit deployment?\",\"options\":[\"A fixed service policy with an explicit maximum age and inclusive boundary\",\"A shared Factory policy whose exact symbol and value are named\",\"An opaque decision made independently by each deployment route\"],\"default_guess\":\"Use a named Factory policy constant, measure age once at deployment-check start using the Factory's UTC clock, and reject when age exceeds the stated maximum.\",\"witness\":{\"initial\":\"The deployment image passes all vulnerability matches, but its OSV snapshot has an age close to an unstated limit.\",\"events\":[\"A deployer submits the image through the Factory deployment route.\",\"The route evaluates whether the snapshot is current.\"],\"outcomes\":[\"One careful implementation accepts a 48-hour-old snapshot.\",\"Another careful implementation refuses the same deployment because it permits at most 24 hours.\"],\"observer\":\"The deployer sees the image admitted by one implementation and refused by the other.\"}},{\"subject\":\"A9 dependency advisory policy\",\"kind\":\"standard_violation\",\"text\":\"Before each deployment every distribution installed in the image is checked against a snapshot of the OSV database, ecosystem PyPI, that the deployment route accepts as current. That route owns the age limit, and no code of this service reads it.\",\"rule\":\"Такая политика законна, только если её `kind` перечислен в декларации фабрики `tools/gate_rules_reads.py` (`GATE_RULES_READS`: гейт, функция, которая читает политику, и поля, которые она читает).\",\"section\":\"15.3.1\",\"question\":\"The passage must identify a gate policy whose `kind`, reader function, read fields, and applicable modules are declared in `GATE_RULES_READS`, or keep the advisory rule outside the generated specification as a deployment design fact.\"}]}",
+ "set_aside": []
+}
