@@ -221,3 +221,68 @@ def test_note_surface_gate_blocks_unknown_attribute_and_undeclared_callable(tmp_
     assert all(f["severity"] == "block" for f in findings)
     baseline = language.surface_findings(ROOT / "examples" / "cabinet-backend", json.loads((ROOT / "examples" / "cabinet-backend" / "global_spec.json").read_text(encoding="utf-8")))
     assert baseline == []
+
+
+def _with_state_binding(project, parameter, attribute):
+    path = project / "global_spec.json"
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    spec["rules"] = {"http_router_backend": {"wiring": {"state_bindings": {
+        parameter: {"factory_parameter": parameter, "state_attribute": attribute}}}}}
+    path.write_text(json.dumps(spec), encoding="utf-8")
+    return project
+
+
+def test_router_state_binding_names_the_attribute_code_reads(tmp_path):
+    project = _with_state_binding(_project(
+        tmp_path,
+        module_functions={"api": ["handle"]},
+        contracts={"create_app": "(store: PortalStore) -> FastAPI", "handle": "(request: Request) -> None"},
+        notes=["handle: [DEPENDENCY_BOUNDARY] MUST read request.app.state.portal_store before delegating."],
+    ), "store", "portal_store")
+    assert "unknown_app_state_attribute" not in _codes(language.report(project))
+
+
+def test_bound_parameter_name_is_not_an_attribute_once_renamed(tmp_path):
+    project = _with_state_binding(_project(
+        tmp_path,
+        module_functions={"api": ["handle"]},
+        contracts={"create_app": "(store: PortalStore) -> FastAPI", "handle": "(request: Request) -> None"},
+        notes=["handle: [DEPENDENCY_BOUNDARY] MUST read request.app.state.store before delegating."],
+    ), "store", "portal_store")
+    finding = _by_code(language.report(project), "unknown_app_state_attribute")[0]
+    assert finding["bound_attributes"] == ["portal_store"]
+
+
+def test_note_surface_gate_reads_a_dotted_enum_value_beside_its_address_as_a_member(tmp_path):
+    """The same rule in the language gate: `= models.X` with one of X's values is a member (§5, §6.10, §15.3.1)."""
+    import json
+    import shutil
+
+    from notes_workbench import language
+
+    case = tmp_path / "cabinet-backend"
+    shutil.copytree(ROOT / "examples" / "cabinet-backend", case)
+    spec = json.loads((case / "global_spec.json").read_text(encoding="utf-8"))
+
+    def model_typed(sig):
+        for name, typ in language.signature_parameters(sig):
+            model = spec["models"].get(typ.split("|")[0].strip())
+            if isinstance(model, dict) and model.get("fields"):
+                return name
+        return None
+
+    scope, parameter = next(
+        (name, model_typed(sig)) for name, sig in spec["contracts"].items()
+        if "." not in name and model_typed(sig)
+    )
+    spec["models"]["DottedAction"] = {"kind": "enum", "values": [f"{parameter}.no_such_field"]}
+    notes = case / "80_notes.md"
+    notes.write_text(
+        notes.read_text(encoding="utf-8").rstrip("\n")
+        + f"\n{scope}: [BEHAVIOR] MUST record the {parameter}.no_such_field member of = models.DottedAction.\n"
+        + f"{scope}: [BEHAVIOR] MUST read {parameter}.no_such_field.\n",
+        encoding="utf-8",
+    )
+    findings = language.surface_findings(case, spec)
+    lines = [f["line"] for f in findings if f["code"] == "note_attribute_unknown"]
+    assert len(lines) == 1  # only the note without the enumeration's address

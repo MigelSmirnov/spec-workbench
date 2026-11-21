@@ -49,6 +49,7 @@ FINDING_MESSAGES = {
     "imports_knows_uncovered": "a module from State 3 Knows gave no symbol to the module and its edge is not rejected",
     "imports_code_undeclared": "the module's code names a project symbol that is neither in uses nor rejected",
     "imports_code_unused": "the symbol is in uses but the module's code does not name it; record code_outdated with a reason if the code lags the specification",
+    "imports_required_unnamed": "the module imports a callable with a contract (the Factory requires the import) that no note or contract of the module names: nothing asks the generated code to call it, and the behaviour it carries is lost",
     "imports_factory_unavailable": "the case has a Factory target, but the Factory or its report is unavailable",
 }
 

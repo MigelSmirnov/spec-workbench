@@ -107,12 +107,18 @@ def workbench_state(project: str) -> dict[str, Any]:
     """Current authoring state of one workbench case: canonical ref, the first
     not-ready design phase, and why it is not ready.
 
+    `authoring.diagnosis` is the whole case beside that phase: what every
+    check of the standard leaves open per owning state, what could not be
+    checked, and the Factory's spec check (design_diagnose in brief). The
+    phase is only the first unmet transition; a later state can be far from
+    closed while it waits. Read both before deciding the next step.
+
     The returned action's shell command is withheld deliberately: it assumes a
     materialized checkout this gateway owns. Authoring remains explicit
     repository work on the canonical project branch.
     """
     try:
-        return authoring_pipeline.project_next(_REPO_ROOT, project)
+        return authoring_pipeline.project_next(_REPO_ROOT, project, with_diagnosis=True)
     except _ERRORS as exc:
         return {"error": str(exc), "known_cases": _known_cases()}
 

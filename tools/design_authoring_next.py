@@ -21,6 +21,8 @@ from imports_workbench import service as imports_closure
 from imports_workbench.model import ImportsError
 import design_emitter_binding
 import design_lint
+import design_record_construction
+import design_semantic_handoff
 import design_router_context
 import design_stage3
 import design_stage4
@@ -28,6 +30,7 @@ import design_stage5
 import design_stage6_contracts
 import design_stage6_data
 import design_trace
+import transition
 from notes_workbench import gate as notes_gate
 from questions_workbench import documents as question_documents
 from questions_workbench import service as question_rounds
@@ -138,11 +141,26 @@ def _result(
         "read": _read(sequence, phase),
         "ask": [str(item) for item in _phase(sequence, phase).get("questions") or []],
         "question_round": _question_round(sequence, phase, project_text),
+        "layer": transition.layer(sequence, phase),
+        "carried_dispositions": _carried_dispositions(project, _phase(sequence, phase)),
         "summary": summary or {},
         "findings": findings or [],
     }
     payload.update(extra)
     return payload
+
+
+def _carried_dispositions(project: Path, phase: dict[str, Any]) -> dict[str, Any]:
+    """What authors carried on by a topic's disposition (owner decision
+    2026-11-08, #147): the items received by this phase's state, and how many
+    wait at each later layer (`design_questions.py carried` lists them)."""
+    items = question_rounds.carried_items(project)
+    state = phase.get("semantic_state")
+    waiting: dict[str, int] = {}
+    for item in items:
+        target = f"state{item['to']}" if isinstance(item["to"], int) else str(item["to"])
+        waiting[target] = waiting.get(target, 0) + 1
+    return {"received": [i for i in items if state is not None and i["to"] == state], "by_layer": waiting}
 
 
 def _question_round(sequence: dict[str, Any], phase: str, project_text: str) -> str | None:
@@ -151,6 +169,32 @@ def _question_round(sequence: dict[str, Any], phase: str, project_text: str) -> 
     if not entry.get("question_scope"):
         return None
     return f"python tools/design_questions.py ask {project_text} --state {entry['semantic_state']}"
+
+
+def _transition_stop(sequence: dict[str, Any], project: Path, project_text: str, phase: str) -> dict[str, Any] | None:
+    """The phase's gate passed: now what closes at this transition (TRANSITION_PROTOCOL.md).
+
+    Its own checks and every obligation an earlier layer carried here. A result
+    that is not closed or carried stops the chain at this phase, so a gate
+    that could not see its inputs never reads as a pass.
+    """
+    report = transition.run_phase(project, phase, sequence)
+    if report["ready"]:
+        return None
+    stopped = [r for r in report["results"] if transition.blocking(r)]
+    names = ", ".join(f"{r['check']} ({r['outcome']}, from {r['from']})" for r in stopped)
+    payload = _result(
+        sequence=sequence, project=project, project_text=project_text,
+        phase=phase, blocked=True,
+        reason=(f"The {phase} gate passed, but what closes at this transition does not: {names}. "
+                "not_checked is not a pass; a workbench_gap is routed to the Workbench, never repaired by "
+                "changing the design's behaviour."),
+        summary=report["summary"], findings=report["findings"],
+    )
+    payload["action"] = {"tool": "tools/transition.py", "args": [project_text, "--phase", phase, "--json"],
+                         "command": _command("tools/transition.py", project_text, ["--phase", phase, "--json"])}
+    payload["transition_results"] = report["results"]
+    return payload
 
 
 def _lint_findings(report: object) -> list[dict[str, Any]]:
@@ -174,18 +218,68 @@ def _has_state_source(project: Path, state: int) -> bool:
     return False
 
 
-def next_step(project: Path, *, display_path: str | None = None) -> dict[str, Any]:
-    """Return the first not-ready phase for one materialized project case."""
+def next_step(project: Path, *, display_path: str | None = None, with_diagnosis: bool = False) -> dict[str, Any]:
+    """Return the first not-ready phase for one materialized project case.
+
+    The phase is the first transition that does not hold; it says nothing of
+    what is open elsewhere. ``with_diagnosis`` adds ``diagnosis``: every check
+    of the standard and the Factory's validator at once (design_diagnose), so
+    an author who follows the phases one by one still sees the whole case.
+    """
     project = project.resolve()
     if not project.is_dir():
         raise AuthoringSequenceError(f"project directory not found: {project}")
     sequence = load_sequence()
     project_text = display_path or project.as_posix()
-    pending = _promoted_states_step(sequence, project, project_text)
-    if pending is not None:
-        return pending
-    step = _post_state5_step(sequence, project, project_text)
-    return _question_gate(sequence, project, project_text, step["phase"]) or step
+    step = _promoted_states_step(sequence, project, project_text)
+    if step is None:
+        step = _post_state5_step(sequence, project, project_text)
+        step = _question_gate(sequence, project, project_text, step["phase"]) or step
+    if with_diagnosis:
+        step["diagnosis"] = diagnosis(project, project_text)
+    return step
+
+
+def diagnosis(project: Path, project_text: str) -> dict[str, Any]:
+    """The design_diagnose report of the case in brief: what is open per owning
+    state and the Factory's spec check. A diagnosis that cannot run is an
+    ``error`` with its reason, never a missing field: no picture is not a clean one."""
+    command = shlex.join(["python", "tools/design_diagnose.py", "--case", project_text])
+    try:
+        import design_diagnose
+
+        report = design_diagnose.diagnose(project, "case")
+    except Exception as exc:  # the phase still stands; the gap in the picture is said
+        return {"outcome": "error", "reason": f"{type(exc).__name__}: {exc}", "command": command}
+    open_by_owner = {owner: max(row["open"].values()) for owner, row in report["summary"].items()
+                     if any(row["open"].values())}
+    unchecked = {owner: [*row["not_checkable"], *row["error"]] for owner, row in report["summary"].items()
+                 if row["not_checkable"] or row["error"]}
+    spec_check = report["factory"]["spec"]
+    factory = {"outcome": spec_check.get("outcome"), "errors": spec_check.get("errors", 0)}
+    if spec_check.get("reason"):
+        factory["reason"] = spec_check["reason"]
+    clean = not open_by_owner and not unchecked and factory["outcome"] == "closed"
+    return {"outcome": "closed" if clean else "open", "open": open_by_owner, "unchecked": unchecked,
+            "factory_spec": factory, "command": command}
+
+
+def diagnosis_line(payload: dict[str, Any]) -> str | None:
+    found = payload.get("diagnosis")
+    if not isinstance(found, dict):
+        return None
+    if found["outcome"] == "error":
+        return f"diagnosis: error — {found['reason']}; the whole picture is unknown: {found['command']}"
+    factory = found["factory_spec"]
+    parts = [f"{owner} {count}" for owner, count in found["open"].items()]
+    parts += [f"{owner} not checked ({', '.join(checks)})" for owner, checks in found["unchecked"].items()]
+    if factory["outcome"] == "open":
+        parts.append(f"Factory spec check {factory['errors']} error(s)")
+    elif factory["outcome"] != "closed":
+        parts.append(f"Factory spec check {factory['outcome']}" + (f" ({factory['reason']})" if factory.get("reason") else ""))
+    if not parts:
+        return "diagnosis: closed — every check of the standard and the Factory spec check"
+    return f"diagnosis: open — {' · '.join(parts)}; see: {found['command']}"
 
 
 def _question_gate(sequence: dict[str, Any], project: Path, project_text: str, reached: str) -> dict[str, Any] | None:
@@ -213,6 +307,10 @@ def _question_gate(sequence: dict[str, Any], project: Path, project_text: str, r
             "python", "tools/design_questions.py", "ask", project_text, "--state", str(state),
             *(["--since", since] if since else []),
         ]
+        if not status.get("needs_round") and status.get("awaiting_disposition"):
+            # one round per change: the text did not change, the author disposes of the topics
+            command = ["python", "tools/design_questions.py", "dispose", project_text, "--state", str(state),
+                       "--topic", "<id>", "--fixed|--carried|--accepted", "..."]
         return _result(
             sequence=sequence, project=project, project_text=project_text,
             phase=phase["id"], blocked=True,
@@ -224,6 +322,9 @@ def _question_gate(sequence: dict[str, Any], project: Path, project_text: str, r
                 "units": status.get("units"),
                 "open_units": status.get("open_units", []),
                 "changed_units": status.get("changed_units", []),
+                "needs_round": status.get("needs_round", []),
+                "contradictions": status.get("contradictions", {}),
+                "awaiting_disposition": status.get("awaiting_disposition", {}),
                 "closed_at": since,
             },
             question_round=shlex.join(command),
@@ -302,6 +403,10 @@ def _promoted_states_step(sequence: dict[str, Any], project: Path, project_text:
             findings=_lint_findings(state2),
         )
 
+    stop = _transition_stop(sequence, project, project_text, "state2_rules_decisions")
+    if stop is not None:
+        return stop
+
     state3 = design_stage3.lint(project)
     s3 = state3["summary"]
     if not s3["modules"] or s3["errors"]:
@@ -353,6 +458,10 @@ def _promoted_states_step(sequence: dict[str, Any], project: Path, project_text:
                 phase="state4_reviewed_flows", blocked=bool(c4["invalid_plan_refs"]),
                 reason="Complete the explicit State 4 flow plan.", summary=c4, use_next=True,
             )
+
+    stop = _transition_stop(sequence, project, project_text, "state4_reviewed_flows")
+    if stop is not None:
+        return stop
 
     state5 = design_stage5.lint(project)
     s5 = state5["summary"]
@@ -469,6 +578,29 @@ def _router_step(sequence: dict[str, Any], project: Path, project_text: str) -> 
     return None
 
 
+def _semantic_handoff_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any] | None:
+    """Stage 7.1; None when the case declares no semantic test handoff or it is closed.
+
+    Stage 9 admission (FA006) and the export refuse a declared handoff that is not
+    semantic_closed; the sequencer names it here, where the work is done.
+    """
+    report = design_semantic_handoff.coverage(project)
+    if report["summary"]["handoff_ready"]:
+        return None
+    return _result(
+        sequence=sequence, project=project, project_text=project_text,
+        phase="stage7_1_semantic_handoff", blocked=True,
+        reason=(
+            f"The case declares a semantic runtime-test handoff ({report['manifest']}) that is not closed: "
+            "review each test against its accepted decision as STAGE_7_1_SEMANTIC_HANDOFF.md, "
+            "\"Handoff result\", requires, and mark the manifest semantic_closed only when every flow meets it. "
+            "Export and Stage 9 admission refuse it until then."
+        ),
+        summary=report["summary"], findings=report["findings"],
+        router_allowed=False, persistence_allowed=False,
+    )
+
+
 def _imports_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any] | None:
     """The imports_closure phase; None once every candidate is decided.
 
@@ -572,7 +704,28 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             phase="state6_exact_contracts", blocked=False,
             reason="State 6 owns canonical Python signatures and must close before deterministic backend closure.",
             summary=contracts["summary"],
+            findings=transition.classify(project, list(contracts.get("findings") or [])),
             unresolved_functions=contracts["unresolved_functions"],
+            router_allowed=False, persistence_allowed=False,
+        )
+    stop = _transition_stop(sequence, project, project_text, "state6_exact_contracts")
+    if stop is not None:
+        return stop
+
+    # Conditional on rules.record_construction_backend: a case without the
+    # closure file declares no record builder and skips the phase.
+    constructions = design_record_construction.coverage(project)
+    if constructions["summary"]["enabled"] and not constructions["summary"]["handoff_ready"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_record_construction_closure",
+            blocked=bool(constructions["summary"]["blocks"]),
+            reason=(
+                "Canonical contracts are ready; the record constructions in "
+                f"{design_record_construction.CLOSURE_FILE} must close against the State 1 models and the "
+                "State 6 builder contracts (RC001-RC015) and be marked closed before Notes."
+            ),
+            summary=constructions["summary"], findings=constructions["findings"],
             router_allowed=False, persistence_allowed=False,
         )
 
@@ -612,6 +765,10 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             router_allowed=True, persistence_allowed=True,
         )
 
+    stop = _transition_stop(sequence, project, project_text, "state7_notes")
+    if stop is not None:
+        return stop
+
     witnesses = design_decision_witness.coverage(project)
     if not witnesses["summary"]["handoff_ready"]:
         return _result(
@@ -625,6 +782,10 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             summary=witnesses["summary"], findings=witnesses["findings"],
             router_allowed=False, persistence_allowed=False,
         )
+
+    semantic_step = _semantic_handoff_step(sequence, project, project_text)
+    if semantic_step is not None:
+        return semantic_step
 
     imports_step = _imports_step(sequence, project, project_text)
     if imports_step is not None:
@@ -646,7 +807,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
-        payload = next_step(args.project, display_path=args.display_path)
+        payload = next_step(args.project, display_path=args.display_path, with_diagnosis=True)
     except (
         AuthoringSequenceError,
         ValueError,
@@ -672,6 +833,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ask: {question}")
         if payload.get("question_round"):
             print(f"questions: {payload['question_round']}")
+        line = diagnosis_line(payload)
+        if line:
+            print(line)
     return 1 if payload["blocked"] else 0
 
 

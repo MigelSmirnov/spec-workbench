@@ -45,6 +45,7 @@ class ClassSurface:
     methods: set[str] = field(default_factory=set)
     init_params: dict[str, str] = field(default_factory=dict)
     source: str = ""
+    values: tuple[str, ...] = ()      # an enum's declared values (SPEC_STANDARD §5)
 
     @property
     def attributes(self) -> set[str]:
@@ -95,6 +96,8 @@ class ModelIndex:
                     name=name, kind=surface_kind,
                     fields={k: str(v) for k, v in fields.items()} if isinstance(fields, dict) else {},
                     source=path.name,
+                    values=tuple(str(v) for v in declared.get("values") or [])
+                    if surface_kind == "enum" and isinstance(declared.get("values"), list) else (),
                 )
         contracts_path = project / "60_contracts.json"
         if contracts_path.is_file():
@@ -121,6 +124,10 @@ class ModelIndex:
             index.modules = set(re.findall(r"`module:([A-Za-z_][A-Za-z0-9_]*)`", text))
             index.modules |= set(re.findall(r"^##\s+`([A-Za-z_][A-Za-z0-9_]*)`\s*$", text, re.MULTILINE))
         return index
+
+    def enum_values(self) -> dict[str, tuple[str, ...]]:
+        """enum name -> its declared values."""
+        return {name: surface.values for name, surface in self.classes.items() if surface.kind == "enum"}
 
     def surface(self, type_name: str | None) -> ClassSurface | None:
         if not type_name:

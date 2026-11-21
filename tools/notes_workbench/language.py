@@ -163,8 +163,12 @@ def load_assembled_spec(project: Path) -> dict[str, Any]:
     return payload
 
 
-def factory_coverage(spec: dict[str, Any]) -> list[dict[str, Any]]:
-    """Findings for callables the Factory will refuse to generate."""
+def factory_coverage(spec: dict[str, Any], deterministic: frozenset[str] | set[str] = frozenset()) -> list[dict[str, Any]]:
+    """Findings for callables the Factory will refuse to generate.
+
+    ``deterministic`` names the callables an emitter lowers from closed IR
+    (gate._load_deterministic_callable_scopes): the Factory never asks a note
+    of them, so they are not counted."""
     required, _drift = semantic_classes()
     module_functions = spec.get("module_functions")
     contracts = spec.get("contracts")
@@ -181,7 +185,7 @@ def factory_coverage(spec: dict[str, Any]) -> list[dict[str, Any]]:
         owned = module_functions[module]
         if not isinstance(owned, list):
             continue
-        for name in sorted(item for item in owned if isinstance(item, str)):
+        for name in sorted(item for item in owned if isinstance(item, str) and item not in deterministic):
             signature = contracts.get(name)
             if not is_function_contract(name, signature):
                 continue
@@ -313,6 +317,14 @@ def surface_findings(project: Path, spec: dict[str, Any]) -> list[dict[str, Any]
     module_functions = spec.get("module_functions") or {}
     owner = {symbol: module for module, symbols in module_functions.items() for symbol in symbols}
     module_internal = (spec.get("imports") or {}).get("module_internal") or {}
+    # model_surface_workbench.index reads this module's signature_parameters
+    from model_surface_workbench.attributes import addressed_enum_values
+
+    enums = {
+        name: declared.get("values") or ()
+        for name, declared in (spec.get("models") or {}).items()
+        if isinstance(declared, dict) and declared.get("kind") == "enum"
+    }
     findings: list[dict[str, Any]] = []
     for note in _iter_authored_notes(project):
         scope = note["scope"]
@@ -322,7 +334,10 @@ def surface_findings(project: Path, spec: dict[str, Any]) -> list[dict[str, Any]
         parameters = dict(signature_parameters(signature))
         scope_module = owner.get(scope.split(".", 1)[0])
         text = note["text"]
+        members = addressed_enum_values(text, enums)
         for match in _ATTRIBUTE_PATH_RE.finditer(text):
+            if match.group(0) in members:  # an enum member named by its value
+                continue
             root, chain = match.group(1), match.group(2)[1:].split(".")
             if root in _SURFACE_SKIP_ROOTS or root not in parameters:
                 continue
@@ -378,6 +393,21 @@ def dependency_bindings(spec: dict[str, Any]) -> list[dict[str, Any]]:
     }
     if not bound_types:
         return []
+    # The router backend may bind a factory parameter under another
+    # app.state attribute (wiring.state_bindings: {"store": {"factory_parameter":
+    # "store", "state_attribute": "portal_store"}}); the attribute code reads
+    # is then the declared one, not the parameter name.
+    router = (spec.get("rules") or {}).get("http_router_backend")
+    bindings = ((router or {}).get("wiring") or {}).get("state_bindings") if isinstance(router, dict) else None
+    if isinstance(bindings, dict):
+        for binding in bindings.values():
+            if not isinstance(binding, dict):
+                continue
+            parameter = binding.get("factory_parameter")
+            attribute = binding.get("state_attribute")
+            if (isinstance(parameter, str) and isinstance(attribute, str)
+                    and parameter in bound_types and attribute != parameter):
+                bound_types[attribute] = bound_types.pop(parameter)
     service_types = set(bound_types.values())
 
     findings: list[dict[str, Any]] = []
@@ -443,7 +473,9 @@ def report(project: Path) -> dict[str, Any]:
     spec = load_assembled_spec(project)
     _required, drift = semantic_classes()
 
-    findings = factory_coverage(spec)
+    from notes_workbench import gate  # gate imports language; read lazily
+
+    findings = factory_coverage(spec, gate._load_deterministic_callable_scopes(project))
     repair_sites, note_files = authored_repair_sites(project)
     findings.extend(repair_sites)
     findings.extend(dependency_bindings(spec))

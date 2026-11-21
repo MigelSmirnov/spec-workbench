@@ -7,6 +7,7 @@ or rejected with a reason. ``module_internal`` is derived from ``uses`` only.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -158,6 +159,43 @@ def _check_use(row: dict[str, Any], scope: Scope, case: Case, order: dict[str, i
     return found
 
 
+def named(symbol: str, text: str) -> bool:
+    """The symbol occurs in the text as a whole identifier (the slicer's strict-imports test)."""
+    return re.search(rf"(?<![A-Za-z0-9_]){re.escape(symbol)}(?![A-Za-z0-9_])", text) is not None
+
+
+def required_unnamed(case: Case, uses_by_module: dict[str, list[tuple[str, dict[str, Any]]]],
+                     modules: set[str]) -> list[dict[str, Any]]:
+    """imports_required_unnamed: a required import nothing in the module asks for (§7.1).
+
+    The Factory refuses generated code that does not import every callable with a
+    contract that imports.internal declares ("missing required import"); the code
+    imports it only when a note or a contract of the module names it. A use kept on
+    basis ``code``, ``contract``, ``knows`` or ``author`` after the note that named it
+    was dropped would otherwise pass every Workbench gate and stop Route B at
+    generation, or lose the behaviour the callable carries. A module a backend's
+    emitter writes (``Case.emitted``) imports what its IR and template need and is
+    not judged here.
+    """
+    found: list[dict[str, Any]] = []
+    # an emitter writes its module from IR and template; the generator is not asked
+    for module in sorted(set(modules) - set(case.emitted)):
+        texts = [note.text for note in case.notes if case.note_module(note) == module]
+        texts += [signature for name, signature in case.contracts.items() if case.owner(name) == module]
+        text = "\n".join(texts)
+        scopes_by_key: dict[tuple[str, str], list[str]] = {}
+        for scope_id, row in uses_by_module.get(module, ()):
+            symbol, provider = _key(row)
+            if isinstance(symbol, str) and isinstance(provider, str):
+                scopes_by_key.setdefault((symbol, provider), []).append(scope_id)
+        for (symbol, provider), scope_ids in sorted(scopes_by_key.items()):
+            if case.required_imports(symbol, provider) and not named(symbol, text):
+                found.append(_finding("imports_required_unnamed", module,
+                                      f"{symbol} from {provider}: {FINDING_MESSAGES['imports_required_unnamed']}",
+                                      symbol=symbol, provider=provider, scopes=sorted(set(scope_ids))))
+    return found
+
+
 def _code_evidence(project: Path, case: Case, factory_root: Path | None) -> dict[str, Any]:
     return factory.evidence(project, case.factory_target, factory_root)
 
@@ -261,6 +299,8 @@ def analyze(case: Case, table: dict[str, Any] | None, code: dict[str, Any], proj
             if isinstance(row.get("code_outdated"), str) and row["code_outdated"].strip():
                 continue
             findings.append(_finding("imports_code_unused", scope_id, symbol=key[0], provider=key[1]))
+
+    findings += required_unnamed(case, uses_by_module, judged_modules)
 
     if code_status == UNAVAILABLE and case.factory_target is not None:
         findings.append(_finding("imports_factory_unavailable", case.project_root,

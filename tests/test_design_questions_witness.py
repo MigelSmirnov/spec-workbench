@@ -151,6 +151,8 @@ def test_a_single_review_with_a_witness_is_judged_without_one_it_is_not(tmp_path
 def test_the_next_round_asks_reviewers_for_a_witness_of_each_hypothesis(tmp_path):
     case = make_case(tmp_path)
     service.ask_round(case, 2, Provider(twice(), CONTRADICTION))
+    # one round per change: the next round asks about a change
+    (case / "00_product.md").write_text((case / "00_product.md").read_text() + "\nOne more line.\n")
     provider = Provider([[], [], []], CONTRADICTION)
     service.ask_round(case, 2, provider)
     assert "Hypotheses of the previous round" in provider.instructions[0]
@@ -211,9 +213,8 @@ def test_units_naming_a_changed_decision_are_found():
 def test_editing_a_closed_decision_reopens_the_closed_decisions_that_name_it(tmp_path):
     case = make_case(tmp_path, git=True)
     silent = {"kind": "indifferent", "why": "no one acts on it"}
-    for _ in range(2):
-        service.ask_round(case, 2, Provider([[], [], []], silent))
-    commit(case, "two clear rounds")
+    service.ask_round(case, 2, Provider([[], [], []], silent))
+    commit(case, "one clear round")
     (case / "02_rules.md").write_text(RULES.replace("whatever it removed", "only when it removed one"),
                                       encoding="utf-8")
     commit(case, "edit A01")

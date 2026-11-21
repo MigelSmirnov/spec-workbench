@@ -41,6 +41,14 @@ def test_intermediate_closures_do_not_consume_state_numbers() -> None:
     assert "semantic_state" not in data
     assert data["next"] == "state6_exact_contracts"
     assert phases["state6_exact_contracts"]["semantic_state"] == 6
+    constructions = phases["deterministic_record_construction_closure"]
+    assert phases["state6_exact_contracts"]["next"] == "deterministic_record_construction_closure"
+    assert constructions["conditional"] == "rules.record_construction_backend is used"
+    assert constructions["compatibility_artifacts"] == ["70_record_construction_closure.json"]
+    assert constructions["gate_tool"] == "tools/design_record_construction.py"
+    assert constructions["gate_args"] == ["--coverage"]
+    assert constructions["next"] == "deterministic_persistence_closure"
+    assert any(doc.get("section", "").startswith("6.13") for doc in constructions["docs"])
     assert persistence["conditional"] == "rules.persistence_backend is used"
     assert persistence["compatibility_artifacts"] == ["70_persistence_closure.json"]
     assert persistence["gate_tool"] == "tools/design_persistence_authoring.py"
@@ -54,6 +62,7 @@ def test_intermediate_closures_do_not_consume_state_numbers() -> None:
     assert binding["next"] == "state7_notes"
     assert phases["state7_notes"]["semantic_state"] == 7
     assert all("semantic_state" not in phases[p] for p in (
+        "deterministic_record_construction_closure",
         "deterministic_persistence_closure", "deterministic_http_router_closure",
         "deterministic_http_router_context_closure", "deterministic_http_router_ir_assembly",
     ))

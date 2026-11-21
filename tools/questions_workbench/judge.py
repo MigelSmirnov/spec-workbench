@@ -30,19 +30,61 @@ reviewers, who are asked for a witness. A contradiction also names, for each
 of its two passages, the earlier-state passage it rests on (verbatim, or none):
 a side that rests on no State 0 or State 1 passage is usually the side to
 change. State 7 asks for contradictions inside one prompt and keeps its rule.
+
+A `standard_violation` is a passage of the texts that breaks a rule of the
+SPEC_STANDARD sections the state's phase lists in `docs`, the sections the
+round gave its reviewers and its judge verbatim (owner decision 2026-11-08,
+#147 comment 6724353913). Both sides are checked mechanically: the passage in
+the texts, the rule in those sections. A verified one blocks like a
+contradiction, in every state and without a witness: the rule is the
+standard's, not an outcome the texts would have to allow.
+
+In State 7 the text is the prompt the Factory builds for one module, and the
+rules the round gives (§2, §15.3.1, §7, §15.9) are the rules the module's
+notes are written by. Only the notes are design text there: every other
+passage — imports, contracts, model surfaces, the static gate contract, the
+generator's own instructions — is written by the Factory for every module and
+no author of the case can change it. A violation whose passage is not found
+in the module's notes (`violation_texts`) is therefore `generator_text`:
+recorded, verified, and asking nothing of the author (client-portal State 7
+round 23, `financial_policy` T1–T3: the judge held the Factory's `model_copy`
+instruction, code-factory#200, to the rules of a note). A contradiction
+between a note and that text still blocks: the note is what can change.
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 BLOCKING = {"contradiction", "consequential_gap"}
+STANDARD_VIOLATION = "standard_violation"
 DEFERRED_TO = "State 6 contracts or State 7 notes"
 LAST_DEFERRING_STATE = 5
 MODULE_STATE = 7
 HYPOTHESIS = "hypothesis"
-KINDS = BLOCKING | {"answered", "answered_later", "later_state", "indifferent", "preexisting", "judged_before",
+# A State 7 violation quoting no note of the module: the Factory's own text.
+GENERATOR_TEXT = "generator_text"
+KINDS = BLOCKING | {STANDARD_VIOLATION, "answered", "answered_later", "later_state", "indifferent", "preexisting", "judged_before",
                     HYPOTHESIS}
 WITNESS_FIELDS = ("initial", "events", "outcomes", "observer", "basis")
+
+# The version of the rules `check` applies to a judge's answer. A round keeps it
+# with the digest of the SPEC_STANDARD sections a violation's rule was looked
+# up in (`rules_record`), so a verdict says which rules it was checked under,
+# and a verdict on an unchanged unit kept under other rules can be checked again
+# under the current ones (`service.rejudge`) instead of standing until the text
+# changes. Raise the version with every change of `check` that can change a
+# kept verdict, and say here what changed:
+#   1  before versioning (rounds that keep no `judge_rules`)
+#   2  #175: a State 7 violation quoting no note of the module is generator_text
+RULES_VERSION = 2
+
+
+def rules_record(standard: str | None) -> dict[str, Any]:
+    """The judge rules a verdict is checked under: the version of `check` and
+    the digest of the standard sections it looked a violation's rule up in."""
+    return {"version": RULES_VERSION,
+            "standard": hashlib.sha256(standard.encode("utf-8")).hexdigest() if standard else None}
 
 
 def _norm(text: str) -> str:
@@ -124,13 +166,18 @@ def _bases(judgement: dict[str, Any], earlier: str | None) -> tuple[list[dict[st
 def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: str | None,
           later_texts: str | None = None, precedents: dict[str, dict[str, Any]] | None = None,
           own_texts: str | None = None, witness_required: bool = False,
-          earlier_texts: str | None = None) -> dict[str, Any]:
+          earlier_texts: str | None = None, standard: str | None = None,
+          violation_texts: str | None = None) -> dict[str, Any]:
     """The judgement as kept in the round, with `verified` and `blocking`.
     `own_texts` are the asked state's own documents; without them every text
     counts as the state's own. With `witness_required`, a contradiction or a
     quoted gap without a complete witness becomes a non-blocking `hypothesis`.
     `earlier_texts` are the documents of the states before this one, where a
-    contradiction's bases are looked up."""
+    contradiction's bases are looked up. `standard` is the text of the
+    SPEC_STANDARD sections the round gave, where a violation's rule is looked up.
+    `violation_texts`, when given, are the only passages a violation may hold
+    (State 7: the module's notes); a verified violation of any other passage
+    of the texts is kept as `generator_text`, not blocking."""
     if not isinstance(judgement, dict):
         return {"kind": None, "verified": False, "blocking": True, "failure": "the judge gave no judgement"}
     kind = judgement.get("kind")
@@ -149,6 +196,15 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     elif kind == "contradiction":
         if len(quotes) < 2 or not all(_found(q, corpus) for q in quotes):
             failure = "a contradiction needs two quotes found verbatim in the texts"
+    elif kind == STANDARD_VIOLATION:
+        kept["rule"] = str(judgement.get("rule") or "")
+        kept["section"] = str(judgement.get("section") or "")
+        if standard is None:
+            failure = "standard_violation is allowed only when the round gave the state's SPEC_STANDARD sections"
+        elif not quotes or not all(_found(q, corpus) for q in quotes):
+            failure = "the passage of a standard violation is not found verbatim in the texts"
+        elif not _found(kept["rule"], _norm(standard)):
+            failure = "the rule of a standard violation is not found verbatim in the state's SPEC_STANDARD sections"
     elif kind == "consequential_gap":
         if not kept["divergence"].strip():
             failure = "a consequential gap needs the two behaviours and who notices"
@@ -205,6 +261,13 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
             kept["unsupported_sides"] = [b["passage"] for b in bases if not b["rests_on"]]
         elif earlier_texts is not None and witness_required:
             kept["bases_missing"] = True
+    if (failure is None and kind == STANDARD_VIOLATION and violation_texts is not None
+            # the prompt lists each note as `- <note>`: the bullet is not the note's
+            and not all(_found(q.strip().removeprefix("- "), _norm(violation_texts)) for q in quotes)):
+        kept["claimed_kind"] = kind
+        kept["kind"] = kind = GENERATOR_TEXT
+        kept["outside_notes"] = ("the passage is not in the module's notes: it is the Factory's own prompt "
+                                 "text, which the rules of a note do not reach and no author of the case changes")
     if failure is not None:
         kept.pop("deferred_to", None)  # an unverified judgement defers nothing, even after a deferred precedent
     kept["verified"] = failure is None
@@ -226,7 +289,8 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     # State 7 asks only for contradictions inside a module's prompt: a gap the
     # judge still names there is recorded, never a reason to keep notes open
     gap_recorded = kind == "consequential_gap" and state == MODULE_STATE and failure is None
-    kept["blocking"] = (kind in BLOCKING and not deferred and not gap_recorded) or failure is not None
+    kept["blocking"] = ((kind in BLOCKING and not deferred and not gap_recorded) or kind == STANDARD_VIOLATION
+                        or failure is not None)
     if failure:
         kept["failure"] = failure
     return kept

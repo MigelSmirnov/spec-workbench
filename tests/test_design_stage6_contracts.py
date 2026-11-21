@@ -144,6 +144,36 @@ def test_missing_router_handler_mapping_is_fail_closed(tmp_path: Path) -> None:
     assert any(item["code"] == "missing_router_handler_contract" for item in report["findings"])
 
 
+def _expose_self_handler(project: Path, router_operation: str) -> None:
+    """Make attach_local_source its own handler: drop the companion, mark the public function."""
+    plan_path = project / PLAN
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["functions"] = [f for f in plan["functions"] if f.get("router_operation") != FIRST_EXTERNAL]
+    public = next(f for f in plan["functions"] if f.get("public_operation") == FIRST_EXTERNAL)
+    public["router_operation"] = router_operation
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+
+def test_exposed_public_operation_may_be_its_own_handler(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    _expose_self_handler(project, FIRST_EXTERNAL)
+    codes = {item["code"] for item in design_stage6_contracts.coverage(project)["findings"]}
+    assert "public_has_router_operation" not in codes
+    assert "missing_router_handler_contract" not in codes
+
+
+def test_public_function_cannot_handle_another_operations_route(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    plan_path = project / PLAN
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    other = next(f for f in plan["functions"]
+                 if f.get("visibility") == "public" and f.get("public_operation") != FIRST_EXTERNAL)
+    other["router_operation"] = FIRST_EXTERNAL
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    codes = {item["code"] for item in design_stage6_contracts.coverage(project)["findings"]}
+    assert "public_has_router_operation" in codes
+
+
 def test_ready_handoff_contains_operation_and_handler_contracts(tmp_path: Path) -> None:
     handoff = design_stage6_contracts.handoff(_ready(tmp_path))
     assert handoff["ready"] is True
@@ -163,6 +193,7 @@ def test_authoring_gate_advances_past_contracts_and_notes_to_the_witness_stop(tm
     # hint on every finding, instead of advancing to assembly.
     monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
     monkeypatch.setattr(design_authoring_next, "_question_gate", lambda *args: None)  # rounds: test_design_questions_gates.py
+    monkeypatch.setattr(design_authoring_next, "_transition_stop", lambda *args: None)  # below
     report = design_authoring_next.next_step(_ready(tmp_path))
     assert report["phase"] == "decision_witness_resolution"
     assert report["blocked"] is True
@@ -170,6 +201,21 @@ def test_authoring_gate_advances_past_contracts_and_notes_to_the_witness_stop(tm
     findings = report["findings"]
     assert findings and {f["code"] for f in findings} == {"decision_without_witness"}
     assert all(f["severity"] == "error" and f["hint"].startswith("not decided — decide:") for f in findings)
+
+
+def test_a_flow_step_assembly_would_reject_stops_the_state6_transition(tmp_path: Path, monkeypatch) -> None:
+    # Cabinet's flow names capability:synchronization.publish_registry_catalogue,
+    # which the State 6 plan does not contract. Until the transition protocol
+    # this surfaced only at the State 8 flows check; now the obligation State 4
+    # carried to State 6 stops the State 6 handoff, needing no notes.
+    monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
+    monkeypatch.setattr(design_authoring_next, "_question_gate", lambda *args: None)
+    report = design_authoring_next.next_step(_ready(tmp_path))
+    assert report["phase"] == "state6_exact_contracts"
+    assert report["blocked"] is True
+    assert {(f["code"], f["carried_from"]) for f in report["findings"]} == {
+        ("flow_capability_missing", "state4_reviewed_flows")}
+    assert report["action"]["tool"] == "tools/transition.py"
 
 
 def test_authoring_gate_returns_to_state6_when_contract_is_unresolved(tmp_path: Path, monkeypatch) -> None:

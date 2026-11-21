@@ -111,3 +111,49 @@ def test_assembled_spec_contains_normative_router_ir_without_handoff_wrapper(tmp
     spec = json.loads((CABINET / "global_spec.json").read_text(encoding="utf-8"))
     handoff = design_router_ir.assemble(CABINET)
     assert spec["rules"]["http_router_backend"] == handoff["rules"]["http_router_backend"]
+
+
+def _answering(tmp_path: Path, mutate=None) -> dict[str, object]:
+    project = _ready(tmp_path)
+    path = project / "70_router_context.json"
+    context = json.loads(path.read_text(encoding="utf-8"))
+    contracts = json.loads((project / "60_contracts.json").read_text(encoding="utf-8"))["contracts"]
+    answer_function = sorted(contracts)[0]
+    context["backend"] = {"framework": "fastapi", "emitter": "fastapi_sync_v2"}
+    context["error_policy"] = {
+        "body": "answer",
+        "default_status": 500,
+        "mapping": [{"exception": entry["exception"], "answer": {
+            "function": answer_function, "args": [{"ref": "exception", "path": ["code"]}]}}
+            for entry in context["error_policy"]["mapping"]],
+        "request_validation": {"function": answer_function, "args": [{"ref": "literal", "value": "invalid"}]},
+        "unavailable_to_module": context["error_policy"]["unavailable_to_module"],
+    }
+    if mutate:
+        mutate(context)
+    path.write_text(json.dumps(context), encoding="utf-8")
+    return design_router_context.coverage(project)
+
+
+def _codes(report: dict[str, object]) -> set[str]:
+    return {item["code"] for item in report["findings"]}
+
+
+def test_fastapi_sync_v2_error_answers_are_accepted(tmp_path: Path) -> None:
+    assert _answering(tmp_path)["summary"]["errors"] == 0
+
+
+def test_error_answers_need_the_v2_emitter(tmp_path: Path) -> None:
+    report = _answering(tmp_path, lambda c: c.__setitem__("backend", {"framework": "fastapi", "emitter": "fastapi_sync_v1"}))
+    assert "invalid_error_body" in _codes(report)
+
+
+def test_the_request_validation_answer_has_no_exception_field(tmp_path: Path) -> None:
+    report = _answering(tmp_path, lambda c: c["error_policy"]["request_validation"].__setitem__(
+        "args", [{"ref": "exception", "path": ["code"]}]))
+    assert "invalid_error_answer_ref" in _codes(report)
+
+
+def test_an_error_answer_names_a_declared_function(tmp_path: Path) -> None:
+    report = _answering(tmp_path, lambda c: c["error_policy"]["mapping"][0]["answer"].__setitem__("function", "nowhere"))
+    assert "invalid_error_answer" in _codes(report)

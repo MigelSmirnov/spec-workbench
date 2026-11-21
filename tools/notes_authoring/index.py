@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import keyword
 import re
 from dataclasses import dataclass, field
 from typing import Any, Iterator
@@ -41,6 +42,49 @@ def normalize(value: Any) -> str | None:
     return None
 
 
+def _identifier(text: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in text.strip()) or "value"
+    if cleaned[0].isdigit():
+        cleaned = f"_{cleaned}"
+    return f"{cleaned}_" if keyword.iskeyword(cleaned) else cleaned
+
+
+def upper_member_name(value: Any) -> str:
+    """The UPPER member name the Factory's models emitter writes for one value
+    (code-factory ``generate_models_draft.uppercase_enum_member_name``, without
+    its ``_2`` suffix for a collision, which the validator refuses first):
+    ``expense.create`` -> ``EXPENSE_CREATE``, ``pending`` -> ``PENDING``."""
+    name = _identifier(str(value).upper())
+    while "__" in name:
+        name = name.replace("__", "_")
+    name = name.strip("_") or "VALUE"
+    return f"VALUE_{name}" if name[0].isdigit() else name
+
+
+def enum_member_names(model: dict[str, Any]) -> dict[str, str]:
+    """value -> the member name a note names it by (SPEC_STANDARD §15.3.1): the
+    declared name (``members`` / ``member_names``) or its UPPER alias, else the
+    UPPER spelling of the value — the name the generator is given."""
+    values = [v for v in model.get("values") or [] if isinstance(v, str)]
+    declared: dict[str, str] = {}
+    members, names = model.get("members"), model.get("member_names")
+    if isinstance(members, dict):
+        declared = {str(v): str(k) for k, v in members.items()}
+    elif isinstance(names, list) and len(names) == len(values):
+        declared = {v: str(n) for n, v in zip(names, values)}
+    elif isinstance(names, dict):
+        declared = ({str(v): str(k) for k, v in names.items()} if set(names.values()) >= set(values)
+                    else {v: str(names[v]) for v in values if v in names})
+    result = {}
+    for value in values:
+        name = declared.get(value)
+        if name is None:
+            result[value] = upper_member_name(value)
+        else:
+            result[value] = name.upper() if name.upper().isidentifier() else name
+    return result
+
+
 def _leaves(value: Any, path: str) -> Iterator[tuple[str, Any]]:
     if isinstance(value, dict):
         for key, item in value.items():
@@ -56,6 +100,7 @@ def _leaves(value: Any, path: str) -> Iterator[tuple[str, Any]]:
 @dataclass
 class SpecIndex:
     enums: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    member_names: dict[str, dict[str, str]] = field(default_factory=dict)  # enum -> value -> NAME
     fields: dict[str, set[str]] = field(default_factory=dict)  # model -> field names
     contracts: set[str] = field(default_factory=set)            # callable names, methods split too
     constants: set[str] = field(default_factory=set)            # data provider constant names
@@ -76,6 +121,7 @@ class SpecIndex:
             if model.get("kind") == "enum" and isinstance(model.get("values"), list):
                 members = tuple(str(v) for v in model["values"] if isinstance(v, str))
                 index.enums[name] = members
+                index.member_names[name] = enum_member_names(model)
                 for member in members:
                     index.values.setdefault(member, set()).add(f"= models.{name}")
             if isinstance(model.get("fields"), dict):

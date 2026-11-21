@@ -87,6 +87,11 @@ def _probe(tmp_path: Path, spec: dict, *, seam: bool = True, case: Path | None =
     return probe(source, _factory(tmp_path, seam=seam), case)
 
 
+def _changed(report: dict) -> list[dict]:
+    """The findings about changed addresses; a namespace without a reader is its own check."""
+    return [item for item in report["findings"] if item["code"] != "rules_namespace_without_reader"]
+
+
 def _codes(report: dict) -> list[tuple[str, str]]:
     return sorted((item["code"], item["module"]) for item in report["findings"])
 
@@ -106,6 +111,7 @@ def test_clean_cuts_are_ready_and_counted(tmp_path: Path) -> None:
         "imports_examined": 1,
         "seam_checked": 4,
         "changed_addresses_asked": 0,
+        "rules_namespaces_asked": 0,
     }
 
 
@@ -267,7 +273,7 @@ def test_changed_address_with_a_consumer_is_ready(tmp_path: Path) -> None:
               _changed_addresses=["rules.store_layout.file_name"]),
         carried=None,
     )
-    assert report["findings"] == []
+    assert _changed(report) == []
     assert report["summary"]["changed_addresses_asked"] == 1
 
 
@@ -279,13 +285,13 @@ def test_address_carried_from_an_uncarried_handoff_is_asked_too(tmp_path: Path) 
         _spec(rules=RULES, notes=[], _changed_addresses=[]),
         carried=["rules.store_layout.file_name", "rules.store_layout.mode", "rules.retention.days"],
     )
-    assert _codes(report) == [("changed_data_without_consumer", ""), ("changed_data_without_consumer", "")]
-    by_namespace = {item["namespace"]: item["addresses"] for item in report["findings"]}
+    assert sorted(item["code"] for item in _changed(report)) == ["changed_data_without_consumer"] * 2
+    by_namespace = {item["namespace"]: item["addresses"] for item in _changed(report)}
     assert by_namespace == {
         "rules.retention": ["rules.retention.days"],
         "rules.store_layout": ["rules.store_layout.file_name", "rules.store_layout.mode"],
     }
-    assert "SPEC_STANDARD 15.3" in report["findings"][0]["message"]
+    assert "SPEC_STANDARD 15.3" in _changed(report)[0]["message"]
     assert report["summary"]["changed_addresses_asked"] == 3
 
 
@@ -293,7 +299,7 @@ def test_deleted_address_is_not_an_orphan(tmp_path: Path) -> None:
     report = _reach(
         tmp_path, _spec(rules={}, notes=[], _changed_addresses=[]), carried=["rules.store_layout.file_name"]
     )
-    assert report["findings"] == []
+    assert _changed(report) == []
     assert report["summary"]["changed_addresses_asked"] == 1
 
 
@@ -302,7 +308,7 @@ def test_without_a_project_nothing_is_asked(tmp_path: Path) -> None:
         tmp_path, _spec(rules=RULES, notes=[], _changed_addresses=["rules.retention.days"]),
         carried=None, project=None,
     )
-    assert report["findings"] == []
+    assert _changed(report) == []
     assert report["summary"]["changed_addresses_asked"] == 0
 
 
@@ -311,7 +317,7 @@ def test_project_the_factory_does_not_hold_yet_is_not_asked(tmp_path: Path) -> N
         tmp_path, _spec(rules=RULES, notes=[], _changed_addresses=["rules.retention.days"]),
         carried=None, project="brand-new",
     )
-    assert report["findings"] == []
+    assert _changed(report) == []
     assert report["summary"]["changed_addresses_asked"] == 0
 
 
@@ -332,3 +338,84 @@ def test_admission_check_reports_not_applicable_pass_and_block(tmp_path: Path) -
     blocked = _factory_slices_check(factory, broken, None)
     assert blocked.status == "BLOCK"
     assert [item["code"] for item in blocked.evidence["findings"]] == ["data_in_model_context"]
+
+
+# Every rules namespace has a reader: a module, or a Factory gate that declares its kind
+# (SPEC_STANDARD 15.3.1, tools/gate_rules_reads.py of the Factory).
+
+GATE_READS = """import argparse, json
+p = argparse.ArgumentParser(); p.add_argument('--json', action='store_true'); p.add_argument('--spec')
+a = p.parse_args()
+reads = [{'kind': 'model_policy', 'gate': 'tools/code_invariant_gates.py', 'reader': '_models_are_frozen',
+          'fields': ['instances_are_frozen']},
+         {'kind': 'transaction_policy', 'gate': 'tools/code_invariant_gates.py',
+          'reader': '_transaction_guard_exception_scope', 'fields': ['guard_exception_scope']}]
+out = {'schema_version': 'factory_gate_rules_reads.v1', 'reads': reads}
+if a.spec:
+    rules = json.load(open(a.spec, encoding='utf-8')).get('rules') or {}
+    out['namespaces'] = {name: [r for r in reads if r['kind'] == value.get('kind')]
+                         for name, value in rules.items()
+                         if isinstance(value, dict) and any(r['kind'] == value.get('kind') for r in reads)}
+print(json.dumps(out))
+"""
+
+GATED_RULES = {
+    "role": "data",
+    "schema_version": 1,
+    "model_immutability_policy": {"kind": "model_policy", "instances_are_frozen": True},
+    "transaction_guard_policy": {"kind": "transaction_policy", "guard_exception_scope": "BaseException"},
+    "retry_policy": {"kind": "retry_policy", "attempts": 3},
+    "store_layout": {"file_name": "db.sqlite"},
+}
+
+
+def _readers(tmp_path: Path, rules: dict, *, declaration: bool = True, notes: list[str] | None = None) -> dict:
+    factory = _factory_with_project(tmp_path, previous_spec=_spec(), carried=None)
+    if declaration:
+        _write(factory / "tools/gate_rules_reads.py", GATE_READS)
+    source = tmp_path / "case/global_spec.json"
+    _write_json(source, _spec(rules=rules, notes=notes or []))
+    return probe(source, factory, None, None)
+
+
+def _unread(report: dict) -> dict[str, dict]:
+    return {item["namespace"]: item for item in report["findings"] if item["code"] == "rules_namespace_without_reader"}
+
+
+def test_a_namespace_a_declared_gate_reads_is_accepted_and_an_undeclared_kind_is_not(tmp_path: Path) -> None:
+    report = _readers(tmp_path, GATED_RULES, notes=["open_store: [RULE_REFERENCE] MUST use = rules.store_layout"])
+    assert sorted(_unread(report)) == ["retry_policy"]
+    finding = _unread(report)["retry_policy"]
+    assert finding["kind"] == "retry_policy" and finding["gate_read_kinds"] == ["model_policy", "transaction_policy"]
+    assert "15.3.1" in finding["message"] and "dead data" in finding["message"]
+    assert report["rules_read_by_gate"] == {
+        "model_immutability_policy": ["tools/code_invariant_gates.py (model_policy)"],
+        "transaction_guard_policy": ["tools/code_invariant_gates.py (transaction_policy)"],
+    }
+    assert report["summary"]["rules_namespaces_asked"] == 4  # role and schema_version are not namespaces
+    assert report["ready"] is False
+
+
+def test_a_namespace_without_a_kind_or_a_module_reader_is_dead_data(tmp_path: Path) -> None:
+    report = _readers(tmp_path, {"store_layout": {"file_name": "db.sqlite"}})
+    assert sorted(_unread(report)) == ["store_layout"]
+    assert "declares no kind" in _unread(report)["store_layout"]["message"]
+
+
+def test_a_factory_without_the_declaration_admits_no_gate_reader(tmp_path: Path) -> None:
+    report = _readers(tmp_path, GATED_RULES, declaration=False,
+                      notes=["open_store: [RULE_REFERENCE] MUST use = rules.store_layout"])
+    assert sorted(_unread(report)) == ["model_immutability_policy", "retry_policy", "transaction_guard_policy"]
+    assert "this Factory declares none" in _unread(report)["retry_policy"]["message"]
+    assert "rules_read_by_gate" not in report
+
+
+def test_every_namespace_read_by_a_module_or_a_gate_is_ready(tmp_path: Path) -> None:
+    rules = {name: value for name, value in GATED_RULES.items() if name != "retry_policy"}
+    report = _readers(tmp_path, rules, notes=["open_store: [RULE_REFERENCE] MUST use = rules.store_layout"])
+    assert report["findings"] == [] and report["ready"] is True
+
+
+def test_a_factory_without_a_resolver_is_not_asked_about_readers(tmp_path: Path) -> None:
+    report = _probe(tmp_path, _spec(rules=GATED_RULES))
+    assert _unread(report) == {} and report["summary"]["rules_namespaces_asked"] == 0

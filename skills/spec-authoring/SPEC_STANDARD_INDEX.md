@@ -13,6 +13,7 @@
 2. Проверь, что note имеет ровно один primary marker: `[NOTE_CLASS]`.
 3. Не добавляй inline-данные в prose. Таблицы, списки, лимиты, пути, TTL, рейтинги и размеры выноси в `config`, `models` или `rules`.
 4. Если note ссылается на данные, называй дом: `= models.X`, `the imported X constant`, поле объекта настроек; в редакции 2 ещё `= rules.<backend>.*` и `= config.persistence.*` (§15.3.1).
+   Член перечисления называй его именем рядом с адресом: `the EXPENSE_CREATE member of = models.AuditAction`; значение — только дополнением к имени (§15.3.1).
    Значение, которое читает генерируемый код, — константа поставщика данных (§6.10); таблица над членами перечисления с проверкой полноты — `record_tuple` версии 2 со столбцом-перечислением, `key` и `total`.
 5. Не расщепляй mixed note механически, если это ухудшает читаемость. Выбирай primary class по semantic impact.
 6. Требование пиши модальностью: у функции, которую генерирует LLM, хотя бы одна note с `MUST`, `SHOULD` или `MAY` (не `MUST NOT`), иначе `tools/spec_underspec_gate.py` её не пропустит.
@@ -49,6 +50,9 @@
 - `config` — runtime/product knobs: лимиты, TTL, paths, feature knobs, небольшие списки пользовательских ключей.
 - `models` — DTO/schema плюс domain catalogs/mapping tables/upstream-downstream contracts.
 - `rules` — read-only policy tables плюс зарезервированные versioned backend IR.
+  Политика `rules`, которую не читает ни один модуль, законна, только если её
+  `kind` перечислен в декларации гейтов фабрики `tools/gate_rules_reads.py`
+  (политика, которую читает гейт, §15.3.1); иначе это мёртвые данные.
 
 Не merge-ить таблицы по похожей форме. Решение только по change-axis: меняются ли они вместе и по одной причине.
 
@@ -99,14 +103,16 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 Порядок authoring фиксирует [AUTHORING_SEQUENCE.md](AUTHORING_SEQUENCE.md).
 
 - `persistence_backend/v2` — SQLite-only: `engine=sqlite`, emitter
-  `sqlite_sync_v2`. `persistence_backend/v3` добавляет ровно восемь вещей
+  `sqlite_sync_v2`. `persistence_backend/v3` добавляет ровно девять вещей
   (§6.3): `engine=postgres` с emitter `postgres_sync_v1`, владение
   транзакцией (`transaction: owned`), вид метода `lock`, bind-ы
   `argument_set`/`optional_argument`, формы хранения `json_model`/`json_value`,
-  `path` в фильтрах и `unique`, виды запросов `upsert_many` и `list_all`, и
+  `path` в фильтрах и `unique`, виды запросов `upsert_many` и `list_all`,
   `list_selected` — чтение, чью колонку равенства выбирает
   аргумент-перечисление (член → колонка — правило backend-а, а не код
-  вызывающего). Форма таблиц, колонок, агрегатов и конвенций не меняется.
+  вызывающего), и `delete_by` — удаление по непустому фильтру, контракт
+  `(self, <аргументы фильтра>) -> int` с числом удалённых строк. Форма таблиц,
+  колонок, агрегатов и конвенций не меняется.
 - Аддитивная форма входит в текущую версию persistence IR, только если не
   меняет смысла ни одной валидной спеки — это доказывает пин эмиссии
   `test_persistence_emission_compat.py`; иначе нужна новая версия (§6.2).
@@ -120,6 +126,12 @@ predicate или method shape не замкнуты, diagnostic emitter возв
   Work. В v3 репозиторий с `transaction: owned` объявляет
   `begin`/`commit`/`rollback` в contracts, но не в `methods`: их lowering
   фиксирован версией.
+- Внешний Unit of Work над SQLite-репозиториями собирается детерминированно
+  отдельным IR `sqlite_unit_of_work_backend/v1`
+  ([раздел 6.12](SPEC_STANDARD.md#612-sqlite_unit_of_work_backendv1)): accessor
+  называет репозиторий `persistence_backend`, делегирование методов выводится
+  из contracts, классы контекста и bootstrap-порта получают в
+  `implementation_obligations` disposition `local`.
 - Один persistence module владеет одной repository class; partial class
   emission и companion ownership для методов запрещены.
 - Финальный `rules.persistence_backend` должен точно совпадать с закрытым
@@ -146,6 +158,24 @@ predicate или method shape не замкнуты, diagnostic emitter возв
   задаются данными IR; backend их не прошивает.
 - Присутствующий, но невалидный IR блокирует сборку. LLM fallback допустим
   только когда IR для модуля отсутствует.
+
+## Если записи строятся детерминированно
+
+Нормативная схема: [раздел 6.13](SPEC_STANDARD.md#613-record_construction_backendv1).
+
+- `rules.record_construction_backend` называет для каждого поля цели один
+  источник из закрытого набора ref и для каждого поля модельного входа —
+  прочитано оно или отброшено с кодом причины. Прочитанные поля не
+  перечисляются: их дом — ссылка.
+- Сигнатура построителя — только `contracts[<builder>]`; модуль построителей
+  (`wiring.module`, один на проект) владеет ровно построителями.
+- Часов в наборе нет: мгновение — параметр построителя. Значение, которое
+  вычисляет поведение (сумма, выбор ветки, поиск), тоже приходит параметром.
+- Note потребителя называет построитель символом и не описывает поля; модуль,
+  получивший построитель цели, эту цель сам не конструирует
+  (`record_construction_bypassed`).
+- В Workbench IR замыкается на передаче State 6 в
+  `70_record_construction_closure.json`.
 
 ## Архитектура
 

@@ -48,7 +48,9 @@ nobody made.
 - `FA017` — runtime carriers: no model whose every field is `object` crosses a
   function signature, and every repository lowered from
   `rules.persistence_backend` is reachable — named as the `local`
-  implementation of an interface or mentioned by another contract.
+  implementation of an interface, mentioned by another contract, or constructed
+  by the declared unit of work (`rules.sqlite_unit_of_work_backend`, an accessor
+  or a bootstrap write, SPEC_STANDARD §6.12).
 
 - `FA018` — the Factory's own local specifications: `normalize_spec.py` and
   `build_local_spec.py` cut every module in a temporary directory, the
@@ -58,8 +60,11 @@ nobody made.
 
 - `FA019` — question rounds closed on the current texts: every state whose
   phase declares a `question_scope` (States 0–7) and that has a document is
-  closed by `design_questions.py status` — every unit closed by its two latest
-  reviews, clear on the text it has now; State 7 on the prompts this Factory
+  closed by `design_questions.py status` — every unit's latest round on the text
+  it has now raised no open contradiction, and every other judged topic of it
+  has the author's disposition (one round per change, owner decision
+  2026-11-08; units closed by two clear rounds before then stay closed); State
+  7 on the prompts this Factory
   builds for the generated modules. A state with no round blocks ("no question
   round yet"). The evidence lists, per state, the reason, the open units and
   the ref it was last closed at (`ask --since`). Explicit `--spec` admission
@@ -85,6 +90,18 @@ nobody made.
   Factory code, equal the Workbench mirror the notes gate exempts from notes.
   A missing emitter or a different table blocks; no such backend is not
   applicable.
+  `sqlite_unit_of_work_backend` (§6.12) is not in its scope: it owns classes,
+  not a function table. The notes gate exempts every declared contract of the
+  classes its IR wires, and the emitter writes each of them or refuses the IR
+  (exact module ownership, every transaction method delegated or listed
+  unbacked); the Factory validator runs that emitter at `FA005`.
+- `FA023` — a source that declares `rules.record_construction_backend`
+  (SPEC_STANDARD §6.13): the builders module `wiring.module` owns exactly the
+  `constructions` keys (no other module owns one of them), and the target
+  Factory has `tools/generate_record_construction_draft.py` whose literals
+  `RULE_KEY` and `EMITTER` name this backend and the source's emitter, read
+  without running Factory code. The closed form itself is judged by the
+  Factory validator at `FA005`. No such backend is not applicable.
 
 `FA019` exists because a late decision passed every other check. On
 2026-10-10 Cabinet Kernel decision 25 added a note allowing pydantic to a
@@ -107,6 +124,19 @@ Only `READY_TO_EXPORT` authorizes export. A successful export writes
 `spec_editor_manifest.json` under the project's `specs/working/`. The historical
 manifest name represents accepted deterministic spec lineage; its producer and
 route identify the external Stage 9 handoff rather than `spec_ops`.
+
+For an existing target, export derives removed modules from the previous
+canonical spec's `module_functions` and the new source. It calls the target
+Factory's `spec_ops_apply.remove_module_artifacts` for those modules, preserving
+that owner's artifact paths and file hashes in `change_summary.artifact_cleanup`
+beside `change_summary.removed_modules`. A missing helper, malformed receipt or
+incomplete cleanup blocks accepted lineage. Only generated/spec-derived
+artifacts covered by the Factory helper are removed; deployed product files
+remain the responsibility of the Factory deploy route.
+
+`--check` previews the same cleanup with `apply=False` and does not delete files.
+Uncarried removals remain owed across exports; a reintroduced module is excluded
+from cleanup. Both working and tracked acceptance receipts carry the result.
 
 ## Completion
 

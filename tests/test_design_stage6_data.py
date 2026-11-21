@@ -213,3 +213,33 @@ def test_unknown_data_closure_status_is_rejected(tmp_path: Path) -> None:
         item["code"] == "invalid_data_closure_status"
         for item in report["findings"]
     )
+
+
+def _retire(tmp_path: Path, entries) -> dict:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["retired"] = entries
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    return payload
+
+
+def test_retired_namespace_is_read_for_the_projector(tmp_path: Path) -> None:
+    payload = _retire(tmp_path, [{"address": "rules.capability_catalog", "reason": "moved to a constant",
+                                  "source_refs": ["SOURCE.md"]}])
+    codes = {item["code"] for item in design_stage6_data.lint(tmp_path)["findings"]}
+    assert not codes & {"invalid_retired", "invalid_retirement", "duplicate_retirement", "retired_namespace_declared",
+                        "retired_backend_namespace", "missing_retirement_reason"}
+    assert design_stage6_data.retired_rule_namespaces(payload) == ["capability_catalog"]
+
+
+def test_retirement_must_be_one_undeclared_non_backend_namespace_with_evidence(tmp_path: Path) -> None:
+    declared = sorted(json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))["sections"]["rules"])[0]
+    _retire(tmp_path, [
+        {"address": f"rules.{declared}", "reason": "r", "source_refs": ["s"]},
+        {"address": "rules.binary_storage_backend", "reason": "r", "source_refs": ["s"]},
+        {"address": "config.old_key", "reason": "r", "source_refs": ["s"]},
+        {"address": "rules.gone", "reason": "", "source_refs": []},
+        {"address": "rules.gone", "reason": "r", "source_refs": ["s"]},
+    ])
+    codes = {item["code"] for item in design_stage6_data.lint(tmp_path)["findings"]}
+    assert {"retired_namespace_declared", "retired_backend_namespace", "invalid_retirement",
+            "missing_retirement_reason", "missing_source_evidence", "duplicate_retirement"} <= codes

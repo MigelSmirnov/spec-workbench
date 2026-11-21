@@ -1,10 +1,12 @@
-"""Lint L2–L5 of the Data Closure contract (§6), without a model.
+"""Lint L2–L6 of the Data Closure contract (§6), without a model.
 
 L1 — every address resolves and is legal — is the Factory's resolver
 (`notes_workbench.factory_addresses`). The rules here check that a note
 followed §15: a literal with a home is named by its address (L2), every
 data signal is covered (L3), an addressed enumeration is not restated (L4),
-and prose repeated across modules has not diverged (L5).
+prose repeated across modules has not diverged (L5), and a member of an
+addressed enumeration is named by its NAME, its value at most beside it (L6,
+SPEC_STANDARD §15.3.1; owner decision 2026-11-09).
 
 The lint gives no verdict "data / not data". A signal it cannot cover is a
 reason for a structure request (contract §5), never for an explanation in
@@ -132,6 +134,33 @@ def _l4(note: dict[str, Any], module: str | None, index: SpecIndex) -> list[dict
     return out
 
 
+def _l6(note: dict[str, Any], module: str | None, index: SpecIndex) -> list[dict[str, Any]]:
+    """A member of an addressed enumeration named by its value alone (§15.3.1).
+
+    Only a value that is no identifier (``expense.create``) is read: it is the
+    name of no member, and the generator is given names. A value that is an
+    identifier (``pending``) is also an alias the emitter writes, and as a word
+    it cannot be told from prose. The value beside the member's NAME is a
+    complement and passes."""
+    text = note["text"]
+    out = []
+    for name in sorted(addressed_models(text)):
+        for value, member in index.member_names.get(name, {}).items():
+            if value.isidentifier():
+                continue
+            if not re.search(rf"(?<![\w.]){re.escape(value)}(?!\w)(?!\.\w)", text):
+                continue
+            if re.search(rf"(?<![\w.]){re.escape(member)}(?!\w)", text):
+                continue
+            out.append(_finding(
+                "L6", "enum_member_by_value", "block", note, module,
+                f"{value!r} names a member of = models.{name} by its value; name it {member} "
+                f"(the {member} member of = models.{name}); the value may only stand beside the name.",
+                enum=name, value=value, member=member,
+            ))
+    return out
+
+
 def _sentences(text: str) -> list[str]:
     return re.split(r"(?<=[.;])\s+", text)
 
@@ -222,6 +251,7 @@ def lint(notes: list[dict[str, Any]], spec: dict[str, Any]) -> dict[str, Any]:
         for note in module_notes:
             findings.extend(_l2_l3(note, module, index))
             findings.extend(_l4(note, module, index))
+            findings.extend(_l6(note, module, index))
     findings.extend(_l5(by_module, index))
     modules: dict[str, dict[str, int]] = {}
     for module, module_notes in by_module.items():

@@ -118,8 +118,17 @@ def _validate_plan(project: Path, plan: dict[str, Any]) -> tuple[list[dict[str, 
             findings.append({"severity":"error","code":"missing_function_purpose","message":function})
 
         if visibility == "public":
-            if router_op is not None:
+            # A public operation that is itself exposed may be its own route
+            # handler (an irregular companion endpoint the router only imports
+            # and registers). Any other router_operation on a public function
+            # would hand one operation's route to another's symbol.
+            if router_op is not None and (router_op != public_op or router_op not in external_ops):
                 findings.append({"severity":"error","code":"public_has_router_operation","message":function})
+            elif router_op is not None:
+                if router_op in seen_router_ops:
+                    findings.append({"severity":"error","code":"duplicate_router_handler","message":router_op})
+                else:
+                    seen_router_ops.add(router_op)
             if not isinstance(public_op, str) or public_op not in accepted_ops:
                 findings.append({"severity":"error","code":"invalid_public_operation","message":function})
             else:
@@ -290,7 +299,13 @@ def _time_source_findings(project: Path, rows: list[dict[str, Any]]) -> list[dic
     contracts = {row["function"]: row["signature"] for row in rows if row["resolved"]}
     func_module = {row["function"]: str(row["module"] or "").removeprefix("module:") for row in rows}
     impacts = design_closure_gaps.parse_state_impacts(project)
-    return design_closure_gaps.fresh_timestamp_findings(models, contracts, func_module, impacts)
+    try:
+        spec = design_closure_gaps.load_spec(project)
+    except (OSError, ValueError):
+        spec = None
+    sources = design_closure_gaps.clock_consumers(project, spec)
+    through = design_closure_gaps.calls_supplying_time(project, spec, models, contracts, func_module, sources)
+    return design_closure_gaps.fresh_timestamp_findings(models, contracts, func_module, impacts, sources, through)
 
 
 NOTES_FILE = "80_notes.md"

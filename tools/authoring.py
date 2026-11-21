@@ -33,6 +33,9 @@ def _print_next(payload: dict[str, object]) -> None:
         print(f"Read:    {where}")
     for question in authoring.get("ask") or []:
         print(f"Ask:     {question}")
+    line = design_authoring_next.diagnosis_line(authoring)
+    if line:
+        print(line)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         repo_root = authoring_pipeline.find_repo_root()
-        payload = authoring_pipeline.project_next(repo_root, args.project)
+        payload = authoring_pipeline.project_next(repo_root, args.project, with_diagnosis=True)
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
         else:

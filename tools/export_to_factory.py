@@ -237,6 +237,63 @@ def project_ever_carried(factory_root: Path, project: str, working_dir: Path) ->
     return False
 
 
+def validate_artifact_cleanup(cleanup: Any, modules: list[str], *, apply: bool) -> None:
+    if not isinstance(cleanup, dict) or not isinstance(cleanup.get("modules"), dict):
+        raise SystemExit("Factory module artifact cleanup returned an invalid report")
+    if (cleanup.get("schema_version") != 1 or cleanup.get("required") is not bool(modules)
+            or set(cleanup["modules"]) != set(modules)):
+        raise SystemExit("Factory module artifact cleanup does not cover the removed modules")
+    if not modules:
+        if cleanup.get("status") != "not_applicable":
+            raise SystemExit("Factory module artifact cleanup has an invalid empty status")
+        return
+    statuses = []
+    for module in modules:
+        evidence = cleanup["modules"][module]
+        paths = evidence.get("artifact_paths") if isinstance(evidence, dict) else None
+        if (not isinstance(paths, list) or not paths
+                or any(not isinstance(item, dict) or type(item.get("exists_after")) is not bool for item in paths)):
+            raise SystemExit("Factory module artifact cleanup lacks artifact evidence for " + module)
+        status = "incomplete" if any(item["exists_after"] for item in paths) else "complete"
+        if evidence.get("status") != status:
+            raise SystemExit("Factory module artifact cleanup has inconsistent module status")
+        statuses.append(status)
+    expected = "incomplete" if "incomplete" in statuses else "complete"
+    if cleanup.get("status") != expected:
+        raise SystemExit("Factory module artifact cleanup has inconsistent overall status")
+    if apply and expected != "complete":
+        raise SystemExit("Factory module artifact cleanup is incomplete; refusing accepted lineage")
+
+
+def remove_module_artifacts(
+    factory_root: Path, structure: dict[str, Any], project: str,
+    modules: list[str], *, apply: bool,
+) -> dict[str, Any]:
+    """Use the target Factory's cleanup owner, in its own import environment."""
+    if not modules:
+        return {"schema_version": 1, "required": False,
+                "status": "not_applicable", "modules": {}}
+    request = {
+        "structure": {**structure, "root": str(factory_root)}, "project": project,
+        "operations": [{"op": "remove_module", "module": name} for name in modules],
+        "apply": apply,
+    }
+    result = subprocess.run(
+        [sys.executable, "-c",
+         "import json, sys; from spec_ops_apply import remove_module_artifacts; "
+         "print(json.dumps(remove_module_artifacts(**json.load(sys.stdin))))"],
+        cwd=factory_root, input=json.dumps(request), text=True, capture_output=True, check=False,
+    )
+    try:
+        cleanup = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SystemExit("Factory module artifact cleanup returned no valid report: " + result.stderr.strip()) from exc
+    if result.returncode != 0:
+        raise SystemExit("Factory module artifact cleanup failed: " + result.stderr.strip())
+    validate_artifact_cleanup(cleanup, modules, apply=apply)
+    return cleanup
+
+
 def owe_global_until_carried(change_scope: dict[str, Any], carried: bool) -> dict[str, Any]:
     """A project no passing route has ever carried owes its whole surface.
 
@@ -410,6 +467,11 @@ def stage9_lineage_manifest(
     # (base, normalized, editor manifest, deploy, handoff) to record the
     # SPEC_STANDARD revision of the accepted base spec
     standard_version = json.loads(base_spec_path.read_text(encoding="utf-8")).get("standard_version")
+    removed_modules = change_scope.get("removed_modules", [])
+    cleanup = change_scope.get("artifact_cleanup")
+    if cleanup is None and not removed_modules:
+        cleanup = {"schema_version": 1, "required": False, "status": "not_applicable", "modules": {}}
+    validate_artifact_cleanup(cleanup, removed_modules, apply=True)
     return {
         "schema_version": 1,
         "standard_version": standard_version,
@@ -464,7 +526,8 @@ def stage9_lineage_manifest(
             "applied_count": 1,
             "no_op_count": 0,
             "errors_count": 0,
-            "removed_modules": change_scope.get("removed_modules", []),
+            "removed_modules": removed_modules,
+            "artifact_cleanup": cleanup,
         },
         "findings": [],
     }
@@ -541,16 +604,29 @@ def main() -> int:
         previous=paths["canonical"] if paths["canonical"].is_file() else None,
         source=source,
     )
+    previous_spec = load_json(paths["canonical"]) if paths["canonical"].is_file() else {}
+    # Delta projection describes affected scope; removals are an exact comparison
+    # of accepted module ownership, even when the projector omits them.
+    change_scope["removed_modules"] = sorted(
+        set(previous_spec.get("module_functions", {})) - set(source_spec.get("module_functions", {}))
+    )
     change_scope = carry_pending_scope(
         change_scope,
         paths["working"],
         sha256_file(paths["canonical"]) if paths["canonical"].is_file() else None,
+    )
+    # A module reintroduced since an uncarried export must never be cleaned.
+    change_scope["removed_modules"] = sorted(
+        set(change_scope.get("removed_modules", [])) - set(source_spec.get("module_functions", {}))
     )
     change_scope = owe_global_until_carried(
         change_scope, project_ever_carried(factory_root, args.project, paths["working"])
     )
     admission["projected_change_scope"] = change_scope
     if args.check:
+        change_scope["artifact_cleanup"] = remove_module_artifacts(
+            factory_root, structure, args.project, change_scope["removed_modules"], apply=False,
+        )
         print(json.dumps(admission, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if admission["ready"] else 1
     if not admission["ready"]:
@@ -577,6 +653,10 @@ def main() -> int:
         raise SystemExit("factory validation report is not bound to the source specification")
 
     base_spec_sha_before = sha256_file(paths["canonical"]) if paths["canonical"].is_file() else None
+    # Resolve the Factory helper before replacing the canonical spec. Preview
+    # may be incomplete (artifacts still exist); it must not mutate anything.
+    remove_module_artifacts(factory_root, structure, args.project,
+                            change_scope["removed_modules"], apply=False)
     command = [sys.executable, str(required["bootstrap"]), "--project", args.project, "--spec", str(source)]
     if args.update_existing:
         command.extend(["--allow-existing", "--force-spec"])
@@ -595,6 +675,9 @@ def main() -> int:
     if not isinstance(canonical_spec, dict) or canonical_spec.get("standard_version") != standard_version:
         raise SystemExit("canonical Factory specification does not preserve source standard_version")
 
+    change_scope["artifact_cleanup"] = remove_module_artifacts(
+        factory_root, structure, args.project, change_scope["removed_modules"], apply=True,
+    )
     semantic_handoff = export_semantic_tests(semantic_plan, paths["root"], args.update_existing)
     validation_path = paths["working"] / "spec_workbench_validation.json"
     write_json_atomic(validation_path, validation_report)

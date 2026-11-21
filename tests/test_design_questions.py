@@ -56,6 +56,14 @@ def _case(tmp_path):
     return case
 
 
+def _change(case, label: str = "revised") -> None:
+    """Edit State 0, which reopens the `context` unit of State 1: one round per
+    change, so a round on unchanged texts is not asked (owner decision
+    2026-11-08, #147)."""
+    path = case / "00_product.md"
+    path.write_text(path.read_text(encoding="utf-8") + f"\n{label}.\n", encoding="utf-8")
+
+
 def _point(subject: str) -> dict:
     return {"subject": subject, "kind": "identity", "text": "x", "question": f"who mints {subject}?",
             "options": [], "default_guess": "uuid"}
@@ -87,9 +95,7 @@ def test_a_topic_raised_by_two_reviews_keeps_the_state_open(tmp_path):
 def test_single_review_topics_close_the_state_until_the_texts_change(tmp_path):
     case = _case(tmp_path)
     service.ask_round(case, 1, FakeProvider([[_point("M01")], [_point("M02")], []]))
-    assert service.status(case, 1)["closed"] is False  # one clear round is not enough
-    service.ask_round(case, 1, FakeProvider([[_point("M01")], [_point("M02")], []]))
-    assert service.status(case, 1)["closed"] is True
+    assert service.status(case, 1)["closed"] is True  # one clear round closes (owner, 2026-11-08)
     (case / "01_models.md").write_text("# State 1 — Demo models\n\nchanged\n", encoding="utf-8")
     result = service.status(case, 1)
     assert result["closed"] is False and result["stale"] is True
@@ -98,6 +104,7 @@ def test_single_review_topics_close_the_state_until_the_texts_change(tmp_path):
 def test_rounds_are_numbered_and_kept(tmp_path):
     case = _case(tmp_path)
     service.ask_round(case, 1, FakeProvider([[], [], []]))
+    _change(case)
     service.ask_round(case, 1, FakeProvider([[], [], []]))
     assert service.status(case, 1)["round"] == "round-02"
 
@@ -168,20 +175,23 @@ def test_a_judged_non_blocking_topic_with_evidence_leaves_the_round_clear(tmp_pa
     assert "who mints M01?" in provider.judged[0]
 
 
-def test_two_clear_rounds_on_the_same_texts_close_the_state(tmp_path):
+def test_one_clear_round_closes_the_state_and_a_second_on_the_same_texts_is_not_asked(tmp_path):
     case = _case(tmp_path)
     verdict = {"kind": "later_state", "later_state": 6}
-    assert _repeated(case, verdict)[0]["closed"] is False
     assert _repeated(case, verdict)[0]["closed"] is True
     assert service.status(case, 1)["closed"] is True
+    with pytest.raises(service.QuestionRoundError, match="nothing to ask"):
+        _repeated(case, verdict)
 
 
-def test_a_clear_round_after_a_text_change_starts_the_count_again(tmp_path):
+def test_a_text_change_reopens_the_state_until_one_round_on_the_change(tmp_path):
     case = _case(tmp_path)
     verdict = {"kind": "indifferent", "why": "no caller acts on it"}
     _repeated(case, verdict)
     (case / "01_models.md").write_text("# State 1 — Demo models\n\n## Model M01 — Thing\n\nmore\n", encoding="utf-8")
-    assert _repeated(case, verdict)[0]["closed"] is False
+    assert service.status(case, 1)["closed"] is False
+    # one round on the change closes it again
+    assert _repeated(case, verdict)[0]["closed"] is True
 
 
 @pytest.mark.parametrize("verdict, failure", [
@@ -208,6 +218,7 @@ def test_contradiction_and_consequential_gap_block_even_when_verified(tmp_path):
                                   "witness": WITNESS})
     assert summary["topics"][0]["judgement"]["verified"] is True
     assert summary["blocking_topics"] == 1
+    _change(case)
     summary, _ = _repeated(case, QUOTED_GAP)
     assert summary["topics"][0]["judgement"]["verified"] is True
     assert summary["blocking_topics"] == 1 and summary["deferred_topics"] == 0
@@ -239,6 +250,7 @@ def test_an_unquoted_gap_after_state_5_still_blocks(tmp_path):
 def test_a_deferred_gap_followed_as_precedent_stays_deferred(tmp_path):
     case = _case(tmp_path)
     _repeated(case, UNQUOTED_GAP)
+    _change(case)
     summary, _ = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
     judgement = summary["topics"][0]["judgement"]
     assert judgement["blocking"] is False and judgement["deferred_to"] == "State 6 contracts or State 7 notes"
@@ -329,7 +341,7 @@ def test_later_documents_are_the_states_after_the_asked_one(tmp_path):
 def test_a_judge_that_reads_files_gets_the_later_states_and_may_find_a_topic_decided_there(tmp_path):
     case = _case(tmp_path)
     summary, provider = _repeated_with_files(case, {"kind": "answered_later", "quotes": ["# State 2 — Demo rules"]})
-    assert provider.files == [{"02_rules.md": "# State 2 — Demo rules\n"}]
+    assert provider.files[0]["later/02_rules.md"] == "# State 2 — Demo rules\n"
     assert "later/02_rules.md" in provider.instructions[0]
     assert "# State 2 — Demo rules" not in provider.judged[0]  # searched, not pasted
     judgement = summary["topics"][0]["judgement"]
@@ -407,7 +419,7 @@ def test_codex_provider_with_files_offers_only_those_under_later(monkeypatch):
     monkeypatch.setattr(provider.subprocess, "run", fake_run)
     asked = provider.CodexCliProvider("m", "low")
     assert asked.reads_files is True
-    answer, _ = asked.complete_with_files("JUDGE", "TOPICS", {"80_notes.md": "NOTE TEXT"})
+    answer, _ = asked.complete_with_files("JUDGE", "TOPICS", {"later/80_notes.md": "NOTE TEXT"})
     assert answer == '{"judgements": []}'
     assert seen["files"] == ["later/80_notes.md"] and seen["body"] == "NOTE TEXT"
     assert seen["sandbox"] == "read-only"
@@ -417,6 +429,7 @@ def test_codex_provider_with_files_offers_only_those_under_later(monkeypatch):
 def test_a_topic_judged_non_blocking_before_may_follow_that_judgement(tmp_path):
     case = _case(tmp_path)
     _repeated(case, {"kind": "answered", "quotes": ["## Model M01 — Thing"]})
+    _change(case)
     summary, provider = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
     assert "=== PRIOR JUDGEMENTS" in provider.judged[0] and "P1 (round-01, answered): M01" in provider.judged[0]
     judgement = summary["topics"][0]["judgement"]
@@ -427,8 +440,9 @@ def test_a_topic_judged_non_blocking_before_may_follow_that_judgement(tmp_path):
 def test_a_followed_precedent_passes_on_its_original_judgement(tmp_path):
     case = _case(tmp_path)
     _repeated(case, {"kind": "answered", "quotes": ["## Model M01 — Thing"]})
+    _change(case)
     _repeated(case, {"kind": "judged_before", "precedent": "P1"})
-    # Two clear rounds closed every unit; an edit away from the quoted passage reopens one.
+    # The clear rounds closed every unit; an edit away from the quoted passage reopens one.
     (case / "00_product.md").write_text("# State 0 — Demo\n\nA changed product.\n", encoding="utf-8")
     _, provider = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
     assert "P1 (round-01, answered): M01" in provider.judged[0]
@@ -445,6 +459,7 @@ def test_judged_before_needs_an_offered_precedent(tmp_path):
 def test_a_blocking_judgement_is_no_precedent(tmp_path):
     case = _case(tmp_path)
     _repeated(case, QUOTED_GAP)
+    _change(case)
     _, provider = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
     assert "=== PRIOR JUDGEMENTS" not in provider.judged[0]
 
@@ -474,7 +489,8 @@ def test_precedent_holds_only_where_its_check_looks():
 def test_precedents_come_from_the_latest_judged_rounds_only(tmp_path):
     case = _case(tmp_path)
     _repeated(case, {"kind": "answered", "quotes": ["## Model M01 — Thing"]})
-    for _ in range(service.PRECEDENT_ROUNDS):
+    for index in range(service.PRECEDENT_ROUNDS):
+        _change(case, f"revision {index}")
         _repeated(case, QUOTED_GAP)
     assert service._precedents(case, 1) == []
 
