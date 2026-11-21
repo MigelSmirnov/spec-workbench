@@ -708,6 +708,28 @@ A disposition may name one unit (`--unit`) or none, when it covers every unit
 the topic concerns. `fixed` and `accepted` close the topic; `carried` closes it
 here and opens it where it was carried.
 
+### Instructions at the point of disposition
+
+`ask`, `rejudge` and `status` return `author_guidance` when topics still need a
+disposition or a blocking contradiction/standard violation needs repair. The
+same instructions reach a new session through `authoring next` for a phase
+with question rounds, in JSON and in human-readable output. A refused repeat
+round on unchanged text also includes them.
+
+Before editing, identify the owning state from the phase purpose,
+`question_scope` and layer obligations, then choose among the existing
+dispositions. A `fixed` must not import later-layer choices just to remove a
+question. In a `carried` topic, `--what` preserves the choice, options,
+consequences and guarantee every option must keep, not only its title. If the
+guarantee itself belongs here and is undecided, decide it here first. An
+`accepted` reason explains permitted freedom; an absent requirement quote does
+not settle a missing product choice for the owner.
+
+These are author instructions, not a semantic validator of a fix or a new
+closure rule. Contradictions and `standard_violation` still take no
+disposition, and deterministic transition findings still require their own
+checks to close. No experimental `--keeps` option is required on main.
+
 ## Closing a question
 
 Ask first who uses what the question is about.

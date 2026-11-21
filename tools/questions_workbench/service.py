@@ -56,6 +56,27 @@ class QuestionRoundError(ValueError):
     pass
 
 
+def author_guidance() -> list[str]:
+    """Instructions for the author, shared by round results and phase routing.
+
+    These explain the existing dispositions; they do not judge the meaning of
+    a fix or change which topics take a disposition (units.topic_need).
+    """
+    return [
+        "Before editing, identify the decision's owning state from the phase purpose, question_scope and "
+        "layer obligations, then choose a disposition for each topic that awaits one.",
+        "fixed: repair a decision the owning state must make; do not add later-layer implementation choices "
+        "merely to close a topic. Record the fix commit and review the changed text once.",
+        "carried: name the receiving layer and use --what to preserve the choice, its options and consequences, "
+        "and the required guarantee every option must keep. Decide any guarantee owned here before carrying "
+        "its execution onward.",
+        "accepted: explain why the remaining choice is permitted. Bring an unresolved product choice to the "
+        "owner with its options and consequences; absence of a quoted requirement does not decide it.",
+        "contradiction and standard_violation take no disposition: repair the offending text in its owning "
+        "state and review the change. Deterministic transition findings must also close through their checks.",
+    ]
+
+
 def _json_object(text: str) -> dict[str, Any]:
     try:
         return json.loads(text[text.index("{"): text.rindex("}") + 1])
@@ -918,6 +939,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     summary["awaiting_disposition"] = sorted({t for key in asked_keys for t in after[key]["awaiting"]})
     summary["contradiction_units"] = [key for key in asked_keys
                                       if after[key]["contradictions"] or after[key]["unverified"]]
+    summary["author_guidance"] = author_guidance() if summary["awaiting_disposition"] or summary["contradiction_units"] else []
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary
 
@@ -1072,6 +1094,7 @@ def rejudge(case: Path, state: int, unit: str, factory_root: Path | None = None)
     summary["open_units"] = [key for key, value in after.items() if not value["closed"]]
     summary["awaiting_disposition"] = sorted(after[unit]["awaiting"])
     summary["contradiction_units"] = [unit] if after[unit]["contradictions"] or after[unit]["unverified"] else []
+    summary["author_guidance"] = author_guidance() if summary["awaiting_disposition"] or summary["contradiction_units"] else []
     directory.mkdir(parents=True)
     (directory / PROMPTS_DIR).mkdir()
     (directory / PROMPTS_DIR / f"{unit}.txt").write_text(text, encoding="utf-8")
@@ -1171,6 +1194,7 @@ def status(case: Path, state: int, factory_root: Path | None = None, with_transi
     rounds' verdict, `ready` adds what closes at the state (TRANSITION_PROTOCOL.md),
     so a round that closed never hides a blocking deterministic result."""
     result = _status(case, state, factory_root)
+    result["author_guidance"] = author_guidance() if result.get("awaiting_disposition") or result.get("contradictions") else []
     if with_transition:
         layer = layer_context(case, state)
         result["transition"] = {**layer_record(layer), "findings": [
@@ -1272,7 +1296,8 @@ def _nothing_to_ask(state: int, per_unit: dict[str, dict[str, Any]]) -> str:
     """Why a round would ask nothing although the state is open: one round per change."""
     return (f"no unit of State {state} needs a round: its text has not changed since its latest review. "
             + _units_reason(per_unit) + ". Dispose of the topics, or change the text a contradiction quotes; "
-            "a second round on the same text is not asked (owner decision 2026-11-08, #147)")
+            "a second round on the same text is not asked (owner decision 2026-11-08, #147). "
+            + " ".join(author_guidance()))
 
 
 def _open_reason(summary: dict[str, Any]) -> str:

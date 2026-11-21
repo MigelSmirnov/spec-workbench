@@ -82,6 +82,7 @@ def _human_round(summary: dict) -> str:
             verdict = f" <{j['kind']}{'' if j['verified'] else ', UNVERIFIED: ' + j.get('failure', '')}{', BLOCKING' if j['blocking'] else ''}{', DEFERRED to ' + j['deferred_to'] if j.get('deferred_to') else ''}>"
         where = f" ({', '.join(topic['units'])})" if topic.get("units") else ""
         lines.append(f"  [{len(topic['runs'])}/{summary['reviews']}] {topic['topic']}{where}{verdict}")
+    lines.extend(f"  author: {line}" for line in summary.get("author_guidance") or [])
     return "\n".join(lines)
 
 
@@ -187,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
                           f" -> {j.get('kind')}{' BLOCKING' if j.get('blocking') else ''}")
                 print(f"  {args.unit}: {'open' if args.unit in summary['open_units'] else 'closed'}; "
                       f"state closed={str(summary['closed']).lower()}")
+                for line in summary.get("author_guidance") or []:
+                    print(f"  author: {line}")
             return 0 if args.unit not in summary["open_units"] else 1
         if args.command == "carried":
             to = None if args.to is None else (int(args.to.removeprefix("state")) if args.to.removeprefix("state").isdigit()
@@ -250,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  received from State {row['state']} {row['round']} {row['topic']}: {row['what']}")
             if result.get("closed_at") and result.get("needs_round"):
                 print(f"  reopened since {result['closed_at']}: ask --since {result['closed_at']}")
+            for line in result.get("author_guidance") or []:
+                print(f"  author: {line}")
         return 0 if result["ready"] else 1
     except (service.QuestionRoundError, ValueError, RuntimeError) as exc:
         print(f"design_questions: error: {exc}", file=sys.stderr)

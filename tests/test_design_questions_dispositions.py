@@ -113,6 +113,51 @@ def clean_transition(monkeypatch):
 
 # ---------------------------------------------------------------- closure
 
+def test_author_guidance_reaches_round_json_saved_result_and_status_until_disposed(tmp_path, monkeypatch, capsys):
+    case = make_case(tmp_path)
+    monkeypatch.setattr(design_questions, "_provider", lambda args: Provider([point("gap")]))
+    assert design_questions.main(["ask", str(case), "--state", "2", "--json"]) == 1
+    summary = json.loads(capsys.readouterr().out)
+    kept = json.loads((service.rounds_dir(case, 2) / summary["round"] / "summary.json").read_text())
+    assert summary["author_guidance"] == kept["author_guidance"] == service.author_guidance()
+    assert "owning state" in design_questions._human_round(summary)
+    assert "--what" in design_questions._human_round(summary)
+    assert design_questions.main(["status", str(case), "--state", "2"]) == 1
+    assert "author: Before editing" in capsys.readouterr().out
+    with pytest.raises(service.QuestionRoundError, match="Before editing"):
+        ask(case)
+    service.dispose(case, 2, "T1", "accepted", reason="both outcomes preserve the accepted rule")
+    assert service.status(case, 2)["author_guidance"] == []
+    assert design_questions.main(["status", str(case), "--state", "2"]) == 0
+    assert "author:" not in capsys.readouterr().out
+
+
+def test_guidance_on_a_contradiction_offers_no_disposition_bypass(tmp_path):
+    case = make_case(tmp_path)
+    summary = ask(case, "contradiction")
+    assert summary["awaiting_disposition"] == [] and summary["contradiction_units"]
+    assert summary["author_guidance"] == service.status(case, 2)["author_guidance"] == service.author_guidance()
+    assert "contradiction and standard_violation take no disposition" in " ".join(summary["author_guidance"])
+    with pytest.raises(service.QuestionRoundError, match="contradiction"):
+        service.dispose(case, 2, "T1", "accepted", reason="accept anyway")
+
+
+def test_authoring_next_carries_guidance_through_the_human_transport(tmp_path, capsys):
+    import authoring
+
+    case = make_case(tmp_path)
+    sequence = design_authoring_next.load_sequence()
+    payload = design_authoring_next._result(sequence=sequence, project=case, project_text="demo",
+                                            phase="state2_rules_decisions", blocked=True, reason="r")
+    assert payload["author_guidance"] == service.author_guidance()
+    authoring._print_next({"project": {"title": "Demo", "id": "demo", "canonical_ref": "origin/agent/demo",
+                                       "path": "examples/demo"}, "authoring": payload})
+    assert "Author:  Before editing" in capsys.readouterr().out
+    later = design_authoring_next._result(sequence=sequence, project=case, project_text="demo",
+                                          phase="state6_exact_contracts", blocked=True, reason="r")
+    assert later["author_guidance"] == []
+
+
 def test_a_state_closes_when_every_gap_and_hypothesis_of_its_round_has_a_disposition(tmp_path):
     case = make_case(tmp_path, with_git=True)
     summary = ask(case, "gap", "hypothesis", "answered")
