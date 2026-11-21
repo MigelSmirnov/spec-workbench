@@ -494,12 +494,19 @@ code, the microservices the kernel calls over their HTTP APIs, the platform
 manifest, and the host that holds the installation. Each category below was
 determined from those boundaries.
 
+The record follows the canonical grammar of `SECURITY_REVIEW_EVIDENCE.md`: a
+reference is an entry of a record's `references` field and names a key of the
+case's design index; an accepted decision is an indexed item of kind `decision`;
+`affected` is review evidence for the reader, and whether a referenced decision
+answers its category is this review's judgement, not a gate's.
+
 ### Formal invariants
 
 ```text
 state2_security_gate_pass
 <-> every_required_category_has_one_outcome
-    AND every_APPLICABLE_references_an_accepted_decision
+    AND every_reference_resolves_to_an_indexed_item
+    AND every_APPLICABLE_references_an_accepted_decision_of_states_0_to_2
     AND no_UNRESOLVED
 ```
 
@@ -513,7 +520,9 @@ state2_security_gate_pass
 
 ### Consequence
 
-State 3 is blocked if any referenced decision is removed or loses its boundary.
+State 3 is blocked while the record fails the gate: when a referenced item is
+removed from the index, or an APPLICABLE category is left without an accepted
+decision of States 0–2 among its references.
 
 ### Security review
 
