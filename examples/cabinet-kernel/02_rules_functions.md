@@ -226,7 +226,8 @@ and no detection promises the runtime cannot keep.
    `value` output — for an output that has none, the bytes of its JSON text as
    returned — and the bytes of every `file` output of the one call of `run` —
    for a `many` file output, the sum of its elements' bytes. Outcomes are closed and checked in this order, the first that holds
-   deciding: wall deadline passed — `timeout`; a limit hit (memory, process count,
+   deciding, unless cleanup is unconfirmed, which rule 7 concludes `crashed`
+   with `cleanup_failed` whatever else holds: wall deadline passed — `timeout`; a limit hit (memory, process count,
    scratch, `output_bytes`) — `resource_exhausted`; a trap of rule 4 raised —
    `sandbox_violation`; the module failed to load, has no `run`, raised, or the
    process exited abnormally — `crashed`; the returned dict does not have exactly
