@@ -507,7 +507,8 @@ state2_security_gate_pass
 
 1. `design_lint --state 2` accepts exactly one complete review record.
    [witness: workbench:state2_rules_decisions]
-2. Every reference resolves to an indexed State 2 decision.
+2. Every reference resolves to an indexed item, and every APPLICABLE category
+   references at least one indexed accepted decision of States 0–2.
    [witness: workbench:state2_rules_decisions]
 
 ### Consequence
