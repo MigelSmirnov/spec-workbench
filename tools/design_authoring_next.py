@@ -22,6 +22,7 @@ from imports_workbench.model import ImportsError
 import design_emitter_binding
 import design_lint
 import design_record_construction
+import design_semantic_handoff
 import design_router_context
 import design_stage3
 import design_stage4
@@ -577,6 +578,29 @@ def _router_step(sequence: dict[str, Any], project: Path, project_text: str) -> 
     return None
 
 
+def _semantic_handoff_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any] | None:
+    """Stage 7.1; None when the case declares no semantic test handoff or it is closed.
+
+    Stage 9 admission (FA006) and the export refuse a declared handoff that is not
+    semantic_closed; the sequencer names it here, where the work is done.
+    """
+    report = design_semantic_handoff.coverage(project)
+    if report["summary"]["handoff_ready"]:
+        return None
+    return _result(
+        sequence=sequence, project=project, project_text=project_text,
+        phase="stage7_1_semantic_handoff", blocked=True,
+        reason=(
+            f"The case declares a semantic runtime-test handoff ({report['manifest']}) that is not closed: "
+            "review each test against its accepted decision as STAGE_7_1_SEMANTIC_HANDOFF.md, "
+            "\"Handoff result\", requires, and mark the manifest semantic_closed only when every flow meets it. "
+            "Export and Stage 9 admission refuse it until then."
+        ),
+        summary=report["summary"], findings=report["findings"],
+        router_allowed=False, persistence_allowed=False,
+    )
+
+
 def _imports_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any] | None:
     """The imports_closure phase; None once every candidate is decided.
 
@@ -758,6 +782,10 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             summary=witnesses["summary"], findings=witnesses["findings"],
             router_allowed=False, persistence_allowed=False,
         )
+
+    semantic_step = _semantic_handoff_step(sequence, project, project_text)
+    if semantic_step is not None:
+        return semantic_step
 
     imports_step = _imports_step(sequence, project, project_text)
     if imports_step is not None:
