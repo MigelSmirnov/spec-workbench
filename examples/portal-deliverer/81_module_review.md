@@ -60,6 +60,13 @@ declared contract `_stop_signal(name: str) -> Signals` (State 7 round 12 clear),
 `deliverer_service` reviewed again, PASS. The slices of six other modules moved only by note indices, the
 new note shifting the global order; their content is unchanged and their hashes are renewed.
 
+With the semantic_runtime binding (code-factory PR #233) the A1 witness for names a scan would not report
+stopped on `"nul\0.jpg"`: the OS refuses the name with ValueError, not OSError. A3 rule 5 condition 1
+already answers NOT_READY_OR_ABSENT; `read_named_source` now returns None for any failed opening or status
+reading (State 7 rounds 13 and 14). `source_folder` reviewed again, PASS. `runtime_settings` moved only by
+the RuntimeEnvironment import its emitted code needs. The ten witness files keep the EXIF a test gives them
+(`Image.Exif() if exif is None else exif`): a sub-IFD-only Exif is falsy, and `or` had dropped it.
+
 ## Open for the Workbench tools
 
 The packet of `runtime_settings` does not carry `config.runtime_environment_variables`, the 6.11 table the
