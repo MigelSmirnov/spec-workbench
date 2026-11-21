@@ -294,7 +294,8 @@ A03-5: cleanup_unconfirmed -> outcome = crashed AND detail = cleanup_failed
    [witness: verification:kernel_a03_kernel_refuses_start_without_sandbox]
 8. A03-4: Code that calls `time.time()`, swallows the error and then busy-loops ends
    `timeout`, not `sandbox_violation`; code that hits a trap and returns a dict
-   with an extra key ends `sandbox_violation`, not `contract_violation`.
+   with an extra key ends `sandbox_violation`, not `contract_violation`; in
+   both, cleanup is confirmed (rule 7 decides otherwise).
    [witness: verification:kernel_a03_outcome_precedence_order]
 9. A03-2: An implementation whose `run` returns `dict(os.environ)` on a `value` output
    port succeeds with exactly `{"PYTHONHASHSEED": "0"}`.
