@@ -67,6 +67,10 @@ reading (State 7 rounds 13 and 14). `source_folder` reviewed again, PASS. `runti
 the RuntimeEnvironment import its emitted code needs. The ten witness files keep the EXIF a test gives them
 (`Image.Exif() if exif is None else exif`): a sub-IFD-only Exif is falsy, and `or` had dropped it.
 
+Owner 2026-11-21: each witness judges what this service owns. A2's INV-03 and INV-05 Required tests and
+witnesses no longer assert how the Portal serves or shows a published photo; A11 stays external_owner (the
+calling flow). `photo_preparation` and `photo_delivery` moved only by that A2 text; PASS, hashes renewed.
+
 ## Open for the Workbench tools
 
 The packet of `runtime_settings` does not carry `config.runtime_environment_variables`, the 6.11 table the
