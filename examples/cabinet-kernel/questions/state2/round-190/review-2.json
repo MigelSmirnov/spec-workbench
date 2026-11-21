@@ -1,0 +1,174 @@
+{
+ "open_points": [
+  {
+   "subject": "A15 rule 1 and formal invariant concluded_attempt",
+   "kind": "contradiction",
+   "text": "Every concluded attempt at an element, every skipped node and every `upstream_failed` node writes exactly one NodeExecution M23 — an owner's resolution of an unknown outcome writes none (A11), and a function execution whose record the store refused writes none: the kernel stops and recovery executes it again (K-09, A03 rule 7).\nconcluded_attempt | skip | upstream_failed -> exactly_one_node_execution",
+   "question": "Is a function execution whose NodeExecution write is refused a concluded attempt, and if so what exception must the formal invariant state?",
+   "options": [
+    "It is a concluded attempt, and the invariant must explicitly exempt a refused NodeExecution write.",
+    "It is not a concluded attempt; conclusion exists only once a NodeExecution is stored.",
+    "The store refusal must still leave one NodeExecution, so recovery must not execute the function again."
+   ],
+   "default_guess": "Treat durable storage of the NodeExecution as the act that concludes the attempt; the refused execution is not concluded and recovery reruns it.",
+   "witness": {
+    "initial": "A run selects a function element with no earlier stored NodeExecution.",
+    "events": [
+     "The function finishes and its outputs validate.",
+     "The store refuses the NodeExecution record.",
+     "The kernel restarts and recovery examines the run."
+    ],
+    "outcomes": [
+     "The formal invariant treats the finished execution as concluded and requires one record, so recovery must not execute it again.",
+     "Rule 1 leaves no record and recovery executes the function again."
+    ],
+    "observer": "The trace reader and anyone observing how many times the function runs"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 changed store-refusal behavior",
+   "kind": "missing required test",
+   "text": "a function execution whose record the store refused writes none: the kernel stops and recovery executes it again (K-09, A03 rule 7).",
+   "question": "Which Required tests item must show that the refused write leaves no NodeExecution, consumes no stored attempt number, stops the kernel, and causes exactly one recovery re-execution?",
+   "options": [
+    "Add a Required tests item covering the whole store-refusal and recovery history.",
+    "Extend Required test 6 to cover the store-refusal exception as well as owner resolution.",
+    "Remove the behavior from the formal decision until a required test is specified."
+   ],
+   "default_guess": "Add a separate Required tests item because none of the six listed tests exercises a refused NodeExecution write or recovery.",
+   "unit": "?"
+  },
+  {
+   "subject": "A15 store refusal boundary",
+   "kind": "undefined refusal condition",
+   "text": "a function execution whose record the store refused writes none",
+   "question": "Exactly which store outcomes count as the record being refused, and at what transaction boundary does this rule apply?",
+   "options": [
+    "Any failure returned while committing the store change containing the NodeExecution counts.",
+    "Only an explicit policy refusal from the store counts; I/O errors and process crashes follow different recovery rules.",
+    "Absence of the NodeExecution after restart is sufficient, regardless of why it is absent."
+   ],
+   "default_guess": "Treat any unsuccessful atomic commit of the NodeExecution store change as a refused record, and use absence of that record during recovery as the durable criterion.",
+   "witness": {
+    "initial": "A function finishes, and persisting its NodeExecution encounters a database error after output bytes have been written.",
+    "events": [
+     "The store reports an error while the kernel is recording the execution.",
+     "The process restarts."
+    ],
+    "outcomes": [
+     "The error counts as a refusal, so recovery reruns the function.",
+     "Only an explicit store-level refusal counts, so the database error follows generic crash recovery and may not trigger this rule."
+    ],
+    "observer": "The run owner, who sees whether the function is executed again"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 refused NodeExecution store change",
+   "kind": "atomicity ambiguity",
+   "text": "a function execution whose record the store refused writes none: the kernel stops and recovery executes it again",
+   "question": "When the record is refused, which accompanying changes survive: StoredValue records, SpooledFile facts, output bytes, resource observations, and mutations of the Run?",
+   "options": [
+    "The whole store change rolls back, while already-written content-addressed or spool bytes may remain unnamed.",
+    "Only the NodeExecution write is rejected; the other records and Run changes remain.",
+    "Every record and every output byte from the execution is removed before the kernel stops."
+   ],
+   "default_guess": "Roll back the entire store transaction, retain only bytes already written outside it as unreachable data, and leave the Run at its pre-execution durable state.",
+   "witness": {
+    "initial": "A function produces a StoredValue and two spooled files, then its NodeExecution write is refused.",
+    "events": [
+     "The kernel stops.",
+     "Recovery executes the function again with different output bytes."
+    ],
+    "outcomes": [
+     "The first execution left no durable output facts, so only the recovery execution can be named or delivered.",
+     "The first StoredValue or SpooledFile facts survived, so recovery must decide whether to reuse, overwrite, count, or discard them."
+    ],
+    "observer": "A trace reader, spool-ceiling enforcement, and a later node receiving the recovered output"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "attempt_number for a recovered function execution",
+   "kind": "identifier contradiction",
+   "text": "a position being the run, node, `map_index`, attempt number, port and list index, which only a retry of the same attempt number writes again, after a restart left that attempt without a record.\n`run_id`, `producer_node_id`, `map_index`, `attempt_number`, `producer_port`: the attempt that produced it, so files of two attempts are two SpooledFiles;",
+   "question": "How can the first execution have a spool position containing an attempt number, and the recovery execution reuse that same number, when an execution that leaves no stored NodeExecution takes no number and files of two attempts are otherwise distinct SpooledFiles?",
+   "options": [
+    "Reserve the next stored ordinal provisionally for spool addressing; recovery reuses it, and both executions are one logical attempt.",
+    "Give the refused execution no attempt number and keep its bytes in a separate temporary namespace; recovery receives the next stored ordinal.",
+    "Give each physical execution a different attempt number even though only stored NodeExecutions count for the model's attempt_number."
+   ],
+   "default_guess": "Use the next stored ordinal as a provisional spool coordinate and define the original execution plus its recovery re-execution as one logical attempt whose number becomes real only when its NodeExecution is stored.",
+   "witness": {
+    "initial": "A function element has no stored NodeExecution, so its next stored ordinal is 1.",
+    "events": [
+     "Its first physical execution writes a file, but the store refuses its NodeExecution.",
+     "Recovery physically executes the function again and writes a different file for the same port and list index."
+    ],
+    "outcomes": [
+     "Both writes use provisional attempt number 1 and the recovery write replaces the first SpooledFile position.",
+     "The first execution has no attempt number, so its file needs another identity and the recovery file becomes the sole SpooledFile for attempt number 1."
+    ],
+    "observer": "Spool accounting, capture, and inspection of SpooledFile identity"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 consequence",
+   "kind": "contradiction",
+   "text": "a function execution whose record the store refused writes none\nThe trace is the kernel's memory of what it did",
+   "question": "Must the consequence be narrowed to durable concluded work, since the kernel can execute a function without leaving any trace record?",
+   "options": [
+    "Say the trace is the kernel's memory of durable conclusions and deliberately omits executions whose record was refused.",
+    "Record a separate durable recovery fact for the unrecorded execution.",
+    "Keep claiming that the trace records what the kernel did, which would require the refused execution to leave a record."
+   ],
+   "default_guess": "Narrow the consequence to durable conclusions; the refused execution occurred but is intentionally absent from the trace.",
+   "witness": {
+    "initial": "A function has an externally observable sandbox invocation counter but no permitted external effect.",
+    "events": [
+     "The function executes once.",
+     "Its NodeExecution write is refused.",
+     "Recovery executes it a second time.",
+     "A reader inspects the trace."
+    ],
+    "outcomes": [
+     "The trace contains only the recovery execution although the kernel executed the sandbox twice.",
+     "The consequence requires the trace to account for both executions."
+    ],
+    "observer": "An operator comparing sandbox observations with the kernel trace"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 invariant payload IN node_execution -> never",
+   "kind": "invariant test gap",
+   "text": "payload IN node_execution -> never\nA function that raises after printing a secret-shaped string leaves a bounded `failure_detail` without it.",
+   "question": "What Required tests item must show the whole invariant—no value, file, credential, header value, or text beyond `failure_detail_bytes_max` in a NodeExecution—rather than only one secret-shaped failure-detail example?",
+   "options": [
+    "Expand Required test 2 to inspect every NodeExecution payload-bearing field and the byte bound.",
+    "Split the invariant into separately tested no-value, no-file, no-credential, no-header-value, and bounded-text invariants.",
+    "Narrow the invariant to the secret-shaped failure_detail behavior currently tested."
+   ],
+   "default_guess": "Split the invariant into explicit clauses and expand Required test 2 to assert each prohibited payload class and the exact failure-detail bound.",
+   "unit": "?"
+  },
+  {
+   "subject": "A15 invariant spooled_file belongs_to(one run)",
+   "kind": "invariant test gap",
+   "text": "spooled_file -> belongs_to(one run) AND size <= spool_file_bytes_max",
+   "question": "Which Required tests item must show that a SpooledFile belongs to exactly one run and cannot be named, read, or reused as another run's spool file?",
+   "options": [
+    "Add a cross-run isolation test for SpooledFile identity and access.",
+    "Extend Required tests 3 and 4 to include cross-run isolation.",
+    "Remove belongs_to(one run) from the formal invariants."
+   ],
+   "default_guess": "Add a cross-run isolation test; the existing ceiling tests show size enforcement but not single-run ownership.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A15 rule 1 and formal invariant concluded_attempt\",\"kind\":\"contradiction\",\"text\":\"Every concluded attempt at an element, every skipped node and every `upstream_failed` node writes exactly one NodeExecution M23 — an owner's resolution of an unknown outcome writes none (A11), and a function execution whose record the store refused writes none: the kernel stops and recovery executes it again (K-09, A03 rule 7).\\nconcluded_attempt | skip | upstream_failed -> exactly_one_node_execution\",\"question\":\"Is a function execution whose NodeExecution write is refused a concluded attempt, and if so what exception must the formal invariant state?\",\"options\":[\"It is a concluded attempt, and the invariant must explicitly exempt a refused NodeExecution write.\",\"It is not a concluded attempt; conclusion exists only once a NodeExecution is stored.\",\"The store refusal must still leave one NodeExecution, so recovery must not execute the function again.\"],\"default_guess\":\"Treat durable storage of the NodeExecution as the act that concludes the attempt; the refused execution is not concluded and recovery reruns it.\",\"witness\":{\"initial\":\"A run selects a function element with no earlier stored NodeExecution.\",\"events\":[\"The function finishes and its outputs validate.\",\"The store refuses the NodeExecution record.\",\"The kernel restarts and recovery examines the run.\"],\"outcomes\":[\"The formal invariant treats the finished execution as concluded and requires one record, so recovery must not execute it again.\",\"Rule 1 leaves no record and recovery executes the function again.\"],\"observer\":\"The trace reader and anyone observing how many times the function runs\"}},{\"subject\":\"A15 changed store-refusal behavior\",\"kind\":\"missing required test\",\"text\":\"a function execution whose record the store refused writes none: the kernel stops and recovery executes it again (K-09, A03 rule 7).\",\"question\":\"Which Required tests item must show that the refused write leaves no NodeExecution, consumes no stored attempt number, stops the kernel, and causes exactly one recovery re-execution?\",\"options\":[\"Add a Required tests item covering the whole store-refusal and recovery history.\",\"Extend Required test 6 to cover the store-refusal exception as well as owner resolution.\",\"Remove the behavior from the formal decision until a required test is specified.\"],\"default_guess\":\"Add a separate Required tests item because none of the six listed tests exercises a refused NodeExecution write or recovery.\"},{\"subject\":\"A15 store refusal boundary\",\"kind\":\"undefined refusal condition\",\"text\":\"a function execution whose record the store refused writes none\",\"question\":\"Exactly which store outcomes count as the record being refused, and at what transaction boundary does this rule apply?\",\"options\":[\"Any failure returned while committing the store change containing the NodeExecution counts.\",\"Only an explicit policy refusal from the store counts; I/O errors and process crashes follow different recovery rules.\",\"Absence of the NodeExecution after restart is sufficient, regardless of why it is absent.\"],\"default_guess\":\"Treat any unsuccessful atomic commit of the NodeExecution store change as a refused record, and use absence of that record during recovery as the durable criterion.\",\"witness\":{\"initial\":\"A function finishes, and persisting its NodeExecution encounters a database error after output bytes have been written.\",\"events\":[\"The store reports an error while the kernel is recording the execution.\",\"The process restarts.\"],\"outcomes\":[\"The error counts as a refusal, so recovery reruns the function.\",\"Only an explicit store-level refusal counts, so the database error follows generic crash recovery and may not trigger this rule.\"],\"observer\":\"The run owner, who sees whether the function is executed again\"}},{\"subject\":\"A15 refused NodeExecution store change\",\"kind\":\"atomicity ambiguity\",\"text\":\"a function execution whose record the store refused writes none: the kernel stops and recovery executes it again\",\"question\":\"When the record is refused, which accompanying changes survive: StoredValue records, SpooledFile facts, output bytes, resource observations, and mutations of the Run?\",\"options\":[\"The whole store change rolls back, while already-written content-addressed or spool bytes may remain unnamed.\",\"Only the NodeExecution write is rejected; the other records and Run changes remain.\",\"Every record and every output byte from the execution is removed before the kernel stops.\"],\"default_guess\":\"Roll back the entire store transaction, retain only bytes already written outside it as unreachable data, and leave the Run at its pre-execution durable state.\",\"witness\":{\"initial\":\"A function produces a StoredValue and two spooled files, then its NodeExecution write is refused.\",\"events\":[\"The kernel stops.\",\"Recovery executes the function again with different output bytes.\"],\"outcomes\":[\"The first execution left no durable output facts, so only the recovery execution can be named or delivered.\",\"The first StoredValue or SpooledFile facts survived, so recovery must decide whether to reuse, overwrite, count, or discard them.\"],\"observer\":\"A trace reader, spool-ceiling enforcement, and a later node receiving the recovered output\"}},{\"subject\":\"attempt_number for a recovered function execution\",\"kind\":\"identifier contradiction\",\"text\":\"a position being the run, node, `map_index`, attempt number, port and list index, which only a retry of the same attempt number writes again, after a restart left that attempt without a record.\\n`run_id`, `producer_node_id`, `map_index`, `attempt_number`, `producer_port`: the attempt that produced it, so files of two attempts are two SpooledFiles;\",\"question\":\"How can the first execution have a spool position containing an attempt number, and the recovery execution reuse that same number, when an execution that leaves no stored NodeExecution takes no number and files of two attempts are otherwise distinct SpooledFiles?\",\"options\":[\"Reserve the next stored ordinal provisionally for spool addressing; recovery reuses it, and both executions are one logical attempt.\",\"Give the refused execution no attempt number and keep its bytes in a separate temporary namespace; recovery receives the next stored ordinal.\",\"Give each physical execution a different attempt number even though only stored NodeExecutions count for the model's attempt_number.\"],\"default_guess\":\"Use the next stored ordinal as a provisional spool coordinate and define the original execution plus its recovery re-execution as one logical attempt whose number becomes real only when its NodeExecution is stored.\",\"witness\":{\"initial\":\"A function element has no stored NodeExecution, so its next stored ordinal is 1.\",\"events\":[\"Its first physical execution writes a file, but the store refuses its NodeExecution.\",\"Recovery physically executes the function again and writes a different file for the same port and list index.\"],\"outcomes\":[\"Both writes use provisional attempt number 1 and the recovery write replaces the first SpooledFile position.\",\"The first execution has no attempt number, so its file needs another identity and the recovery file becomes the sole SpooledFile for attempt number 1.\"],\"observer\":\"Spool accounting, capture, and inspection of SpooledFile identity\"}},{\"subject\":\"A15 consequence\",\"kind\":\"contradiction\",\"text\":\"a function execution whose record the store refused writes none\\nThe trace is the kernel's memory of what it did\",\"question\":\"Must the consequence be narrowed to durable concluded work, since the kernel can execute a function without leaving any trace record?\",\"options\":[\"Say the trace is the kernel's memory of durable conclusions and deliberately omits executions whose record was refused.\",\"Record a separate durable recovery fact for the unrecorded execution.\",\"Keep claiming that the trace records what the kernel did, which would require the refused execution to leave a record.\"],\"default_guess\":\"Narrow the consequence to durable conclusions; the refused execution occurred but is intentionally absent from the trace.\",\"witness\":{\"initial\":\"A function has an externally observable sandbox invocation counter but no permitted external effect.\",\"events\":[\"The function executes once.\",\"Its NodeExecution write is refused.\",\"Recovery executes it a second time.\",\"A reader inspects the trace.\"],\"outcomes\":[\"The trace contains only the recovery execution although the kernel executed the sandbox twice.\",\"The consequence requires the trace to account for both executions.\"],\"observer\":\"An operator comparing sandbox observations with the kernel trace\"}},{\"subject\":\"A15 invariant payload IN node_execution -> never\",\"kind\":\"invariant test gap\",\"text\":\"payload IN node_execution -> never\\nA function that raises after printing a secret-shaped string leaves a bounded `failure_detail` without it.\",\"question\":\"What Required tests item must show the whole invariant—no value, file, credential, header value, or text beyond `failure_detail_bytes_max` in a NodeExecution—rather than only one secret-shaped failure-detail example?\",\"options\":[\"Expand Required test 2 to inspect every NodeExecution payload-bearing field and the byte bound.\",\"Split the invariant into separately tested no-value, no-file, no-credential, no-header-value, and bounded-text invariants.\",\"Narrow the invariant to the secret-shaped failure_detail behavior currently tested.\"],\"default_guess\":\"Split the invariant into explicit clauses and expand Required test 2 to assert each prohibited payload class and the exact failure-detail bound.\"},{\"subject\":\"A15 invariant spooled_file belongs_to(one run)\",\"kind\":\"invariant test gap\",\"text\":\"spooled_file -> belongs_to(one run) AND size <= spool_file_bytes_max\",\"question\":\"Which Required tests item must show that a SpooledFile belongs to exactly one run and cannot be named, read, or reused as another run's spool file?\",\"options\":[\"Add a cross-run isolation test for SpooledFile identity and access.\",\"Extend Required tests 3 and 4 to include cross-run isolation.\",\"Remove belongs_to(one run) from the formal invariants.\"],\"default_guess\":\"Add a cross-run isolation test; the existing ceiling tests show size enforcement but not single-run ownership.\"}]}",
+ "set_aside": []
+}
