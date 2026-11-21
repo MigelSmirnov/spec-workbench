@@ -54,6 +54,12 @@ Route B on `7c6d11f4` then generated 11 of 12 modules and rejected `deliverer_se
 of that name. The `run_service` note now says so, and that every handler is installed unconditionally, never
 tested for (State 7 rounds 10 and 11). `deliverer_service` reviewed again, PASS.
 
+Route B on `154e3259` rejected `deliverer_service` again for `getattr(signal.Signals, name)`. State 7
+round 10 had judged that a note may not prescribe how a name becomes a signal; the mechanism is now the
+declared contract `_stop_signal(name: str) -> Signals` (State 7 round 12 clear), and `run_service` calls it.
+`deliverer_service` reviewed again, PASS. The slices of six other modules moved only by note indices, the
+new note shifting the global order; their content is unchanged and their hashes are renewed.
+
 ## Open for the Workbench tools
 
 The packet of `runtime_settings` does not carry `config.runtime_environment_variables`, the 6.11 table the
