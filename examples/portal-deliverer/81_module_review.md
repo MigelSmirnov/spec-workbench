@@ -49,6 +49,11 @@ names Linux, no version named, as cabinet-kernel A20 rule 3. The nine notes that
 a probed or guarded flag, or an opening that follows a link the note forbids, contradicts its note. PASS;
 the ledger holds the new slice hashes.
 
+Route B on `7c6d11f4` then generated 11 of 12 modules and rejected `deliverer_service` for
+`getattr(signal.Signals, name)`: `STOP_SIGNALS` holds signal names and no note said that each is the OS signal
+of that name. The `run_service` note now says so, and that every handler is installed unconditionally, never
+tested for (State 7 rounds 10 and 11). `deliverer_service` reviewed again, PASS.
+
 ## Open for the Workbench tools
 
 The packet of `runtime_settings` does not carry `config.runtime_environment_variables`, the 6.11 table the
