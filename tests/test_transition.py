@@ -1320,6 +1320,21 @@ def test_a_binding_brings_the_factory_modules_its_check_imports_but_not_the_prod
         ("verification/counts_once.py", False), ("verification/witness_support.py", True)]
 
 
+def test_a_pytest_node_id_in_the_command_names_its_file(tmp_path):
+    import yaml
+
+    case, factory = _two_decision_factory(
+        tmp_path, "- INV-001: refused. [witness: verification:counts_once]",
+        "- INV-003: kept. [witness: verification:counts_once]", {"counts_once": IMPORTING_CHECK})
+    _write(factory / "verification" / "configs" / "Demo.yaml", yaml.safe_dump({"checks": {"commands": [
+        {"name": "counts_once", "cwd": "../..",
+         "command": ["python", "-m", "pytest", "-q", "verification/counts_once.py::test_once"]}]}}))
+    materials = design_decision_witness.binding_material(case, factory)
+    assert materials[0]["status"] == "available"
+    assert [f["path"] for f in materials[0]["files"]] == [
+        "verification/counts_once.py", "verification/witness_support.py"]
+
+
 def test_a_check_shared_by_bindings_is_judged_once_for_all_of_them(tmp_path, monkeypatch):
     _clean_gate(monkeypatch)
     case, factory = _two_decision_factory(
