@@ -211,7 +211,7 @@ read_runner_report: [FIELD_PROJECTION] MUST decode the base64-text fields of = m
 read_runner_report: [RETURN_SHAPE] MUST return = models.RunnerReport from the messages read_runner_messages returned, with returned absent when none of them is a returned message. Message variants are defined by = models.RunnerWireMessage; decoded output fields are defined by = models.ReturnedOutput.
 read_runner_messages: [BEHAVIOR] MUST read message as newline-terminated lines in channel order and decode each complete line as one UTF-8 JSON object validated against = models.RunnerWireMessage with strict JSON types and no extra fields; a file output is valid only when every base64-text field of = models.RunnerWireFileOutput and = models.RunnerWireFileListOutput decodes with the standard library base64 decoder with validation enabled and ASCII input. The first line that is not UTF-8, not JSON, not of that shape, carries invalid base64, or is a second = models.RunnerReturnedMessage ends decoding: it and every later line contribute nothing. An incomplete final line is ignored.
 read_runner_messages: [DEPENDENCY_BOUNDARY] MAY use TypeAdapter from pydantic to validate = models.RunnerWireMessage in JSON mode in the kernel process; this adds no import to the standard-library-only program returned by runner_source.
-read_runner_messages: [RETURN_SHAPE] Returns the tuple of = models.RunnerWireMessage decoded before the first invalid line, in channel order, empty when none was decoded; channel content never makes it raise.
+read_runner_messages: [RETURN_SHAPE] MUST return the tuple of = models.RunnerWireMessage decoded before the first invalid line, in channel order, empty when none was decoded; channel content never makes it raise.
 
 ## sandbox
 
