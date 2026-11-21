@@ -141,6 +141,7 @@ def _result(
         "read": _read(sequence, phase),
         "ask": [str(item) for item in _phase(sequence, phase).get("questions") or []],
         "question_round": _question_round(sequence, phase, project_text),
+        "author_guidance": question_rounds.author_guidance(_phase(sequence, phase).get("semantic_state")) if _phase(sequence, phase).get("question_scope") else [],
         "layer": transition.layer(sequence, phase),
         "carried_dispositions": _carried_dispositions(project, _phase(sequence, phase)),
         "summary": summary or {},
@@ -833,6 +834,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ask: {question}")
         if payload.get("question_round"):
             print(f"questions: {payload['question_round']}")
+        for line in payload.get("author_guidance") or []:
+            print(f"author: {line}")
         line = diagnosis_line(payload)
         if line:
             print(line)
