@@ -241,7 +241,9 @@ and no detection promises the runtime cannot keep.
    and the exchange directory is removed. If that cannot be confirmed the output
    is discarded, the execution is recorded `crashed` with detail
    `cleanup_failed`, and the kernel process stops; runs it left `running` are
-   recovered on the next start (A14 rule 5).
+   recovered on the next start (A14 rule 5). If that record cannot be stored,
+   the kernel process stops all the same, and recovery executes the element
+   again, as it does every function element without a concluded record.
 8. The kernel checks at start, before recovery and before the surface opens,
    that `bubblewrap` is present and that one probe execution succeeds; without
    both it does not start, and says why. A running kernel therefore always has
