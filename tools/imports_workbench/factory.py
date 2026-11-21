@@ -6,6 +6,8 @@ factory_slice_workbench runs the Factory's tools: a subprocess, cwd at the
 Factory root. Authority stays with the Factory; nothing here parses code.
 
 - no 90_factory_target.json  -> not_applicable (a new project has no code);
+- a target whose Factory project has no specification yet -> not_applicable:
+  the first export creates it, so there is no accepted code to compare with;
 - a target, but no Factory, no report or a report without code -> unavailable,
   which the gate turns into a block, never a skip.
 """
@@ -68,8 +70,10 @@ def evidence(project: Path, factory_project: str | None, explicit_root: Path | N
     except (OSError, KeyError, json.JSONDecodeError) as exc:
         return _unavailable(f"the Factory structure cannot be read: {exc}", factory_root=str(root))
     if not spec.is_file():
-        return _unavailable(f"the Factory project {factory_project} has no specification at {spec}",
-                            factory_root=str(root))
+        # Before the first export there is no accepted code; the export creates the spec.
+        return {"status": NOT_APPLICABLE, "modules": {}, "factory_root": str(root),
+                "reason": f"the Factory project {factory_project} has no specification yet ({spec}): "
+                          "the first export creates it, and the code is compared from then on"}
     command = [sys.executable, "-m", "tools.slicer", "report", "--spec", str(spec), "--code-root", str(code_root),
                "--json"]
     try:
