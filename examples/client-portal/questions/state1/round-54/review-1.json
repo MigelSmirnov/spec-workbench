@@ -1,0 +1,259 @@
+{
+ "open_points": [
+  {
+   "subject": "Model M04 — ProjectViewerGrant identity",
+   "kind": "identity_minting",
+   "text": "`grant_id: UUID`",
+   "question": "Who mints each ProjectViewerGrant identity, and is `grant_id` always a fresh backend-generated identity or may an administrator or another system supply it?",
+   "options": [
+    "The backend mints a fresh grant_id from the authenticated grant action.",
+    "The administrator-facing action supplies grant_id.",
+    "An upstream system supplies or derives grant_id from viewer_id and project_id."
+   ],
+   "default_guess": "The backend mints a fresh grant_id for every successful grant action, including re-granting a revoked pair.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M04 — ProjectViewerGrant lifecycle",
+   "kind": "initial_state_invariant",
+   "text": "`active → revoked` (Meaning).",
+   "question": "Must every newly created grant start as active with revoked_at and revoked_by absent, and must revocation set both fields while changing status to revoked?",
+   "options": [
+    "Creation requires active with both revocation fields absent; revocation requires revoked with both fields present.",
+    "Status and revocation fields are independently nullable facts.",
+    "A grant may be created directly in revoked status."
+   ],
+   "default_guess": "Creation produces active with null revocation fields; revocation atomically makes it revoked and records both revocation facts.",
+   "witness": {
+    "initial": "No grant exists for viewer V and project P.",
+    "events": [
+     "Administrator grants V access to P.",
+     "A reader loads the newly persisted ProjectViewerGrant."
+    ],
+    "outcomes": [
+     "The record is active and both revoked_at and revoked_by are absent.",
+     "The record may be revoked initially or may contain one or both revocation fields despite being active."
+    ],
+    "observer": "The viewer authorization check and the administrator audit view."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M04 — ProjectViewerGrant revocation action",
+   "kind": "action_target",
+   "text": "Revoking one grant affects only that project",
+   "question": "Now that a pair can have several historical records, does the revocation product action target a grant_id, or does it target viewer_id plus project_id and resolve the sole active grant?",
+   "options": [
+    "Revoke by grant_id.",
+    "Revoke by viewer_id and project_id, selecting the active record.",
+    "Support both target forms with explicitly equivalent semantics."
+   ],
+   "default_guess": "Revoke by viewer_id and project_id and change the sole active record.",
+   "witness": {
+    "initial": "Viewer V and project P have revoked grants G1 and G2 and active grant G3.",
+    "events": [
+     "Administrator requests revocation using the pair V and P or an identifier exposed by the product action."
+    ],
+    "outcomes": [
+     "The action resolves the pair and revokes G3.",
+     "The action requires a grant_id; supplying an old id leaves G3 active or supplying G3 revokes it."
+    ],
+    "observer": "Viewer V, who either retains or loses project access, and the administrator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M04 — ProjectViewerGrant retention",
+   "kind": "terminal_retention",
+   "text": "revoked grants of the pair stay as history.",
+   "question": "Does “stay as history” prohibit every deletion or purge of revoked grants, or does it only require ordinary operations to preserve them while allowing a later retention lifecycle?",
+   "options": [
+    "Revoked grants are retained indefinitely and have no deletion lifecycle.",
+    "Revoked grants may be purged under a separate retention lifecycle.",
+    "Only the latest revoked grant must be retained."
+   ],
+   "default_guess": "Every revoked grant is retained indefinitely unless a later state explicitly introduces a retention lifecycle.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M04 — ProjectViewerGrant fields",
+   "kind": "standard_violation",
+   "text": "- **Fields:** `grant_id: UUID`, `viewer_id: UUID`, `project_id: UUID`,\n  `status: GrantStatus (active | revoked)`, `created_at`, `created_by`,\n  `revoked_at | None`, `revoked_by | None`.",
+   "rule": "- Указывай все поля с типами",
+   "section": "5",
+   "question": "Give created_at and created_by explicit types and give revoked_at and revoked_by complete nullable types.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M07 — StaffProjectAssignment identity",
+   "kind": "identity_minting",
+   "text": "`assignment_id: UUID`",
+   "question": "Who mints each StaffProjectAssignment identity, and is assignment_id always a fresh backend-generated identity or may an administrator or another system supply it?",
+   "options": [
+    "The backend mints a fresh assignment_id from the authenticated assignment action.",
+    "The administrator-facing action supplies assignment_id.",
+    "The identity is derived from staff_id and project_id."
+   ],
+   "default_guess": "The backend mints a fresh assignment_id for every successful assignment action, including reassignment after revocation.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M07 — StaffProjectAssignment lifecycle",
+   "kind": "initial_state_invariant",
+   "text": "`active → revoked` (Meaning).",
+   "question": "Must every newly created assignment start as active with revoked_at and revoked_by absent, and must revocation set both fields while changing status to revoked?",
+   "options": [
+    "Creation requires active with both revocation fields absent; revocation requires revoked with both fields present.",
+    "Status and revocation fields are independently nullable facts.",
+    "An assignment may be created directly in revoked status."
+   ],
+   "default_guess": "Creation produces active with null revocation fields; revocation atomically makes it revoked and records both revocation facts.",
+   "witness": {
+    "initial": "No assignment exists for staff account S and project P.",
+    "events": [
+     "Administrator assigns S to P.",
+     "A project authorization check loads the new assignment."
+    ],
+    "outcomes": [
+     "The assignment is active and both revocation fields are absent.",
+     "The assignment may initially be revoked or have revocation fields inconsistent with its status."
+    ],
+    "observer": "Staff account S and the authorization service."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M07 — StaffProjectAssignment revocation action",
+   "kind": "action_target",
+   "text": "A revoked assignment is terminal and no operation reactivates it; assigning the pair again creates a new assignment record.",
+   "question": "With several historical assignments for a pair, does the revocation product action target assignment_id, or staff_id plus project_id and the sole active assignment?",
+   "options": [
+    "Revoke by assignment_id.",
+    "Revoke by staff_id and project_id, selecting the active record.",
+    "Support both target forms with explicitly equivalent semantics."
+   ],
+   "default_guess": "Revoke by staff_id and project_id and change the sole active assignment.",
+   "witness": {
+    "initial": "Staff S and project P have revoked assignments A1 and A2 and active assignment A3.",
+    "events": [
+     "Administrator requests revocation for S on P using the target accepted by the product action."
+    ],
+    "outcomes": [
+     "The pair resolves to A3, which becomes revoked.",
+     "The action requires a particular assignment_id; an old id does not revoke A3."
+    ],
+    "observer": "Staff S, the administrator, and the next project-scoped authorization check."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M07 — StaffProjectAssignment retention",
+   "kind": "terminal_retention",
+   "text": "revoked assignments of the pair stay as history.",
+   "question": "Does “stay as history” prohibit every deletion or purge of revoked assignments, or may a later retention lifecycle remove them?",
+   "options": [
+    "Revoked assignments are retained indefinitely and have no deletion lifecycle.",
+    "Revoked assignments may be purged under a separate retention lifecycle.",
+    "Only the latest revoked assignment must be retained."
+   ],
+   "default_guess": "Every revoked assignment is retained indefinitely unless a later state explicitly introduces a retention lifecycle.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M07 — StaffProjectAssignment fields",
+   "kind": "standard_violation",
+   "text": "- **Fields:** `assignment_id: UUID`, `staff_id: UUID`, `project_id: UUID`,\n  `status: GrantStatus (active | revoked)`, `created_at`,\n  `created_by: UUID (administrator)`, `revoked_at: datetime | None`,\n  `revoked_by: UUID | None`.",
+   "rule": "- Указывай все поля с типами",
+   "section": "5",
+   "question": "Give created_at an explicit type.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M15 — ProducerProjectGrant identity",
+   "kind": "identity_minting",
+   "text": "`grant_id: UUID`",
+   "question": "Who mints each ProducerProjectGrant identity, and is grant_id always a fresh backend-generated identity or may an administrator or another system supply it?",
+   "options": [
+    "The backend mints a fresh grant_id from the authenticated grant action.",
+    "The administrator-facing action supplies grant_id.",
+    "The identity is derived from service_principal_id and project_id."
+   ],
+   "default_guess": "The backend mints a fresh grant_id for every successful producer-grant action, including re-granting after revocation.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M15 — ProducerProjectGrant lifecycle",
+   "kind": "initial_state_invariant",
+   "text": "`active → revoked` (Meaning).",
+   "question": "Must every newly created producer grant start as active with revoked_at and revoked_by absent, and must revocation set both fields while changing status to revoked?",
+   "options": [
+    "Creation requires active with both revocation fields absent; revocation requires revoked with both fields present.",
+    "Status and revocation fields are independently nullable facts.",
+    "A producer grant may be created directly in revoked status."
+   ],
+   "default_guess": "Creation produces active with null revocation fields; revocation atomically makes it revoked and records both revocation facts.",
+   "witness": {
+    "initial": "No producer grant exists for service principal S and project P.",
+    "events": [
+     "Administrator grants S access to publish for P.",
+     "An import authorization check loads the new grant."
+    ],
+    "outcomes": [
+     "The grant is active and both revocation fields are absent.",
+     "The grant may initially be revoked or have revocation fields inconsistent with its status."
+    ],
+    "observer": "The producer import authorization check and the administrator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M15 — ProducerProjectGrant revocation action",
+   "kind": "action_target",
+   "text": "A revoked grant is terminal and no operation reactivates it; granting the pair again creates a new grant record.",
+   "question": "With several historical grants for a pair, does the revocation product action target grant_id, or service_principal_id plus project_id and the sole active grant?",
+   "options": [
+    "Revoke by grant_id.",
+    "Revoke by service_principal_id and project_id, selecting the active record.",
+    "Support both target forms with explicitly equivalent semantics."
+   ],
+   "default_guess": "Revoke by service_principal_id and project_id and change the sole active grant.",
+   "witness": {
+    "initial": "Principal S and project P have revoked grants G1 and G2 and active grant G3.",
+    "events": [
+     "Administrator requests revocation for S on P using the target accepted by the product action."
+    ],
+    "outcomes": [
+     "The pair resolves to G3, which becomes revoked.",
+     "The action requires a particular grant_id; an old id does not revoke G3."
+    ],
+    "observer": "Principal S, whose subsequent import is either authorized or refused, and the administrator."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "Model M15 — ProducerProjectGrant retention",
+   "kind": "terminal_retention",
+   "text": "revoked grants of the pair stay as history.",
+   "question": "Does “stay as history” prohibit every deletion or purge of revoked producer grants, or may a later retention lifecycle remove them?",
+   "options": [
+    "Revoked producer grants are retained indefinitely and have no deletion lifecycle.",
+    "Revoked producer grants may be purged under a separate retention lifecycle.",
+    "Only the latest revoked grant must be retained."
+   ],
+   "default_guess": "Every revoked producer grant is retained indefinitely unless a later state explicitly introduces a retention lifecycle.",
+   "unit": "?"
+  },
+  {
+   "subject": "Model M15 — ProducerProjectGrant fields",
+   "kind": "standard_violation",
+   "text": "- **Fields:** `grant_id: UUID`, `service_principal_id: UUID`,\n  `project_id: UUID`, `status: GrantStatus (active | revoked)`,\n  `created_at`, `created_by`, `revoked_at | None`, `revoked_by | None`.",
+   "rule": "- Указывай все поля с типами",
+   "section": "5",
+   "question": "Give created_at and created_by explicit types and give revoked_at and revoked_by complete nullable types.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Model M04 — ProjectViewerGrant identity\",\"kind\":\"identity_minting\",\"text\":\"`grant_id: UUID`\",\"question\":\"Who mints each ProjectViewerGrant identity, and is `grant_id` always a fresh backend-generated identity or may an administrator or another system supply it?\",\"options\":[\"The backend mints a fresh grant_id from the authenticated grant action.\",\"The administrator-facing action supplies grant_id.\",\"An upstream system supplies or derives grant_id from viewer_id and project_id.\"],\"default_guess\":\"The backend mints a fresh grant_id for every successful grant action, including re-granting a revoked pair.\"},{\"subject\":\"Model M04 — ProjectViewerGrant lifecycle\",\"kind\":\"initial_state_invariant\",\"text\":\"`active → revoked` (Meaning).\",\"question\":\"Must every newly created grant start as active with revoked_at and revoked_by absent, and must revocation set both fields while changing status to revoked?\",\"options\":[\"Creation requires active with both revocation fields absent; revocation requires revoked with both fields present.\",\"Status and revocation fields are independently nullable facts.\",\"A grant may be created directly in revoked status.\"],\"default_guess\":\"Creation produces active with null revocation fields; revocation atomically makes it revoked and records both revocation facts.\",\"witness\":{\"initial\":\"No grant exists for viewer V and project P.\",\"events\":[\"Administrator grants V access to P.\",\"A reader loads the newly persisted ProjectViewerGrant.\"],\"outcomes\":[\"The record is active and both revoked_at and revoked_by are absent.\",\"The record may be revoked initially or may contain one or both revocation fields despite being active.\"],\"observer\":\"The viewer authorization check and the administrator audit view.\"}},{\"subject\":\"Model M04 — ProjectViewerGrant revocation action\",\"kind\":\"action_target\",\"text\":\"Revoking one grant affects only that project\",\"question\":\"Now that a pair can have several historical records, does the revocation product action target a grant_id, or does it target viewer_id plus project_id and resolve the sole active grant?\",\"options\":[\"Revoke by grant_id.\",\"Revoke by viewer_id and project_id, selecting the active record.\",\"Support both target forms with explicitly equivalent semantics.\"],\"default_guess\":\"Revoke by viewer_id and project_id and change the sole active record.\",\"witness\":{\"initial\":\"Viewer V and project P have revoked grants G1 and G2 and active grant G3.\",\"events\":[\"Administrator requests revocation using the pair V and P or an identifier exposed by the product action.\"],\"outcomes\":[\"The action resolves the pair and revokes G3.\",\"The action requires a grant_id; supplying an old id leaves G3 active or supplying G3 revokes it.\"],\"observer\":\"Viewer V, who either retains or loses project access, and the administrator.\"}},{\"subject\":\"Model M04 — ProjectViewerGrant retention\",\"kind\":\"terminal_retention\",\"text\":\"revoked grants of the pair stay as history.\",\"question\":\"Does “stay as history” prohibit every deletion or purge of revoked grants, or does it only require ordinary operations to preserve them while allowing a later retention lifecycle?\",\"options\":[\"Revoked grants are retained indefinitely and have no deletion lifecycle.\",\"Revoked grants may be purged under a separate retention lifecycle.\",\"Only the latest revoked grant must be retained.\"],\"default_guess\":\"Every revoked grant is retained indefinitely unless a later state explicitly introduces a retention lifecycle.\"},{\"subject\":\"Model M04 — ProjectViewerGrant fields\",\"kind\":\"standard_violation\",\"text\":\"- **Fields:** `grant_id: UUID`, `viewer_id: UUID`, `project_id: UUID`,\\n  `status: GrantStatus (active | revoked)`, `created_at`, `created_by`,\\n  `revoked_at | None`, `revoked_by | None`.\",\"rule\":\"- Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Give created_at and created_by explicit types and give revoked_at and revoked_by complete nullable types.\"},{\"subject\":\"Model M07 — StaffProjectAssignment identity\",\"kind\":\"identity_minting\",\"text\":\"`assignment_id: UUID`\",\"question\":\"Who mints each StaffProjectAssignment identity, and is assignment_id always a fresh backend-generated identity or may an administrator or another system supply it?\",\"options\":[\"The backend mints a fresh assignment_id from the authenticated assignment action.\",\"The administrator-facing action supplies assignment_id.\",\"The identity is derived from staff_id and project_id.\"],\"default_guess\":\"The backend mints a fresh assignment_id for every successful assignment action, including reassignment after revocation.\"},{\"subject\":\"Model M07 — StaffProjectAssignment lifecycle\",\"kind\":\"initial_state_invariant\",\"text\":\"`active → revoked` (Meaning).\",\"question\":\"Must every newly created assignment start as active with revoked_at and revoked_by absent, and must revocation set both fields while changing status to revoked?\",\"options\":[\"Creation requires active with both revocation fields absent; revocation requires revoked with both fields present.\",\"Status and revocation fields are independently nullable facts.\",\"An assignment may be created directly in revoked status.\"],\"default_guess\":\"Creation produces active with null revocation fields; revocation atomically makes it revoked and records both revocation facts.\",\"witness\":{\"initial\":\"No assignment exists for staff account S and project P.\",\"events\":[\"Administrator assigns S to P.\",\"A project authorization check loads the new assignment.\"],\"outcomes\":[\"The assignment is active and both revocation fields are absent.\",\"The assignment may initially be revoked or have revocation fields inconsistent with its status.\"],\"observer\":\"Staff account S and the authorization service.\"}},{\"subject\":\"Model M07 — StaffProjectAssignment revocation action\",\"kind\":\"action_target\",\"text\":\"A revoked assignment is terminal and no operation reactivates it; assigning the pair again creates a new assignment record.\",\"question\":\"With several historical assignments for a pair, does the revocation product action target assignment_id, or staff_id plus project_id and the sole active assignment?\",\"options\":[\"Revoke by assignment_id.\",\"Revoke by staff_id and project_id, selecting the active record.\",\"Support both target forms with explicitly equivalent semantics.\"],\"default_guess\":\"Revoke by staff_id and project_id and change the sole active assignment.\",\"witness\":{\"initial\":\"Staff S and project P have revoked assignments A1 and A2 and active assignment A3.\",\"events\":[\"Administrator requests revocation for S on P using the target accepted by the product action.\"],\"outcomes\":[\"The pair resolves to A3, which becomes revoked.\",\"The action requires a particular assignment_id; an old id does not revoke A3.\"],\"observer\":\"Staff S, the administrator, and the next project-scoped authorization check.\"}},{\"subject\":\"Model M07 — StaffProjectAssignment retention\",\"kind\":\"terminal_retention\",\"text\":\"revoked assignments of the pair stay as history.\",\"question\":\"Does “stay as history” prohibit every deletion or purge of revoked assignments, or may a later retention lifecycle remove them?\",\"options\":[\"Revoked assignments are retained indefinitely and have no deletion lifecycle.\",\"Revoked assignments may be purged under a separate retention lifecycle.\",\"Only the latest revoked assignment must be retained.\"],\"default_guess\":\"Every revoked assignment is retained indefinitely unless a later state explicitly introduces a retention lifecycle.\"},{\"subject\":\"Model M07 — StaffProjectAssignment fields\",\"kind\":\"standard_violation\",\"text\":\"- **Fields:** `assignment_id: UUID`, `staff_id: UUID`, `project_id: UUID`,\\n  `status: GrantStatus (active | revoked)`, `created_at`,\\n  `created_by: UUID (administrator)`, `revoked_at: datetime | None`,\\n  `revoked_by: UUID | None`.\",\"rule\":\"- Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Give created_at an explicit type.\"},{\"subject\":\"Model M15 — ProducerProjectGrant identity\",\"kind\":\"identity_minting\",\"text\":\"`grant_id: UUID`\",\"question\":\"Who mints each ProducerProjectGrant identity, and is grant_id always a fresh backend-generated identity or may an administrator or another system supply it?\",\"options\":[\"The backend mints a fresh grant_id from the authenticated grant action.\",\"The administrator-facing action supplies grant_id.\",\"The identity is derived from service_principal_id and project_id.\"],\"default_guess\":\"The backend mints a fresh grant_id for every successful producer-grant action, including re-granting after revocation.\"},{\"subject\":\"Model M15 — ProducerProjectGrant lifecycle\",\"kind\":\"initial_state_invariant\",\"text\":\"`active → revoked` (Meaning).\",\"question\":\"Must every newly created producer grant start as active with revoked_at and revoked_by absent, and must revocation set both fields while changing status to revoked?\",\"options\":[\"Creation requires active with both revocation fields absent; revocation requires revoked with both fields present.\",\"Status and revocation fields are independently nullable facts.\",\"A producer grant may be created directly in revoked status.\"],\"default_guess\":\"Creation produces active with null revocation fields; revocation atomically makes it revoked and records both revocation facts.\",\"witness\":{\"initial\":\"No producer grant exists for service principal S and project P.\",\"events\":[\"Administrator grants S access to publish for P.\",\"An import authorization check loads the new grant.\"],\"outcomes\":[\"The grant is active and both revocation fields are absent.\",\"The grant may initially be revoked or have revocation fields inconsistent with its status.\"],\"observer\":\"The producer import authorization check and the administrator.\"}},{\"subject\":\"Model M15 — ProducerProjectGrant revocation action\",\"kind\":\"action_target\",\"text\":\"A revoked grant is terminal and no operation reactivates it; granting the pair again creates a new grant record.\",\"question\":\"With several historical grants for a pair, does the revocation product action target grant_id, or service_principal_id plus project_id and the sole active grant?\",\"options\":[\"Revoke by grant_id.\",\"Revoke by service_principal_id and project_id, selecting the active record.\",\"Support both target forms with explicitly equivalent semantics.\"],\"default_guess\":\"Revoke by service_principal_id and project_id and change the sole active grant.\",\"witness\":{\"initial\":\"Principal S and project P have revoked grants G1 and G2 and active grant G3.\",\"events\":[\"Administrator requests revocation for S on P using the target accepted by the product action.\"],\"outcomes\":[\"The pair resolves to G3, which becomes revoked.\",\"The action requires a particular grant_id; an old id does not revoke G3.\"],\"observer\":\"Principal S, whose subsequent import is either authorized or refused, and the administrator.\"}},{\"subject\":\"Model M15 — ProducerProjectGrant retention\",\"kind\":\"terminal_retention\",\"text\":\"revoked grants of the pair stay as history.\",\"question\":\"Does “stay as history” prohibit every deletion or purge of revoked producer grants, or may a later retention lifecycle remove them?\",\"options\":[\"Revoked producer grants are retained indefinitely and have no deletion lifecycle.\",\"Revoked producer grants may be purged under a separate retention lifecycle.\",\"Only the latest revoked grant must be retained.\"],\"default_guess\":\"Every revoked producer grant is retained indefinitely unless a later state explicitly introduces a retention lifecycle.\"},{\"subject\":\"Model M15 — ProducerProjectGrant fields\",\"kind\":\"standard_violation\",\"text\":\"- **Fields:** `grant_id: UUID`, `service_principal_id: UUID`,\\n  `project_id: UUID`, `status: GrantStatus (active | revoked)`,\\n  `created_at`, `created_by`, `revoked_at | None`, `revoked_by | None`.\",\"rule\":\"- Указывай все поля с типами\",\"section\":\"5\",\"question\":\"Give created_at and created_by explicit types and give revoked_at and revoked_by complete nullable types.\"}]}",
+ "set_aside": []
+}
