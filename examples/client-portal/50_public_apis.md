@@ -736,7 +736,8 @@ None: the tables `config.persistence.staff_account_table_name`,
 `config.persistence.staff_session_table_name` and
 `config.persistence.staff_assignment_table_name` exist, keyed by `staff_id`,
 `session_id` and `assignment_id`; the account email is unique and
-(`staff_id`, `project_id`) of an assignment is unique.
+(`staff_id`, `project_id`) is unique among active assignments only, so the
+revoked ones of a pair stay (A3 INV-009).
 
 ### Observable effect
 
@@ -775,8 +776,9 @@ None: the tables `config.persistence.viewer_table_name`,
 `config.persistence.viewer_credential_table_name`,
 `config.persistence.viewer_session_table_name` and
 `config.persistence.viewer_grant_table_name` exist, keyed by `viewer_id`,
-`credential_id`, `session_id` and `grant_id`; (`viewer_id`, `project_id`) of a
-grant is unique.
+`credential_id`, `session_id` and `grant_id`; (`viewer_id`, `project_id`) is
+unique among active grants only, so the revoked ones of a pair stay (A3
+INV-009).
 
 ### Observable effect
 
@@ -815,8 +817,9 @@ None: the tables `config.persistence.service_principal_table_name`,
 `config.persistence.service_credential_table_name` and
 `config.persistence.producer_grant_table_name` exist, keyed by
 `service_principal_id`, `credential_id` and `grant_id`; (`service_principal_id`,
-`project_id`) of a grant and (`service_principal_id`, `key_version`) of a
-credential are unique.
+`project_id`) is unique among active grants only, so the revoked ones of a
+pair stay (A3 INV-009), and (`service_principal_id`, `key_version`) of a
+credential is unique.
 
 ### Observable effect
 

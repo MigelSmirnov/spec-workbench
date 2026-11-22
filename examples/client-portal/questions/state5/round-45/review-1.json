@@ -1,0 +1,107 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "Upgrade of existing access tables from full-pair uniqueness",
+   "kind": "later_layer_decision",
+   "text": "Creates the tables when absent; never drops, alters, commits, rolls back or closes.",
+   "question": "How will an existing deployment whose access tables still have the former full-pair UNIQUE constraints be converted to active-only uniqueness without losing revoked history?",
+   "decision_owner": "deploy",
+   "options": [
+    "Rebuild the three affected tables in a deployment migration, preserve every row, and install partial unique indexes for active records",
+    "Create replacement tables with the new constraints, copy and verify every row, then atomically switch them into service"
+   ],
+   "consequences": [
+    "An in-place migration can preserve identifiers and history with a shorter operational path, but requires a transactional SQLite table rebuild and deployment downtime or locking.",
+    "Replacement tables permit explicit verification before cutover, but require more storage, a coordinated switch, and cleanup of the former tables."
+   ],
+   "requirement": "INV-009: at most one active record per (staff_id, project_id) assignment, per (viewer_id, project_id) grant and per (service_principal_id, project_id) grant; revoked records of the pair stay, and a new grant after revocation is a new record",
+   "default_guess": "Use one transactional deployment migration that rebuilds all three affected tables, preserves every record and identifier, and installs active-only partial unique indexes.",
+   "witness": {
+    "initial": "A deployed database was created under the former schema and contains a revoked access record for a pair.",
+    "events": [
+     "The new release is deployed without recreating the database.",
+     "An administrator attempts to give the pair access again."
+    ],
+    "outcomes": [
+     "A deployment migration removes the obsolete full-pair constraint, so the new active record is created and the revoked history remains.",
+     "No migration runs, so the obsolete constraint rejects the insert and the administrator receives a persistence failure."
+    ],
+    "observer": "The administrator and deployment operator"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"public_op:staff_identity.assign_staff_project\",\"subject\":\"StaffProjectAssignment uniqueness\",\"kind\":\"contradiction\",\"text\":\"(`staff_id`, `project_id`) of an assignment is unique.\",\"question\":\"Must `create_staff_access_schema` instead guarantee uniqueness only for active assignments, so `assign_staff_project` can create a new record after revocation while still refusing a second active record?\",\"options\":[\"Replace full-pair uniqueness with uniqueness limited to active assignments\",\"Keep full-pair uniqueness, which makes the promised post-revocation assignment impossible\"],\"default_guess\":\"Replace the full-pair constraint with a partial unique constraint for active assignments.\",\"witness\":{\"initial\":\"A staff/project pair has one revoked StaffProjectAssignment and no active assignment.\",\"events\":[\"An administrator calls assign_staff_project for that pair after Registry validation succeeds.\"],\"outcomes\":[\"The changed operation obligation creates and returns a new active assignment while preserving the revoked record.\",\"The schema obligation rejects the insert because the staff/project pair is already present, producing PersistenceError and no new assignment.\"],\"observer\":\"The administrator calling the API\"}},{\"unit\":\"public_op:viewer_access.grant_viewer_project\",\"subject\":\"ProjectViewerGrant uniqueness\",\"kind\":\"contradiction\",\"text\":\"(`viewer_id`, `project_id`) of a grant is unique.\",\"question\":\"Must `create_client_access_schema` instead guarantee uniqueness only for active viewer grants, so `grant_viewer_project` can create a new record after revocation while still refusing a second active record?\",\"options\":[\"Replace full-pair uniqueness with uniqueness limited to active grants\",\"Keep full-pair uniqueness, which makes the promised post-revocation grant impossible\"],\"default_guess\":\"Replace the full-pair constraint with a partial unique constraint for active viewer grants.\",\"witness\":{\"initial\":\"A viewer/project pair has one revoked ProjectViewerGrant and no active grant.\",\"events\":[\"An administrator calls grant_viewer_project for that pair after Registry validation succeeds.\"],\"outcomes\":[\"The changed operation obligation creates and returns a new active grant while preserving the revoked record.\",\"The schema obligation rejects the insert because the viewer/project pair is already present, producing PersistenceError and no new grant.\"],\"observer\":\"The administrator calling the API\"}},{\"unit\":\"public_op:service_identity.grant_producer_project\",\"subject\":\"ProducerProjectGrant uniqueness\",\"kind\":\"contradiction\",\"text\":\"(`service_principal_id`, `project_id`) of a grant and (`service_principal_id`, `key_version`) of a credential are unique.\",\"question\":\"Must `create_producer_identity_schema` retain credential key-version uniqueness but limit producer-grant pair uniqueness to active grants, so `grant_producer_project` can create a new record after revocation?\",\"options\":[\"Keep credential key-version uniqueness and replace full grant-pair uniqueness with uniqueness limited to active grants\",\"Keep full grant-pair uniqueness, which makes the promised post-revocation grant impossible\"],\"default_guess\":\"Keep credential key-version uniqueness and use a partial unique constraint for active producer grants.\",\"witness\":{\"initial\":\"A service-principal/project pair has one revoked ProducerProjectGrant and no active grant.\",\"events\":[\"An administrator calls grant_producer_project for that pair after Registry validation succeeds.\"],\"outcomes\":[\"The changed operation obligation creates and returns a new active grant while preserving the revoked record.\",\"The schema obligation rejects the insert because the principal/project pair is already present, producing PersistenceError and no new grant.\"],\"observer\":\"The administrator calling the API\"}},{\"unit\":\"context\",\"subject\":\"Upgrade of existing access tables from full-pair uniqueness\",\"kind\":\"later_layer_decision\",\"text\":\"Creates the tables when absent; never drops, alters, commits, rolls back or closes.\",\"question\":\"How will an existing deployment whose access tables still have the former full-pair UNIQUE constraints be converted to active-only uniqueness without losing revoked history?\",\"decision_owner\":\"deploy\",\"options\":[\"Rebuild the three affected tables in a deployment migration, preserve every row, and install partial unique indexes for active records\",\"Create replacement tables with the new constraints, copy and verify every row, then atomically switch them into service\"],\"consequences\":[\"An in-place migration can preserve identifiers and history with a shorter operational path, but requires a transactional SQLite table rebuild and deployment downtime or locking.\",\"Replacement tables permit explicit verification before cutover, but require more storage, a coordinated switch, and cleanup of the former tables.\"],\"requirement\":\"INV-009: at most one active record per (staff_id, project_id) assignment, per (viewer_id, project_id) grant and per (service_principal_id, project_id) grant; revoked records of the pair stay, and a new grant after revocation is a new record\",\"default_guess\":\"Use one transactional deployment migration that rebuilds all three affected tables, preserves every record and identifier, and installs active-only partial unique indexes.\",\"witness\":{\"initial\":\"A deployed database was created under the former schema and contains a revoked access record for a pair.\",\"events\":[\"The new release is deployed without recreating the database.\",\"An administrator attempts to give the pair access again.\"],\"outcomes\":[\"A deployment migration removes the obsolete full-pair constraint, so the new active record is created and the revoked history remains.\",\"No migration runs, so the obsolete constraint rejects the insert and the administrator receives a persistence failure.\"],\"observer\":\"The administrator and deployment operator\"}}]}",
+ "set_aside": [
+  {
+   "unit": "public_op:staff_identity.assign_staff_project",
+   "subject": "StaffProjectAssignment uniqueness",
+   "kind": "contradiction",
+   "text": "(`staff_id`, `project_id`) of an assignment is unique.",
+   "question": "Must `create_staff_access_schema` instead guarantee uniqueness only for active assignments, so `assign_staff_project` can create a new record after revocation while still refusing a second active record?",
+   "options": [
+    "Replace full-pair uniqueness with uniqueness limited to active assignments",
+    "Keep full-pair uniqueness, which makes the promised post-revocation assignment impossible"
+   ],
+   "default_guess": "Replace the full-pair constraint with a partial unique constraint for active assignments.",
+   "witness": {
+    "initial": "A staff/project pair has one revoked StaffProjectAssignment and no active assignment.",
+    "events": [
+     "An administrator calls assign_staff_project for that pair after Registry validation succeeds."
+    ],
+    "outcomes": [
+     "The changed operation obligation creates and returns a new active assignment while preserving the revoked record.",
+     "The schema obligation rejects the insert because the staff/project pair is already present, producing PersistenceError and no new assignment."
+    ],
+    "observer": "The administrator calling the API"
+   }
+  },
+  {
+   "unit": "public_op:viewer_access.grant_viewer_project",
+   "subject": "ProjectViewerGrant uniqueness",
+   "kind": "contradiction",
+   "text": "(`viewer_id`, `project_id`) of a grant is unique.",
+   "question": "Must `create_client_access_schema` instead guarantee uniqueness only for active viewer grants, so `grant_viewer_project` can create a new record after revocation while still refusing a second active record?",
+   "options": [
+    "Replace full-pair uniqueness with uniqueness limited to active grants",
+    "Keep full-pair uniqueness, which makes the promised post-revocation grant impossible"
+   ],
+   "default_guess": "Replace the full-pair constraint with a partial unique constraint for active viewer grants.",
+   "witness": {
+    "initial": "A viewer/project pair has one revoked ProjectViewerGrant and no active grant.",
+    "events": [
+     "An administrator calls grant_viewer_project for that pair after Registry validation succeeds."
+    ],
+    "outcomes": [
+     "The changed operation obligation creates and returns a new active grant while preserving the revoked record.",
+     "The schema obligation rejects the insert because the viewer/project pair is already present, producing PersistenceError and no new grant."
+    ],
+    "observer": "The administrator calling the API"
+   }
+  },
+  {
+   "unit": "public_op:service_identity.grant_producer_project",
+   "subject": "ProducerProjectGrant uniqueness",
+   "kind": "contradiction",
+   "text": "(`service_principal_id`, `project_id`) of a grant and (`service_principal_id`, `key_version`) of a credential are unique.",
+   "question": "Must `create_producer_identity_schema` retain credential key-version uniqueness but limit producer-grant pair uniqueness to active grants, so `grant_producer_project` can create a new record after revocation?",
+   "options": [
+    "Keep credential key-version uniqueness and replace full grant-pair uniqueness with uniqueness limited to active grants",
+    "Keep full grant-pair uniqueness, which makes the promised post-revocation grant impossible"
+   ],
+   "default_guess": "Keep credential key-version uniqueness and use a partial unique constraint for active producer grants.",
+   "witness": {
+    "initial": "A service-principal/project pair has one revoked ProducerProjectGrant and no active grant.",
+    "events": [
+     "An administrator calls grant_producer_project for that pair after Registry validation succeeds."
+    ],
+    "outcomes": [
+     "The changed operation obligation creates and returns a new active grant while preserving the revoked record.",
+     "The schema obligation rejects the insert because the principal/project pair is already present, producing PersistenceError and no new grant."
+    ],
+    "observer": "The administrator calling the API"
+   }
+  }
+ ]
+}
