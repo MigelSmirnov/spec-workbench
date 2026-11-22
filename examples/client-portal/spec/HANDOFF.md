@@ -8,6 +8,36 @@ merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
 results are in `80_assembly.md`; the semantic diff, for the owner, is
 `SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
+## Security pass on the test stand (2026-11-22) — read this first
+
+The owner's ZAP and authorization pass on the Portal test stand
+(code-factory `tools/portal_zap`, reports in `zap-reports/`) found that a
+viewer access code without the envelope dot made `enter_viewer_access` let
+the `ValueError` of `parse_verification_secret` escape; uvicorn reset the
+connection and the proxy answered 502, also to the next request on it.
+`resolve_viewer_session` had the same path for a malformed cookie. A17 already
+required concealment; the viewer notes did not say it (`5175229f`).
+
+On the way, after Workbench main was merged (`6dd6cf8e`): State 7 rounds
+37-40 (all 18 units reopened by Factory prompt changes); the imports closure
+reconciled with the code of accepted spec `43e2c70c` (`5b2ec7bd`, 98 findings
+to 0); `service_identity` regained `PortalTransaction` and its transaction
+contracts, which the reconciliation had dropped from its prompt (`e8ce6e2b`,
+`eba30648`); witness verdicts and Stage 8.1 hashes (`7d6cecf9`). Assembly
+15/15; admission READY_TO_EXPORT 23 checks, 18 PASS, 0 BLOCK.
+`global_spec.json` sha256 `61c75674…`. Exported into the Factory branch
+`spec/client-portal-malformed-viewer-code` (worktree
+`code_factory_cp_export_malformed`, from origin/main `8ae2f26f`):
+verify_workbench_handoff valid, Spec Inspector preflight PASS 0/0. Not
+pushed; no Route B.
+
+Other findings of the pass wait for the owner: Q28 (entry rate limit shared
+behind the proxy, A25), Q29 (re-grant after revoke answers 500), Q30
+(409/422 instead of 404 for a foreign object), Q31 (Factory router emitter
+ignores `default_status`). Zap Medium "Proxy Disclosure" and the missing
+COOP/COEP/CORP/Permissions-Policy headers belong to the proxy and the static
+front end (route `frontend_release`), not to this case.
+
 ## Lost behaviours from the Route B verify of 071062af (2026-11-10, later) — read this first
 
 #210 merged (spec `071062af`); Route B passed generation, linker and deploy;

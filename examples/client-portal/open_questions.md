@@ -456,3 +456,56 @@ together. To be designed, before real photos are first delivered to a client.
 2. May the same `intake_id` be published again after a removal? The Portal
    Deliverer keeps a publication mark for each delivered photo (case
    `portal-deliverer`), and it must not keep pointing at a removed photo.
+
+### Q28 — Viewer entry is rate limited for all clients at once
+
+Found 2026-11-22 by the security pass on the Portal test stand
+(code-factory `tools/portal_zap`, `authz_gaps.py`). A25 identifies a viewer
+entry attempt by the client address of the connection, never a forwarded
+header. The service runs behind the deployment proxy, so every client arrives
+with the proxy's address and shares one bucket: whoever sends
+`VIEWER_ENTRY_RATE_LIMIT_ATTEMPTS` wrong codes in a window locks every client
+out of entry for that window. The pass did not reach the limit (the malformed
+codes broke connections first, fixed in `5175229f`); this is read from A25 and
+`transport_guard`, not observed.
+
+1. (a) Keep A25 and limit viewer entry at the proxy by the real client
+   address (nginx `limit_req`); the service limit stays as a backstop.
+   No spec change. Recommended.
+2. (b) Revise A25: trust a forwarded client address only from a configured
+   proxy address. A spec change with a new setting.
+
+### Q29 — Access cannot be given again after it was revoked
+
+Found 2026-11-22 by the same pass. Re-assigning an operator to a project after
+the assignment was revoked answers 500: `assign_staff_project` inserts a new
+`StaffProjectAssignment`, and the table holds `UNIQUE (staff_id, project_id)`
+beside the revoked row (`PersistenceError`). The note refuses only a duplicate
+*active* assignment, and A3 makes `revoked` terminal, so the note and the
+persistence contract disagree. `grant_viewer_project` follows the same pattern;
+not yet checked against its table.
+
+1. (a) Allow it: uniqueness only among active rows, the revoked row stays as
+   history. Recommended.
+2. (b) Forbid it: answer 409 and require a new operator.
+
+### Q30 — A foreign object under the own project path tells that it exists
+
+Found 2026-11-22 by the same pass. An operator of project Alpha who names an
+expense or document of project Beta under Alpha's path gets 409
+(`ExpenseConflictError`), while an unknown id gets 404. A viewer naming
+another project's photo under its own project path gets 422. Both answer
+differently from "not found" and so confirm the object exists elsewhere.
+Exploiting it needs a UUID, so the risk is low. Proposed: an object that is not
+of the path's project is `ScopedNotFoundError`, as an unknown one.
+
+### Q31 — An unmapped exception resets the connection
+
+Found 2026-11-22 by the same pass. `70_router_context.json` declares
+`error_policy.default_status: 500` for any exception the mapping does not
+name, but the Factory router emitter (`tools/generate_router_draft.py`)
+registers handlers only for the mapped exceptions. An unmapped one escapes the
+ASGI app, uvicorn resets the connection and the proxy answers 502, also to the
+next request on the pooled connection. The design already says the right
+thing; this is a Factory emitter change (surface `factory`), not a case
+change. The malformed viewer code that showed it is fixed in `5175229f`.
