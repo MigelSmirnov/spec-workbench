@@ -979,8 +979,8 @@ and the stale check before every send.
 
 ### Knows
 
-`models` (effect classes), `data_provider`, `canonical_values`, `clock`,
-`store`, `installation`, `service_invoker` (request shape).
+`models`, `data_provider`, `canonical_values`, `clock`, `store`,
+`installation`, `service_invoker` (request shape).
 
 ### Must not own
 
@@ -1018,9 +1018,9 @@ The proof-time reach of disclosure classes (A07 rule 2).
 
 ### Knows
 
-`models` (effect classes), `data_provider`, `canonical_values`, `clock`,
-`store`, `functions` (contract versions), `bindings` (binding status and
-declared classes).
+`models`, `data_provider`, `canonical_values`, `clock`, `store`,
+`functions` (contract versions), `bindings` (binding status and declared
+classes).
 
 ### Must not own
 
