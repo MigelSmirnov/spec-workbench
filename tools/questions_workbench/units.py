@@ -68,7 +68,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import re
-from typing import Any
+from typing import Any, Callable
 
 DECISION_HEADING = re.compile(r"^##\s+Accepted decision\s+(A\d+)\b")
 DECISION_KEY = re.compile(r"A\d+")
@@ -245,6 +245,12 @@ def topic_need(topic: dict[str, Any], summary: dict[str, Any]) -> str | None:
         return CONTRADICTION
     if not judgement.get("verified"):
         return DISPOSITION if judgement.get("blocking", True) else None
+    if judgement.get("needs_disposition"):
+        return DISPOSITION
+    if judgement.get("requirement") and (kind == "later_state" or
+                                        (kind == "judged_before" and
+                                         (judgement.get("precedent") or {}).get("kind") == "later_state")):
+        return DISPOSITION  # carry the choice together with the accepted guarantee
     if kind in SETTLED_KINDS:
         return None
     return DISPOSITION  # consequential_gap (quoted, deferred or recorded), hypothesis
@@ -276,14 +282,20 @@ def _legacy_closed(reviewed: list[dict[str, Any]], key: str, digest: str,
 
 
 def unit_state(summaries: list[dict[str, Any]], key: str, digest: str,
-               evidence: dict[str, str] | None = None) -> dict[str, Any]:
+               evidence: dict[str, str] | None = None,
+               stands: Callable[[str], bool] | None = None) -> dict[str, Any]:
     """Whether one unit is closed on its text `digest`, and what keeps it open.
 
     - ``needs_round``: why a round must review it (never reviewed, changed
       since its latest review, its evidence changed, or an unverified
       contradiction), or None;
     - ``contradictions``: topic ids of its latest round that raise one against
-      it — closed only by a changed text and a round on it;
+      it — closed only by a changed text and a round on it. The text that
+      changed may be another unit's: a contradiction one of whose verified
+      quotes no longer stands in the current texts (`stands`), with a round of
+      the state asked after the one that raised it, is closed on every unit it
+      names — the rule of QUESTIONS.md, "it closes when the text changes and
+      the one round on that change no longer raises it";
     - ``awaiting``: topic ids of that round that need an author disposition;
     - ``carried``: what that round's dispositions carry to later layers.
     """
@@ -304,11 +316,22 @@ def unit_state(summaries: list[dict[str, Any]], key: str, digest: str,
     if evidence is not None and evidence_changed(last, key, evidence):
         state["needs_round"] = EVIDENCE_CHANGED
         return state
-    _close_on_topics(state, last, key, lambda topic: _topic_concerns(topic, last, key))
+    later = [s for s in asked(summaries[summaries.index(last) + 1:]) if s.get("closure") == CLOSURE_RULE]
+    _close_on_topics(state, last, key, lambda topic: _topic_concerns(topic, last, key),
+                     resolved=(lambda topic: _quote_gone(topic, stands)) if later and stands else None)
     return state
 
 
-def _close_on_topics(state: dict[str, Any], summary: dict[str, Any], key: str, concerns) -> None:
+def _quote_gone(topic: dict[str, Any], stands: Callable[[str], bool]) -> bool:
+    """Whether a verified contradiction lost one of its two passages: a quote
+    of it no longer stands in the current texts."""
+    judgement = topic.get("judgement") or {}
+    quotes = [q for q in judgement.get("quotes") or [] if isinstance(q, str) and q.strip()]
+    return bool(judgement.get("verified", True)) and bool(quotes) and not all(stands(q) for q in quotes)
+
+
+def _close_on_topics(state: dict[str, Any], summary: dict[str, Any], key: str, concerns,
+                     resolved=None) -> None:
     """Fill `state` from the topics of `summary` that `concerns` selects: the
     contradictions it holds, the topics awaiting a disposition for `key`, and
     what the dispositions carried; closed when nothing of it is left."""
@@ -318,6 +341,8 @@ def _close_on_topics(state: dict[str, Any], summary: dict[str, Any], key: str, c
             continue
         topic_id = str(topic.get("id") or f"#{index}")
         if need == CONTRADICTION:
+            if resolved is not None and resolved(topic):
+                continue
             verified = (topic.get("judgement") or {}).get("verified", True)
             state["contradictions" if verified else "unverified"].append(topic_id)
             continue
@@ -325,7 +350,8 @@ def _close_on_topics(state: dict[str, Any], summary: dict[str, Any], key: str, c
         if entry is None:
             state["awaiting"].append(topic_id)
         elif entry.get("disposition") == "carried":
-            state["carried"].append({"topic": topic_id, "to": entry.get("to"), "what": entry.get("what")})
+            state["carried"].append({"topic": topic_id, "to": entry.get("to"), "what": entry.get("what"),
+                                      **{k: entry[k] for k in ("keeps", "options", "consequences") if entry.get(k)}})
     if state["unverified"]:
         state["needs_round"] = UNVERIFIED
     state["closed"] = not (state["contradictions"] or state["unverified"] or state["awaiting"])
@@ -353,10 +379,12 @@ def no_unit_state(summaries: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def states(summaries: list[dict[str, Any]], current: dict[str, dict[str, str]],
-           evidence: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
+           evidence: dict[str, str] | None = None,
+           stands: Callable[[str], bool] | None = None) -> dict[str, dict[str, Any]]:
     """``unit_state`` of every unit, and ``NO_UNIT`` when the topics naming no
-    unit leave something open or carried."""
-    found = {key: unit_state(summaries, key, unit["digest"], evidence) for key, unit in current.items()}
+    unit leave something open or carried. `stands` tells whether a quoted
+    passage stands verbatim in the current texts (``unit_state``)."""
+    found = {key: unit_state(summaries, key, unit["digest"], evidence, stands) for key, unit in current.items()}
     layer = no_unit_state(summaries)
     if not layer["closed"] or layer["carried"]:
         found[NO_UNIT] = layer

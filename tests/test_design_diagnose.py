@@ -106,6 +106,8 @@ V5 = {"kind": "system_clock_backend", "schema_version": 5,
       "backend": {"emitter": "python_host_naive_utc_and_elapsed_clock_v1"},
       "wiring": {"module": "clock", "wall_clock_function": "utc_now", "elapsed_clock_function": "monotonic_seconds"},
       "time": {"policy": "rules.time_source_policy", "read": "per_call", "representation": "naive_utc_datetime"}}
+V6 = {**V5, "schema_version": 6, "backend": {"emitter": "python_host_utc_and_elapsed_clock_v1"},
+      "time": {"policy": "rules.time_source_policy", "read": "per_call", "representation": "aware_utc_datetime"}}
 
 
 def _policy(elapsed: list[str] | None) -> dict:
@@ -121,7 +123,7 @@ def _policy(elapsed: list[str] | None) -> dict:
 def _time(tmp_path, rules, imports) -> dict:
     spec = tmp_path / "accepted.json"
     data = _spec([TIME_NOTE, GUARD_NOTE], rules=rules, imports=imports)
-    data["module_functions"]["clock"] = ["utc_now"] + (["monotonic_seconds"] if rules["system_clock_backend"] is V5 else [])
+    data["module_functions"]["clock"] = ["utc_now"] + (["monotonic_seconds"] if rules["system_clock_backend"] in (V5, V6) else [])
     _write(spec, data)
     return design_diagnose.diagnose(spec, "spec", factory=tmp_path / "none")["time"]
 
@@ -149,6 +151,14 @@ def test_a_v5_clock_imported_by_the_guard_covers_both(tmp_path):
     time = _time(tmp_path, {"system_clock_backend": V5, "time_source_policy": _policy(["clock"])},
                  {"things": {"clock": ["utc_now"]}, "guard": {"clock": ["monotonic_seconds"]}})
     assert time["wall"]["outcome"] == "closed" and time["elapsed"]["outcome"] == "closed"
+    assert time["elapsed"]["declared"]["backend_operation"] == "clock.monotonic_seconds"
+
+
+def test_a_v6_clock_imported_by_the_guard_covers_both(tmp_path):
+    time = _time(tmp_path, {"system_clock_backend": V6, "time_source_policy": _policy(["clock"])},
+                 {"things": {"clock": ["utc_now"]}, "guard": {"clock": ["monotonic_seconds"]}})
+    assert time["wall"]["outcome"] == "closed" and time["elapsed"]["outcome"] == "closed"
+    assert time["wall"]["declared"]["backend"] == {"schema_version": 6, "module": "clock", "operation": "utc_now"}
     assert time["elapsed"]["declared"]["backend_operation"] == "clock.monotonic_seconds"
 
 

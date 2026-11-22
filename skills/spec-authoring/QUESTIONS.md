@@ -38,7 +38,7 @@ units name (a decision, a model, an operation, an INV-* or R-* id) or that name
 what they define — the earlier texts whole only when that cannot be decided,
 and the round says why (`questions_workbench/layer_prompt.py`). It gives it
 (for State 7: one generated module's
-prompt, below; for State 6: still the texts of States 0..6) to several
+prompt, below; State 6 has no round of its own) to several
 independent reviews (three by default) with the
 state's `question_scope` from `authoring_sequence.json`, then
 groups their open points into topics, and has every topic raised by two or more
@@ -618,6 +618,41 @@ is not prose: a case that declares a builder writes each field's source in
 unsourced field before any round. A note then names the builder, not the
 fields, so a round still has nothing to ask about them.
 
+### What the reviews read is kept, and measured
+
+A Codex review reports no usage, so until 2026-11-13 a document round kept
+nothing of what its reviews were given: the judge's `inline_characters` were
+on record, the reviews' were not. Every round of States 0–5 now keeps
+`reviews_read` in its summary (`layer_prompt.record`): the size of the
+instruction and of the text, the units under review and their neighbours,
+every earlier passage received with its size and its `depth` — 0 when a unit
+under review names it or it names what the unit defines, n when the closure
+reached it in n steps — and, when the earlier texts were read whole, why.
+
+Measured on the kept rounds of client-portal and registry (57 rounds of States
+3–5 under the single-round rule, texts rebuilt as each round read them): the
+closure is most of what a review of States 3–5 reads — a median of 170–204k
+characters, of which 47–92k are direct links — while of 258 verified topics
+225 stand on the state's own text or a direct link, 13 on a passage one
+closure step away (8 of them blocking), none on a passage further away, and
+20 on a passage the selection never gave: a section no identifier names
+("Facts several modules touch, and their one owner", "Actors and trust
+boundaries", a document's preamble), found by the judge in its files. A verdict
+shows what the judge quoted, not what a review had to read to see the
+question, so this decides nothing by itself.
+
+`ask --probe <dir> --state <0..5> [--unit <u>] [--reading selection|route]`
+measures it: a round over the named units (default: all; never `context`),
+each whole on its current text, kept outside the case, with no precedent, no
+earlier hypothesis and the input size of every request. `--reading route`
+gives the reviews what the judge has (`layer_prompt.render_route`): inline the
+units under review and their direct links, the earlier states whole as files
+to search, and an index of every earlier passage not inline — what it defines
+and which given passage names it. Nothing is cut and nothing falls back to the
+whole texts. Two probes of the same units, one of each reading, compare what
+the two find; a round of a case reads the selection until the owner decides
+otherwise.
+
 To measure a change of the round's own instruction on a case whose units are
 closed, `ask --probe <dir> [--module <m>]` asks State 7 over every generated
 module (or the named ones) on its current prompt, offers no precedent, logs the
@@ -637,7 +672,11 @@ at assembly. Each layer now does its share and hands the rest on explicitly.
   and checked mechanically, blocking wherever its passages are. So does a
   verified `standard_violation` (above). It takes no
   disposition. It closes when the text changes and the one round on that
-  change no longer raises it. A contradiction whose quotes failed is not
+  change no longer raises it — on every unit it names: a unit whose own text
+  did not change closes once one of the contradiction's quotes no longer
+  stands in the texts and a round of the state followed (registry State 4,
+  2026-11-16: round 43 named one contradiction on four units, its passages
+  stood in two). A contradiction whose quotes failed is not
   downgraded: it blocks too, and may be asked again on the same text.
 - **Every other judged topic** — a consequential gap (quoted, deferred or
   recorded at State 7), a hypothesis, a judgement whose evidence failed — gets
@@ -668,6 +707,74 @@ at assembly. Each layer now does its share and hands the rest on explicitly.
 A disposition may name one unit (`--unit`) or none, when it covers every unit
 the topic concerns. `fixed` and `accepted` close the topic; `carried` closes it
 here and opens it where it was carried.
+
+### Instructions at the point of disposition
+
+`ask`, `rejudge` and `status` return `author_guidance` when topics still need a
+disposition or a blocking contradiction/standard violation needs repair. The
+same instructions reach a new session through `authoring next` for a phase
+with question rounds, in JSON and in human-readable output. A refused repeat
+round on unchanged text also includes them.
+
+Before editing, identify the owning state from the phase purpose,
+`question_scope` and layer obligations, then choose among the existing
+dispositions. A `fixed` must not import later-layer choices just to remove a
+question. In a `carried` topic, `--what` preserves the choice, options,
+consequences and guarantee every option must keep, not only its title. If the
+guarantee itself belongs here and is undecided, decide it here first. An
+`accepted` reason explains permitted freedom; an absent requirement quote does
+not settle a missing product choice for the owner.
+
+These are author instructions, not a semantic validator of a fix.
+Contradictions and `standard_violation` still take no disposition, and
+deterministic transition findings still require their own checks to close.
+
+### Decision owner before consequence (States 2 and 5)
+
+These phases declare `gap_needs_requirement` in `authoring_sequence.json`.
+Their reviewers still notice where the generator must choose, but distinguish
+the current stage's missing decision from a later layer's choice. The latter
+is reported with its owner, options, consequences and any already accepted
+requirement every implementation must preserve; it does not demand the
+implementation here. Words such as "order", "lock" or a technical name do
+not determine ownership. Refusal or authorization precedence may express a
+required guarantee of State 2. State 5 judges obligations between modules;
+exact contract forms and hidden procedures are left to later layers.
+
+The judge first identifies the owner, then asks whether the outcomes must be
+distinguished. A current-stage `consequential_gap` needs a verbatim
+`requirement` and a `divergence` explaining which outcome violates it. An
+observer alone is insufficient. A gap without that requirement stays an
+unresolved `hypothesis` requiring an author disposition; it is neither proof
+of freedom nor automatically deferred to State 6/7. An absent product choice
+is a hypothesis with `owner_question`, options and consequences for the
+owner, shown in round and status output. An `indifferent` verdict that itself
+names an owner question is also kept unresolved. The instructions require
+incompatible obligations for a contradiction: different detail alone does
+not establish one. Whether obligations actually conflict remains a semantic
+judgement; checking quotes does not prove it.
+
+`later_state` may name a later state through 8, `generation`, `factory_checks`
+or `deploy`. Under this policy it needs a disposition so the choice is handed
+on rather than silently dropped. A `carried` disposition automatically
+preserves a verified judge requirement in `keeps`, with its options and
+consequences. The author may add repeatable `--keeps` clauses from accepted
+text, including on older rounds. Every clause is checked verbatim (code marks
+and whitespace aside); the receiving round reads it with `--what`. It does
+not prove that the quotation is relevant or the proposed option safe.
+
+The policy is recorded as `judge_rules.decision_boundary`. Old observer-only
+verdicts are not offered as precedents under it; earlier closed units are not
+automatically reopened. A followed guarantee-bearing precedent preserves
+its guarantee and disposition obligation. State 7 retains its existing
+mechanical rules.
+
+Scripted tests verify routing, quote checks and preservation, not the semantic
+quality of a model. Before promoting the changed judge, compare old and new
+probes at fixed tool and case revisions, separately for State 2 and State 5.
+Read every softened verdict for missed required results, missing product
+decisions and real incompatibilities; include known contradictions and
+standard violations. Do not infer fewer future rounds from a replay.
 
 ## Closing a question
 

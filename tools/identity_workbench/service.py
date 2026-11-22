@@ -101,10 +101,30 @@ def _closure_models(project: Path) -> dict[str, dict[str, Any]]:
     return models
 
 
-def _introduced(contracts: dict[str, Any], models: dict[str, dict[str, Any]]) -> set[str]:
-    """Closure models a contract introduces: named in a signature, or a field type of one that is."""
+def _table_row_models(project: Path) -> list[str]:
+    """Row models of the data provider's tables: a ``record_tuple`` constant of
+    70_data_provider_closure.json types each of its rows by its ``row_model``."""
+    try:
+        payload = json.loads((project / "70_data_provider_closure.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    backend = payload.get("backend_ir") if isinstance(payload, dict) else None
+    constants = backend.get("constants") if isinstance(backend, dict) else None
+    if not isinstance(constants, dict):
+        return []
+    return [str(row["row_model"]) for row in constants.values()
+            if isinstance(row, dict) and row.get("value_type") == "record_tuple"
+            and isinstance(row.get("row_model"), str)]
+
+
+def _introduced(contracts: dict[str, Any], models: dict[str, dict[str, Any]],
+                row_models: list[str] = ()) -> set[str]:
+    """Closure models a contract introduces: named in a signature, the row model of
+    a data-provider table, or a field type or a variant (SPEC_STANDARD 5,
+    kind: discriminated_union) of one that is."""
     frontier = [name for signature in contracts.values() for name in TYPE_NAME.findall(str(signature))
                 if name in models]
+    frontier += [name for name in row_models if name in models]
     found: set[str] = set()
     while frontier:
         name = frontier.pop()
@@ -113,6 +133,9 @@ def _introduced(contracts: dict[str, Any], models: dict[str, dict[str, Any]]) ->
         found.add(name)
         for field_type in (models[name].get("fields") or {}).values():
             frontier += [n for n in TYPE_NAME.findall(str(field_type)) if n in models and n not in found]
+        variants = models[name].get("variants")
+        if isinstance(variants, list):
+            frontier += [str(n) for n in variants if str(n) in models and str(n) not in found]
     # an interface model is introduced by its own method contracts too
     found |= {key.split(".", 1)[0] for key in contracts if "." in key and key.split(".", 1)[0] in models}
     return found
@@ -125,8 +148,9 @@ def state6_closure(project: Path) -> dict[str, Any]:
     (60_model_closure_*.json) is the one typed field list, written with the
     State 6 contracts. At the State 6 handoff: every State 1 model a contract
     introduces has a closure record of the same identity, and every ``contract_only`` record is justified —
-    introduced by a contract (named in a signature, or carried by a field of a
-    model that is) and not a State 1 concept. A case with no closure file is not
+    introduced by a contract (named in a signature, the row model of a
+    data-provider table, or carried by a field of a model that is) and not a
+    State 1 concept. A case with no closure file is not
     checked, which is not a pass: identity, field carriers and the time source
     all read the closure.
     """
@@ -150,7 +174,7 @@ def state6_closure(project: Path) -> dict[str, Any]:
     contracts = contracts if isinstance(contracts, dict) else {}
     universe = {name: {} for name in state1}
     universe.update(_closure_models(project))
-    introduced = _introduced(contracts, universe)
+    introduced = _introduced(contracts, universe, _table_row_models(project))
     for name, record in sorted(state1.items()):
         if name not in introduced:
             continue  # a concept no contract introduces is not in the specification (identity: assembled models only)
@@ -170,7 +194,8 @@ def state6_closure(project: Path) -> dict[str, Any]:
         if name not in state1 and name not in introduced:
             findings.append(Finding("contract_only_model_unintroduced",
                                     f"contract_only model {name} is introduced by no contract (no signature and "
-                                    "no field of an introduced model names it): nothing justifies it.",
+                                    "no data-provider table rows, no field of an introduced model names it): "
+                                    "nothing justifies it.",
                                     name, record.location))
     items = [{**finding.to_dict(), "severity": "error"} for finding in findings]
     return {"schema_version": VERIFICATION_SCHEMA, "project_root": project.resolve().name,

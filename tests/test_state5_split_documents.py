@@ -55,3 +55,20 @@ def test_a_case_without_state5_documents_has_no_operations(tmp_path):
     assert design_stage5.public_api_documents(tmp_path) == []
     assert slice_builder._public_op_details(tmp_path, "store") == []
     assert design_closure_gaps.parse_state_impacts(tmp_path) == {}
+
+
+def test_a_read_impact_is_read_only_and_a_write_after_it_is_not(tmp_path):
+    impacts = {
+        "read_one": "Reads one Customer.",
+        "lists": "Lists the backup location; writes nothing.",
+        "pure": "Pure; touches no record.",
+        "denied": "Reads the closure and the ids production holds; writes nothing.",
+        "copies": "Reads the store; writes one file at the given path.",
+        "writes": "Writes one Customer.",
+        "legacy": "Read-only.",
+    }
+    _write(tmp_path, "50_public_apis.md", *[
+        OPERATION.format(module="m", name=name, impact=impact) for name, impact in impacts.items()])
+    read_only = {name: row["read_only"] for name, row in design_closure_gaps.parse_state_impacts(tmp_path).items()}
+    assert read_only == {"read_one": True, "lists": True, "pure": True, "denied": True,
+                         "copies": False, "writes": False, "legacy": True}

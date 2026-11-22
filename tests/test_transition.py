@@ -140,6 +140,42 @@ def test_a_contract_only_model_must_be_introduced_by_a_contract(tmp_path):
         ("contract_only_model_unintroduced", "Orphan"), ("state1_model_marked_contract_only", "Thing")}
 
 
+def test_a_union_introduces_its_variants(tmp_path):
+    case = _case(tmp_path)
+    _contracts(case, {"record_thing": ("things", "(name: str) -> RecordOutcome")})
+    _closure(case, {"Thing": {"identity": "entity", "fields": {"name": "str"}}})
+    _write(case / "60_model_closure_contract_types.json", {
+        "schema_version": "spec_workbench_model_closure.v1", "status": "closed", "identity_scope": "contract_only",
+        "models": {"RecordOutcome": {"kind": "discriminated_union", "discriminator": "outcome",
+                                     "variants": ["Recorded", "Refused"]},
+                   "Recorded": {"identity": "value", "fields": {"outcome": "Literal['recorded']",
+                                                                 "detail": "RecordDetail"}},
+                   "RecordDetail": {"identity": "value", "fields": {"name": "str"}},
+                   "Refused": {"identity": "value", "fields": {"outcome": "Literal['refused']"}}}})
+    assert transition.run_check(case, "model_closure")["findings"] == []
+
+
+def test_the_row_model_of_a_data_provider_table_is_introduced(tmp_path):
+    # portal-deliverer: SourceSignatureRule types the rows of SOURCE_SIGNATURES and
+    # no signature names it; the table, not a contract, is what carries it
+    case = _case(tmp_path)
+    _contracts(case, {"record_thing": ("things", "(name: str) -> Thing")})
+    _closure(case, {"Thing": {"identity": "entity", "fields": {"name": "str"}}})
+    _write(case / "60_model_closure_contract_types.json", {
+        "schema_version": "spec_workbench_model_closure.v1", "status": "closed", "identity_scope": "contract_only",
+        "models": {"SignatureRule": {"identity": "value", "fields": {"format": "str", "detail": "RuleDetail"}},
+                   "RuleDetail": {"identity": "value", "fields": {"offset": "int"}},
+                   "Orphan": {"identity": "value", "fields": {"x": "str"}}}})
+    _write(case / "70_data_provider_closure.json", {
+        "schema_version": "x", "status": "closed",
+        "backend_ir": {"kind": "data_provider_backend", "constants": {
+            "SIGNATURES": {"value_type": "record_tuple", "row_model": "SignatureRule", "key": ["format"],
+                           "value": [{"format": "JPEG", "detail": {"offset": 0}}]},
+            "LIMIT": {"value_type": "integer", "value": 3}}}})
+    findings = transition.run_check(case, "model_closure")["findings"]
+    assert {(f["code"], f["model"]) for f in findings} == {("contract_only_model_unintroduced", "Orphan")}
+
+
 def test_flow_reachability_without_readable_routes_is_not_checked(tmp_path):
     case = _flow_case(tmp_path, router=False)
     _write(case / "70_router_closure.json", {"schema_version": "x", "items": []})  # authored, not assemblable
@@ -1284,6 +1320,21 @@ def test_a_binding_brings_the_factory_modules_its_check_imports_but_not_the_prod
         ("verification/counts_once.py", False), ("verification/witness_support.py", True)]
 
 
+def test_a_pytest_node_id_in_the_command_names_its_file(tmp_path):
+    import yaml
+
+    case, factory = _two_decision_factory(
+        tmp_path, "- INV-001: refused. [witness: verification:counts_once]",
+        "- INV-003: kept. [witness: verification:counts_once]", {"counts_once": IMPORTING_CHECK})
+    _write(factory / "verification" / "configs" / "Demo.yaml", yaml.safe_dump({"checks": {"commands": [
+        {"name": "counts_once", "cwd": "../..",
+         "command": ["python", "-m", "pytest", "-q", "verification/counts_once.py::test_once"]}]}}))
+    materials = design_decision_witness.binding_material(case, factory)
+    assert materials[0]["status"] == "available"
+    assert [f["path"] for f in materials[0]["files"]] == [
+        "verification/counts_once.py", "verification/witness_support.py"]
+
+
 def test_a_check_shared_by_bindings_is_judged_once_for_all_of_them(tmp_path, monkeypatch):
     _clean_gate(monkeypatch)
     case, factory = _two_decision_factory(
@@ -1478,6 +1529,23 @@ def test_a_v5_clock_is_read_by_its_wall_operation_and_handed_to_its_dependants(t
                                      "wiring": {"module": "clock", "wall_clock_function": "utc_now",
                                                 "elapsed_clock_function": "monotonic_seconds"}}}
     _write(case / "70_system_clock_closure.json", v5)
+    assert design_closure_gaps.declared_clock_function(case) == ("clock", "utc_now")
+    assert design_closure_gaps.clock_consumers(case) == {"things"}
+    assert [f["contract"] for f in transition.run_check(case, "time_source")["findings"]] == ["record_other"]
+
+
+def test_a_v6_clock_is_read_by_its_wall_operation_and_handed_to_its_dependants(tmp_path):
+    # system_clock_backend/v6 (2026-11-16, Registry): v5's wiring, timezone-aware UTC wall clock
+    import design_closure_gaps
+
+    case = _clock_case(tmp_path)
+    v6 = {**V4_CLOCK, "backend_ir": {**V4_CLOCK["backend_ir"], "schema_version": 6,
+                                     "backend": {"emitter": "python_host_utc_and_elapsed_clock_v1"},
+                                     "wiring": {"module": "clock", "wall_clock_function": "utc_now",
+                                                "elapsed_clock_function": "monotonic_seconds"},
+                                     "time": {"policy": "rules.time_source_policy", "read": "per_call",
+                                              "representation": "aware_utc_datetime"}}}
+    _write(case / "70_system_clock_closure.json", v6)
     assert design_closure_gaps.declared_clock_function(case) == ("clock", "utc_now")
     assert design_closure_gaps.clock_consumers(case) == {"things"}
     assert [f["contract"] for f in transition.run_check(case, "time_source")["findings"]] == ["record_other"]

@@ -103,14 +103,16 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 Порядок authoring фиксирует [AUTHORING_SEQUENCE.md](AUTHORING_SEQUENCE.md).
 
 - `persistence_backend/v2` — SQLite-only: `engine=sqlite`, emitter
-  `sqlite_sync_v2`. `persistence_backend/v3` добавляет ровно восемь вещей
+  `sqlite_sync_v2`. `persistence_backend/v3` добавляет ровно девять вещей
   (§6.3): `engine=postgres` с emitter `postgres_sync_v1`, владение
   транзакцией (`transaction: owned`), вид метода `lock`, bind-ы
   `argument_set`/`optional_argument`, формы хранения `json_model`/`json_value`,
-  `path` в фильтрах и `unique`, виды запросов `upsert_many` и `list_all`, и
+  `path` в фильтрах и `unique`, виды запросов `upsert_many` и `list_all`,
   `list_selected` — чтение, чью колонку равенства выбирает
   аргумент-перечисление (член → колонка — правило backend-а, а не код
-  вызывающего). Форма таблиц, колонок, агрегатов и конвенций не меняется.
+  вызывающего), и `delete_by` — удаление по непустому фильтру, контракт
+  `(self, <аргументы фильтра>) -> int` с числом удалённых строк. Форма таблиц,
+  колонок, агрегатов и конвенций не меняется.
 - Аддитивная форма входит в текущую версию persistence IR, только если не
   меняет смысла ни одной валидной спеки — это доказывает пин эмиссии
   `test_persistence_emission_compat.py`; иначе нужна новая версия (§6.2).
@@ -211,9 +213,9 @@ predicate или method shape не замкнуты, diagnostic emitter возв
   конструирует, проверяет тип) — тогда входят.
 - Если прямых импортов из provider-а нет, ребро provider-а отсутствует.
 - Вывод импортов из текста — подсказка: каждый выведенный и не объявленный
-  символ — находка `SLICE_IMPORT_UNDECLARED`. До включения строгого режима
-  (`CODE_FACTORY_STRICT_IMPORTS=1`) фабрика ещё добавляет такие символы к
-  объявленным; в строгом режиме — нет
+  символ — находка `SLICE_IMPORT_UNDECLARED`. Строгий режим — поведение по
+  умолчанию с 2026-11-21: такие символы не импортируются; добавляет их только
+  явный выход `CODE_FACTORY_STRICT_IMPORTS=0`
   ([раздел 7](SPEC_STANDARD.md#7-imports)).
 
 Что объявить и что лишнее — отчёт проектора (read-only); с `--code-dir`

@@ -61,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
                 for name in item["evidence"].get("open", []):
                     row = item["evidence"]["states"][name]
                     print(f"  {name}: open units {', '.join(row['open_units']) or '-'}")
+        for line in report.get("author_guidance") or []:
+            print(f"author: {line}")
     return 0 if report["ready"] else 1
 
 

@@ -267,7 +267,8 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
                         files = []
                         named: list[Path] = []
                         for arg in command.get("command") or []:
-                            candidate = (base / str(arg)).resolve()
+                            # a pytest node id (file.py::test_name) names its file
+                            candidate = (base / str(arg).split("::", 1)[0]).resolve()
                             if candidate.is_file() and root in candidate.parents:
                                 named.append(candidate)
                         seen = set(named)

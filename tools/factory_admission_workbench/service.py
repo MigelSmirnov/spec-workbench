@@ -973,7 +973,7 @@ def _question_rounds_check(case_root: Path | None, factory_root: Path) -> Admiss
     )
 
 
-def _semantic_check(case_root: Path | None) -> AdmissionCheck:
+def semantic_check(case_root: Path | None) -> AdmissionCheck:
     if case_root is None:
         return AdmissionCheck(
             "FA006",
@@ -1465,7 +1465,7 @@ def check(
         inspector_check,
         _factory_slices_check(factory_root, source, case_root, project),
         _question_rounds_check(case_root, factory_root),
-        _semantic_check(case_root),
+        semantic_check(case_root),
         _target_check(factory_root, project, source, update_existing),
         _factory_toolchain_check(factory_root),
     ])
@@ -1500,4 +1500,5 @@ def check(
         "checks": [item.to_dict() for item in checks],
         "factory_validation": validation_report,
         "factory_inspector": inspector_report,
+        "author_guidance": question_rounds.author_guidance(factory_return=True) if blocks else [],
     }

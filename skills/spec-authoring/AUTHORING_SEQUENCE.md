@@ -404,6 +404,23 @@ receipts under the Factory project's `specs/working/` directory. Generated code,
 deploy, verification and terminal OTK remain inside Factory Route B and are not
 Stage 9 completion criteria.
 
+### Returning from Factory
+
+Apply the repair discipline in `AGENTS.md` only after identifying the defect's
+owner. Preserve the exact diagnostic, tool and artifact revisions and a minimal
+reproducer. Retrieve the current instructions with
+`python tools/design_questions.py guide --factory-return --json`; this needs
+no remembered case or phase. Blocked Factory admission reports also carry
+these instructions as `author_guidance`. Then
+compare the accepted obligation with its structured data/contracts,
+notes and generated implementation. Repair the earliest layer that actually
+loses the obligation, or Factory when its tool misreads valid input. A failure
+in generation does not by itself reopen State 2. The signal-name and dictionary
+field examples in `AGENTS.md` distinguish a missing technical contract from an
+analyser defect. Repeat the failing check and follow the current Factory's
+documented continuation procedure; generation success alone does not prove
+verification or deployment.
+
 ## Agent entry point
 
 After resolving a logical project with `tools/workbench.py`, use:
