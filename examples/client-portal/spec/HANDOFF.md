@@ -8,6 +8,24 @@ merged: accepted spec `018b2e2e`). The assembly, admission and diagnosis
 results are in `80_assembly.md`; the semantic diff, for the owner, is
 `SEMANTIC_DIFF.md` (against `018b2e2e` first, then against `459ac96c`).
 
+## Q29 re-grant after revocation (2026-11-22, later) — read this first
+
+Owner decision Q29 (a) designed through every state: one active grant or
+assignment per pair, revoked records kept, a new record after revocation.
+State 1 M04/M07/M15; INV-009 moved from A8 to A3 (it was owned by
+snapshot_import) and widened to assignments; State 4 flows and State 5
+operations no longer answer a re-grant with 500; State 6
+`persistence_backend` v3 with the new partial unique groups (SPEC_STANDARD
+§6.3 tenth addition: spec-workbench #203, code-factory #251, #252);
+get_staff_assignment, get_viewer_grant, get_producer_grant read the active
+record only; State 7 notes. Rounds: State 1 r54-55, State 2 r118-121, State 3
+r57-58, State 4 r53-54, State 5 r45-46, State 7 r41-43, all closed.
+Exported as `2ddcbcf1` (code-factory #253, with deploy/migrate_db.py step 2
+that rebuilds the three access tables of an existing database under the
+emitter's index names). Next: Route B for `2ddcbcf1`, then the release via
+release.sh (steps 1-2 of the migration run there), then authz_gaps.py on the
+stand.
+
 ## Security pass on the test stand (2026-11-22) — read this first
 
 The owner's ZAP and authorization pass on the Portal test stand
