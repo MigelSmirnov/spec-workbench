@@ -1103,3 +1103,19 @@ note is gone; the `[BEHAVIOR]` note now says what `record_change` writes: record
 bytes and spooled files those records name were published before the call by their publishers,
 and it publishes, rewrites and re-checks none of them. `store` moved by one note fewer; the other
 packets only by global note indices. All 19 modules remain PASS.
+
+### propose_binding port order and the imports closure (2026-11-23)
+
+The home server's agent found that the accepted codex kernel refuses every binding proposal whose
+ports are not in name order with `manifest_mismatch:binding_not_recorded`, although it records the
+binding. The notes left a binding's port order undecided. `record_change` now says an
+OperationBinding writes the ports of its inputs and of its outputs, each of one direction, sorted by
+name — the order A08 checks a proposal in — and `propose_binding` returns the one binding of the
+RecordSet its change wrote, never matched against the proposal's ports. A08 gains Required test 8
+with witness `kernel_a08_proposal_ports_out_of_name_order`. The imports closure is closed against
+the codex kernel: uses whose only basis was the earlier code are removed, note-named ones keep their
+clause, `functions` annotates with `DisclosureClass`. The `store` and `bindings` packets moved by
+their notes; `runs`, `surface`, `service_invoker` and `functions` by their `module_internal`;
+`data_provider`, `installation`, `effects` and `run_graph` only by the A08 text and the line numbers
+after it in their accepted evidence. Structural review of each: 0 blocks, 0 reviews. All 19 modules
+remain PASS.
