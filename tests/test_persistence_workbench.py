@@ -566,3 +566,52 @@ def test_v3_delete_by_refuses_a_whole_table_delete() -> None:
     del _delete(payload)["filter"]
     codes = {item.code for item in validate(payload)}
     assert "missing_method_field" in codes and "invalid_delete_filter" not in codes
+
+
+def _partial_unique_backend() -> dict:
+    payload = _v3_backend()
+    payload["tables"][0]["columns"] += [
+        {"column": "owner_id", "field": "owner_id", "storage": "uuid",
+         "nullable": False, "check": None, "element_model": None},
+        {"column": "status", "field": "status", "storage": "enum",
+         "nullable": False, "check": None, "element_model": "InvoiceStatus"},
+    ]
+    payload["tables"][0]["unique"] = [{
+        "columns": ["owner_id"],
+        "where": [{"column": "status", "bind": "constant", "enum": "InvoiceStatus", "member": "ACTIVE"}],
+    }]
+    return payload
+
+
+def test_v3_partial_unique_group_is_valid() -> None:
+    assert validate(_partial_unique_backend()) == []
+
+
+def test_v2_rejects_partial_unique_group() -> None:
+    payload = _partial_unique_backend()
+    payload["schema_version"] = 2
+    payload["backend"] = {"engine": "sqlite", "emitter": "sqlite_sync_v2"}
+    del payload["repositories"][0]["transaction"]
+    payload["repositories"][0]["methods"].pop()
+    assert any(item.code == "invalid_name_list" for item in validate(payload))
+
+
+def test_partial_unique_group_refuses_bad_predicates() -> None:
+    payload = _partial_unique_backend()
+    group = payload["tables"][0]["unique"][0]
+    group["columns"] = ["nope"]
+    group["where"][0]["bind"] = "argument"
+    codes = {item.code for item in validate(payload)}
+    assert {"unknown_unique_column", "invalid_unique_where_bind"} <= codes
+
+    payload = _partial_unique_backend()
+    payload["tables"][0]["unique"][0]["where"][0]["column"] = "owner_id"
+    assert any(item.code == "invalid_unique_where_column" for item in validate(payload))
+
+    payload = _partial_unique_backend()
+    payload["tables"][0]["unique"][0]["where"] = []
+    assert any(item.code == "invalid_unique_where" for item in validate(payload))
+
+    payload = _partial_unique_backend()
+    payload["tables"][0]["unique"][0]["name"] = "custom"
+    assert any("unique_partial" in item.code for item in validate(payload))
