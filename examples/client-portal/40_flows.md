@@ -313,8 +313,11 @@ projects. `module:credential_security` hashes the initial password.
   assignment: 409; Registry failure: 502.
 - A second assignment for a pair: while the first is active, refused by the
   operation's own check before any write (authorization rejection, 403);
-  after its revocation, refused by State 1's one-record-per-pair rule
-  (persistence conflict, 500).
+  after its revocation, a new assignment record is created and the revoked
+  one stays (State 1 M07, A3 INV-009, owner 2026-11-22 Q29).
+  A concurrent second creation that passes that check is stopped by the
+  storage's one-active-per-pair index: its transaction rolls back, nothing
+  and no audit is written (persistence failure, 500).
 
 ## `flow:administer_viewer_access`
 
@@ -368,8 +371,12 @@ grant. `module:credential_security` issues the link secret.
 - Not an administrator: 403.
 - Unknown or inactive viewer, unknown credential or grant: not found (404).
 - A second grant for a pair: while the first is active, refused by the
-  operation's own check before any write (403); after its revocation,
-  refused by State 1's one-record-per-pair rule (persistence conflict, 500).
+  operation's own check before any write (403); after its revocation, a new
+  grant record is created and the revoked one stays (State 1 M04, A3
+  INV-009, owner 2026-11-22 Q29).
+  A concurrent second creation that passes that check is stopped by the
+  storage's one-active-per-pair index: its transaction rolls back, nothing
+  and no audit is written (persistence failure, 500).
 - Project not known or not active for a new grant: Registry boundary
   failure (502).
 
@@ -525,6 +532,13 @@ their cascades (A12). `module:authorization_guard` decides access management.
 
 - Not an administrator: 403. Unknown principal, credential or grant: 404.
   Archived project for a new grant: 409. Registry failure: 502.
+- A second producer grant for a pair: while the first is active, refused by
+  the operation's own check before any write (403); after its revocation, a
+  new grant record is created and the revoked one stays (State 1 M15, A3
+  INV-009, owner 2026-11-22 Q29).
+  A concurrent second creation that passes that check is stopped by the
+  storage's one-active-per-pair index: its transaction rolls back, nothing
+  and no audit is written (persistence failure, 500).
 
 ## `flow:import_estimate_snapshot`
 
