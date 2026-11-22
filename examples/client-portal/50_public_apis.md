@@ -1589,14 +1589,17 @@ One Registry validation before the transaction opens.
 ### Enforces
 
 R0-14, A5 and R0-24 (no new access to an unknown or archived project), A13
-(`staff_assignment.create` with the project).
+(`staff_assignment.create` with the project). A3 INV-009: a pair whose records are all revoked receives a new record and
+the revoked ones stay.
 
 ### Errors
 
 Access-management failures; `ScopedNotFoundError` for a project the Registry
 does not know or an unknown staff account; `ArchivedProjectRejected` for an
 inactive project; `AuthorizationRejected` for an existing active assignment;
-`RegistryBoundaryError`.
+`RegistryBoundaryError`. A second active record
+inserted concurrently past that check fails at storage as `PersistenceError`
+and nothing is written.
 
 ### State impact
 
@@ -2048,14 +2051,17 @@ One Registry validation before the transaction opens.
 ### Enforces
 
 R0-14, A5 and R0-24 (only an existing active project receives a new grant),
-A13 (`grant.create`).
+A13 (`grant.create`). A3 INV-009: a pair whose records are all revoked receives a new record and
+the revoked ones stay.
 
 ### Errors
 
 Access-management failures; `RegistryBoundaryError` carrying the validation's
 failure kind for a project the Registry does not know or does not report
 active, and for a failed Registry call; `ScopedNotFoundError` for an unknown
-or non-active viewer; `AuthorizationRejected` for an existing active grant.
+or non-active viewer; `AuthorizationRejected` for an existing active grant. A second active record
+inserted concurrently past that check fails at storage as `PersistenceError`
+and nothing is written.
 
 ### State impact
 
@@ -2317,14 +2323,17 @@ One Registry validation before the transaction opens.
 
 ### Enforces
 
-R0-14, A12, A5 and R0-24, A13 (`producer_grant.create` with the project).
+R0-14, A12, A5 and R0-24, A13 (`producer_grant.create` with the project). A3 INV-009: a pair whose records are all revoked receives a new record and
+the revoked ones stay.
 
 ### Errors
 
 Access-management failures; `ScopedNotFoundError` for a project the Registry
 does not know or an unknown principal; `ArchivedProjectRejected` for an
 inactive project; `AuthorizationRejected` for an existing active grant;
-`RegistryBoundaryError`.
+`RegistryBoundaryError`. A second active record
+inserted concurrently past that check fails at storage as `PersistenceError`
+and nothing is written.
 
 ### State impact
 
