@@ -153,6 +153,7 @@ is not written around.
 | `kernel_a08_changed_digest_stale_nothing_sent` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `manifest.new_revision`, `installation.set_manifest_revision`, `restart()`, `stub.requests` |
 | `kernel_a08_record_read_only_at_pinned_path` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `manifest.write_record(file_name=, revision=)`, `manifest.new_revision` |
 | `kernel_a08_several_http_routes_not_invocable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
+| `kernel_a08_proposal_ports_out_of_name_order` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
 | `kernel_a09_possibly_sent_outcome_unknown_no_retry` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests` |
 | `kernel_a09_read_5xx_service_unreachable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
 | `kernel_a09_non_read_4xx_not_applied` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |

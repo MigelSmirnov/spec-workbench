@@ -479,3 +479,55 @@ def test_several_http_routes_not_invocable(semantic_runtime):
     assert _enum(control.status) == "proposed"
     assert _enum(control.effect_class) == "draft-write"
     assert [b.binding_id for b in _bindings(semantic_runtime)] == [control.binding_id]
+
+
+def _names(ports):
+    return [p["name"] if isinstance(p, dict) else p.name for p in ports]
+
+
+def test_proposal_ports_out_of_name_order(semantic_runtime):
+    """[witness: verification:kernel_a08_proposal_ports_out_of_name_order]
+
+    A08 Required test 8: a proposal whose input and output ports are given out
+    of name order is recorded, and the answer is that one binding with its
+    ports in name order; another proposal of the same operation already in the
+    store is not the answer.
+    """
+    stub = semantic_runtime.stub_service()
+    save = _capability(
+        "save_draft", ["POST /drafts"], "draft-write", idempotency_key="material_id"
+    )
+    semantic_runtime.manifest.write_record(
+        SERVICE, _record(SERVICE, [save], stub.base_url)
+    )
+    _install(semantic_runtime, SERVICE)
+
+    # An earlier proposal of the same operation, ports in name order: a kernel
+    # that answers with a stored binding of the operation instead of the one
+    # this change wrote returns it.
+    earlier = semantic_runtime.propose_binding(
+        SERVICE,
+        "save_draft",
+        [_port("material_id", "input", TEXT), _port("title", "input", TEXT)],
+        DRAFT_OUTPUTS,
+    )
+
+    # A08 rule 5 takes ports in name order, and the store writes a binding's
+    # ports in (direction, name) order whatever order the proposer used.
+    answer = semantic_runtime.propose_binding(
+        SERVICE,
+        "save_draft",
+        [_port("title", "input", TEXT), _port("material_id", "input", TEXT)],
+        [_port("revision", "output", NUMBER), _port("draft_id", "output", TEXT)],
+    )
+    assert _enum(answer.status) == "proposed"
+    assert answer.binding_id != earlier.binding_id
+    assert _names(answer.inputs) == ["material_id", "title"]
+    assert _names(answer.outputs) == ["draft_id", "revision"]
+
+    stored = semantic_runtime.read_binding(answer.binding_id)
+    assert _names(stored.inputs) == ["material_id", "title"]
+    assert _names(stored.outputs) == ["draft_id", "revision"]
+    assert sorted(b.binding_id for b in _bindings(semantic_runtime)) == sorted(
+        [earlier.binding_id, answer.binding_id]
+    )
