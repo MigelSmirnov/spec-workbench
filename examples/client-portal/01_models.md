@@ -256,11 +256,11 @@ None.
 - **Fields:** `grant_id: UUID`, `viewer_id: UUID`, `project_id: UUID`,
   `status: GrantStatus (active | revoked)`, `created_at`, `created_by`,
   `revoked_at | None`, `revoked_by | None`.
-- **Rules:** at most one grant record per `(viewer_id, project_id)`, active
-  or revoked; revoking one grant affects only that project; Registry
-  archival never changes grant status. A revoked grant is terminal and the
-  pair cannot be granted again (one record per pair), and no operation
-  reactivates a revoked grant.
+- **Rules:** at most one active grant per `(viewer_id, project_id)`; revoked
+  grants of the pair stay as history. Revoking one grant affects only that
+  project; Registry archival never changes grant status. A revoked grant is
+  terminal and no operation reactivates it; giving the pair access again
+  creates a new grant record.
 - **Created/modified by:** administrator only (R0-14).
 
 ### Carried changes
@@ -274,6 +274,8 @@ when that record is revoked, since the grant operation refuses an active
 duplicate itself, State 4; Factory code
 `adapters/viewer_access_repository.py`). Owner 2026-11-06: current service
 behaviour accepted; technical decisions delegated.
+
+Owner 2026-11-22 (`open_questions.md` Q29 (a)) reverses the narrowing: a second insert for a pair answered 500 and no administrator could give access again after a revocation. One active grant per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.
 
 ### Identity
 
@@ -427,9 +429,10 @@ None.
   `status: GrantStatus (active | revoked)`, `created_at`,
   `created_by: UUID (administrator)`, `revoked_at: datetime | None`,
   `revoked_by: UUID | None`.
-- **Rules:** at most one assignment record per `(staff_id, project_id)`,
-  active or revoked; a revoked assignment is terminal and the pair cannot be
-  assigned again (one record per pair; no operation reactivates one). Revocation blocks the next
+- **Rules:** at most one active assignment per `(staff_id, project_id)`;
+  revoked assignments of the pair stay as history. A revoked assignment is
+  terminal and no operation reactivates it; assigning the pair again creates
+  a new assignment record. Revocation blocks the next
   project-scoped authorization check without changing project records or
   other assignments. In the current documented
   single administrative area, administrators cover all projects through that
@@ -461,6 +464,8 @@ duplicate itself, State 4);
 administrator before reading assignments (`application/authorization_guard.py`).
 Owner 2026-11-06: current service behaviour accepted; technical decisions
 delegated.
+
+Owner 2026-11-22 (`open_questions.md` Q29 (a)) reverses the narrowing: a second insert for a pair answered 500 and no administrator could give access again after a revocation. One active assignment per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.
 
 ### Identity
 
@@ -602,10 +607,10 @@ None.
 - **Fields:** `grant_id: UUID`, `service_principal_id: UUID`,
   `project_id: UUID`, `status: GrantStatus (active | revoked)`,
   `created_at`, `created_by`, `revoked_at | None`, `revoked_by | None`.
-- **Rules:** at most one grant record per `(principal, project)`, active or
-  revoked; a revoked grant is terminal and the pair cannot be granted again
-  (one record per pair; no operation reactivates one); consulted only when
-  the principal's `scope_mode` is
+- **Rules:** at most one active grant per `(principal, project)`; revoked
+  grants of the pair stay as history. A revoked grant is terminal and no
+  operation reactivates it; granting the pair again creates a new grant
+  record. Grants are consulted only when the principal's `scope_mode` is
   `granted_projects`.
 
 ### Carried changes
@@ -618,6 +623,8 @@ reached only when that record is revoked, since the operation refuses an
 active duplicate itself, State 4).
 Owner 2026-11-06: current service behaviour accepted; technical decisions
 delegated.
+
+Owner 2026-11-22 (`open_questions.md` Q29 (a)) reverses the narrowing: a second insert for a pair answered 500 and no administrator could give access again after a revocation. One active grant per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.
 
 ### Identity
 
