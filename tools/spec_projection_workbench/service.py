@@ -718,6 +718,56 @@ def _project_builders_imports(projected: dict[str, Any], module: str, constructi
 IMPORTS_TABLE = "65_imports.json"
 
 
+CODEC_ELEMENT_STORAGE = frozenset({"enum", "json", "json_model"})
+
+
+def _persistence_codec_edges(
+    projected: dict[str, Any], current: dict[str, Any]
+) -> dict[str, dict[str, list[str]]]:
+    """imports.module_internal of the table repositories a persistence_backend v3 emits.
+
+    A v3 codec names the element model of every enum, json and json_model
+    column of the tables its repository touches, and the Factory emitter refuses
+    a module that does not import them (generate_repository_draft
+    _require_codec_names_bound). Version 2 bound them itself. The edges are the
+    module's current ones with those models added, in the current order and
+    then sorted, so a v2 case and a v3 case without such columns project
+    exactly as before.
+    """
+    backend = _get(projected, "rules.persistence_backend")
+    if not isinstance(backend, dict) or backend.get("schema_version", 2) < 3:
+        return {}
+    tables = {
+        table.get("table"): table for table in backend.get("tables") or [] if isinstance(table, dict)
+    }
+    current_edges = _get(current, "imports.module_internal")
+    current_edges = current_edges if isinstance(current_edges, dict) else {}
+    result: dict[str, dict[str, list[str]]] = {}
+    for repository in backend.get("repositories") or []:
+        if not isinstance(repository, dict) or repository.get("emission") != "table":
+            continue
+        module = repository.get("module")
+        touched = {
+            method.get("table") for method in repository.get("methods") or []
+            if isinstance(method, dict) and method.get("table")
+        }
+        needed = sorted({
+            column["element_model"]
+            for name in touched if name in tables
+            for column in tables[name].get("columns") or []
+            if isinstance(column, dict) and column.get("storage") in CODEC_ELEMENT_STORAGE
+            and column.get("element_model")
+        })
+        edges = copy.deepcopy(current_edges.get(module) or {})
+        models = list(edges.get("models") or [])
+        missing = [name for name in needed if name not in models]
+        if not missing:
+            continue
+        edges["models"] = models + missing
+        result[str(module)] = edges
+    return result
+
+
 def _project_module_internal(
     project: Path,
     current: dict[str, Any],
@@ -1168,6 +1218,8 @@ def _project(
                 _place_record_builders_module(projected, authored, findings, standard.closure_file))
 
     if imports:
+        for module, edges in _persistence_codec_edges(projected, current).items():
+            emitted_edges.setdefault(module, edges)
         _project_module_internal(project, current, projected, findings, source_checks, emitted_edges)
 
     return current, projected, findings, source_checks
