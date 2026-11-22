@@ -205,7 +205,7 @@ to every account stays the one the accepted spec gave.
 
 - INV-014: a focused test at `authenticate_staff` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-014 [witness: verification:staff_identity_uow_client_portal].
-- INV-009: at `assign_staff_project`, `grant_viewer_project` and `grant_producer_project`: a pair whose only record is revoked receives a new active record and the revoked one is unchanged; a pair with an active record is refused and nothing changes; and the storage refuses a second active record for a pair inserted past that check.
+- INV-009: at `assign_staff_project`, `grant_viewer_project` and `grant_producer_project`: a pair whose records are all revoked receives a new active record and every revoked one is unchanged; after several revoke-and-grant cycles of one pair, every earlier record is still stored as revoked and exactly one is active; a pair with an active record is refused and nothing changes; and the storage refuses a second active record for a pair inserted past that check, leaving the first active record and the history unchanged.
 - Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:service_identity_consumer_uow_client_portal].
 - Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:viewer_access_sqlite_uow_client_portal].
 - Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:staff_identity_uow_client_portal].
@@ -1711,7 +1711,7 @@ Security review: PERFORMED
 - external_callbacks_webhooks: APPLICABLE; references: A3, A7, A8, A12, A25; affected: M18, M25, M34, snapshot publication, recognition intake
 - browser_boundary: APPLICABLE; references: A25; affected: viewer cookie session, CORS, trusted hosts, mutation origin
 - files_artifacts: APPLICABLE; references: A14; affected: M30, M35, binary storage root, and the hand-over of placed binaries that stays Q12 (R0-13)
-- concurrency: APPLICABLE; references: A8, A18, A19, A22, A29; affected: replay identities, single active budget version, bootstrap
+- concurrency: APPLICABLE; references: A3, A8, A18, A19, A22, A29; affected: replay identities, single active budget version, single active assignment or grant per pair, bootstrap
 - dependencies: APPLICABLE; references: A32; affected: deploy/requirements.txt (fastapi, pydantic, argon2-cffi, uvicorn pinned)
 
 ## Accepted decision A32 — Dependency pins and their vulnerability check (owner 2026-11-06: current service behaviour accepted; technical decisions delegated)
