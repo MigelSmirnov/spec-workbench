@@ -47,7 +47,7 @@ the one mapping; `30_trace.json` records the same:
 |---|---|---|
 | A1 | `authorization_guard` | `models`, `staff_identity`, `viewer_access`, `service_identity` |
 | A2 | `authorization_guard` | `models`, `staff_identity`, `service_identity`, `data_provider` |
-| A3 | `staff_identity` | `viewer_access`, `service_identity`, `budget_management`, `staff_access_repository`, `data_provider` |
+| A3 | `staff_identity` | `viewer_access`, `service_identity`, `budget_management`, `staff_access_repository`, `data_provider`, `viewer_access_repository`, `service_identity_repository` |
 | A4 | `authorization_guard` | `registry_gateway`, `api`, `api_irregular` |
 | A5 | `authorization_guard` | `registry_gateway`, `staff_identity`, `viewer_access`, `service_identity`, `derived_views` |
 | A6 | `registry_gateway` | `authorization_guard`, `derived_views`, `data_provider` |

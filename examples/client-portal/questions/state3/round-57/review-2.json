@@ -1,0 +1,157 @@
+{
+ "open_points": [
+  {
+   "subject": "Q29 re-grant and reassignment decision",
+   "kind": "missing_owner",
+   "text": "Each accepted decision has one primary owner, the module that holds the decision's central mechanism, and consumers, except the two decisions recorded `cross_cutting` (A22, A26, below).",
+   "question": "Which primary owner and consumers own the 2026-11-22 decision that revoked grants and assignments remain as history while a new active record may be created, and where must that decision be added to the ownership mapping?",
+   "options": [
+    "Each identity use case (`viewer_access`, `staff_identity`, `service_identity`) owns re-creation and its repository owns only enforcement",
+    "Each corresponding repository owns the complete re-grant/reassignment rule",
+    "One named primary module owns the common rule and the three identity modules and repositories are consumers"
+   ],
+   "default_guess": "Make each identity use case the owner of its record's re-creation behavior and each corresponding repository a consumer responsible for the partial uniqueness constraint.",
+   "unit": "?"
+  },
+  {
+   "subject": "active grant and assignment uniqueness",
+   "kind": "unmapped_decision",
+   "text": "- INV-009: at most one active grant per (viewer_id, project_id) and per (service_principal_id, project_id)",
+   "question": "Which accepted decision and owning module contain the equivalent at-most-one-active rule for `StaffProjectAssignment`, and does A8 still own the viewer and producer uniqueness rules after the Q29 change?",
+   "options": [
+    "Extend A8 and its ownership mapping to all three active-record constraints",
+    "Place all three constraints under A3 and update its consumers",
+    "Create a new accepted decision for reusable active-grant uniqueness"
+   ],
+   "default_guess": "Create one explicit decision covering all three active-record constraints and map the three identity services and their repositories as consumers.",
+   "unit": "?"
+  },
+  {
+   "subject": "ProjectViewerGrant persistence upgrade",
+   "kind": "schema_migration_gap",
+   "text": "One active grant per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.",
+   "question": "How is an existing SQLite viewer-grant table with a full UNIQUE `(viewer_id, project_id)` constraint upgraded so that re-granting after revocation actually works?",
+   "options": [
+    "Rebuild and migrate the table, replacing the full constraint with a partial unique index",
+    "Introduce a new schema/table version and copy existing rows",
+    "Apply the partial index only to fresh databases and leave existing databases unchanged"
+   ],
+   "default_guess": "Use a transactional table rebuild that preserves rows and replaces the full unique constraint with a partial unique index on active rows.",
+   "witness": {
+    "initial": "A deployed database still has the old full UNIQUE constraint and contains a revoked viewer grant for viewer V and project P.",
+    "events": [
+     "The deployment is upgraded to the new design.",
+     "An administrator grants V access to P again."
+    ],
+    "outcomes": [
+     "A migration removed the old constraint, so a new active grant is inserted.",
+     "Only the new partial index was added, so the old full constraint rejects the insert and the administrator receives a failure."
+    ],
+    "observer": "The administrator attempting to restore the viewer's access"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "StaffProjectAssignment persistence upgrade",
+   "kind": "schema_migration_gap",
+   "text": "One active assignment per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.",
+   "question": "How is an existing SQLite staff-assignment table with a full UNIQUE `(staff_id, project_id)` constraint upgraded to permit a new assignment after revocation?",
+   "options": [
+    "Rebuild and migrate the table, replacing the full constraint with a partial unique index",
+    "Introduce a new schema/table version and copy existing rows",
+    "Apply the partial index only to fresh databases and leave existing databases unchanged"
+   ],
+   "default_guess": "Use a transactional table rebuild that preserves rows and replaces the full unique constraint with a partial unique index on active rows.",
+   "witness": {
+    "initial": "A deployed database has the old full UNIQUE constraint and a revoked assignment for staff member S and project P.",
+    "events": [
+     "The deployment is upgraded.",
+     "An administrator assigns S to P again."
+    ],
+    "outcomes": [
+     "The old constraint was removed and a new active assignment is created.",
+     "The old constraint remains and rejects the new assignment."
+    ],
+    "observer": "The administrator and the operator whose access should be restored"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ProducerProjectGrant persistence upgrade",
+   "kind": "schema_migration_gap",
+   "text": "One active grant per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.",
+   "question": "How is an existing SQLite producer-grant table with a full UNIQUE `(service_principal_id, project_id)` constraint upgraded to permit a new grant after revocation?",
+   "options": [
+    "Rebuild and migrate the table, replacing the full constraint with a partial unique index",
+    "Introduce a new schema/table version and copy existing rows",
+    "Apply the partial index only to fresh databases and leave existing databases unchanged"
+   ],
+   "default_guess": "Use a transactional table rebuild that preserves rows and replaces the full unique constraint with a partial unique index on active rows.",
+   "witness": {
+    "initial": "A deployed database has the old full UNIQUE constraint and a revoked grant for principal S and project P.",
+    "events": [
+     "The deployment is upgraded.",
+     "An administrator grants S access to P again."
+    ],
+    "outcomes": [
+     "The old constraint was removed and the new active grant is inserted.",
+     "The old constraint remains and rejects the insert."
+    ],
+    "observer": "The administrator and the service principal attempting its next import"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "revocation after a pair has been granted again",
+   "kind": "ambiguous_target",
+   "text": "A revoked grant is terminal and no operation reactivates it; giving the pair access again creates a new grant record.",
+   "question": "After a pair has historical revoked records and a new active record, do the viewer, staff-assignment and producer revocation operations identify the active record by pair or identify one exact record by `grant_id` or `assignment_id`, and what must happen to a stale repeated revocation request?",
+   "options": [
+    "Commands identify the pair and always revoke its current active record",
+    "Commands identify the exact record id and cannot revoke a later replacement",
+    "Commands carry both pair and record id and reject a mismatch"
+   ],
+   "default_guess": "Identify the exact active record by id, verify its pair, and make a stale request leave a later replacement active.",
+   "witness": {
+    "initial": "Grant G1 for a pair was revoked and replacement grant G2 is active.",
+    "events": [
+     "An administrator or delayed client repeats the revocation request originally intended for G1."
+    ],
+    "outcomes": [
+     "Pair-based revocation resolves the current active row and revokes G2.",
+     "Record-based revocation finds G1 already revoked and leaves G2 active."
+    ],
+    "observer": "The principal whose replacement access either remains available or is unexpectedly removed"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "simultaneous re-grant or reassignment",
+   "kind": "conflict_semantics",
+   "text": "at most one active grant per `(viewer_id, project_id)`; revoked grants of the pair stay as history.",
+   "question": "When two administrators concurrently create replacement active records for the same pair, what domain result must the losing operation return when the partial unique index rejects it?",
+   "options": [
+    "Return the same typed active-duplicate refusal used when an active record was observed before insertion",
+    "Return the active record created by the winning operation as an idempotent result",
+    "Expose a persistence failure or HTTP 500"
+   ],
+   "default_guess": "Translate the constraint conflict into the operation's typed active-duplicate refusal and roll back all effects, including audit, from the losing operation.",
+   "witness": {
+    "initial": "A pair has only revoked historical records and therefore no active grant.",
+    "events": [
+     "Administrator A and administrator B concurrently request access for the same pair.",
+     "Both operations reach creation before either has observed the other's committed active row."
+    ],
+    "outcomes": [
+     "The loser receives a stable typed duplicate refusal and writes nothing.",
+     "The partial-index violation escapes as a persistence error or HTTP 500."
+    ],
+    "observer": "The losing administrator"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Q29 re-grant and reassignment decision\",\"kind\":\"missing_owner\",\"text\":\"Each accepted decision has one primary owner, the module that holds the decision's central mechanism, and consumers, except the two decisions recorded `cross_cutting` (A22, A26, below).\",\"question\":\"Which primary owner and consumers own the 2026-11-22 decision that revoked grants and assignments remain as history while a new active record may be created, and where must that decision be added to the ownership mapping?\",\"options\":[\"Each identity use case (`viewer_access`, `staff_identity`, `service_identity`) owns re-creation and its repository owns only enforcement\",\"Each corresponding repository owns the complete re-grant/reassignment rule\",\"One named primary module owns the common rule and the three identity modules and repositories are consumers\"],\"default_guess\":\"Make each identity use case the owner of its record's re-creation behavior and each corresponding repository a consumer responsible for the partial uniqueness constraint.\"},{\"subject\":\"active grant and assignment uniqueness\",\"kind\":\"unmapped_decision\",\"text\":\"- INV-009: at most one active grant per (viewer_id, project_id) and per (service_principal_id, project_id)\",\"question\":\"Which accepted decision and owning module contain the equivalent at-most-one-active rule for `StaffProjectAssignment`, and does A8 still own the viewer and producer uniqueness rules after the Q29 change?\",\"options\":[\"Extend A8 and its ownership mapping to all three active-record constraints\",\"Place all three constraints under A3 and update its consumers\",\"Create a new accepted decision for reusable active-grant uniqueness\"],\"default_guess\":\"Create one explicit decision covering all three active-record constraints and map the three identity services and their repositories as consumers.\"},{\"subject\":\"ProjectViewerGrant persistence upgrade\",\"kind\":\"schema_migration_gap\",\"text\":\"One active grant per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.\",\"question\":\"How is an existing SQLite viewer-grant table with a full UNIQUE `(viewer_id, project_id)` constraint upgraded so that re-granting after revocation actually works?\",\"options\":[\"Rebuild and migrate the table, replacing the full constraint with a partial unique index\",\"Introduce a new schema/table version and copy existing rows\",\"Apply the partial index only to fresh databases and leave existing databases unchanged\"],\"default_guess\":\"Use a transactional table rebuild that preserves rows and replaces the full unique constraint with a partial unique index on active rows.\",\"witness\":{\"initial\":\"A deployed database still has the old full UNIQUE constraint and contains a revoked viewer grant for viewer V and project P.\",\"events\":[\"The deployment is upgraded to the new design.\",\"An administrator grants V access to P again.\"],\"outcomes\":[\"A migration removed the old constraint, so a new active grant is inserted.\",\"Only the new partial index was added, so the old full constraint rejects the insert and the administrator receives a failure.\"],\"observer\":\"The administrator attempting to restore the viewer's access\"}},{\"subject\":\"StaffProjectAssignment persistence upgrade\",\"kind\":\"schema_migration_gap\",\"text\":\"One active assignment per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.\",\"question\":\"How is an existing SQLite staff-assignment table with a full UNIQUE `(staff_id, project_id)` constraint upgraded to permit a new assignment after revocation?\",\"options\":[\"Rebuild and migrate the table, replacing the full constraint with a partial unique index\",\"Introduce a new schema/table version and copy existing rows\",\"Apply the partial index only to fresh databases and leave existing databases unchanged\"],\"default_guess\":\"Use a transactional table rebuild that preserves rows and replaces the full unique constraint with a partial unique index on active rows.\",\"witness\":{\"initial\":\"A deployed database has the old full UNIQUE constraint and a revoked assignment for staff member S and project P.\",\"events\":[\"The deployment is upgraded.\",\"An administrator assigns S to P again.\"],\"outcomes\":[\"The old constraint was removed and a new active assignment is created.\",\"The old constraint remains and rejects the new assignment.\"],\"observer\":\"The administrator and the operator whose access should be restored\"}},{\"subject\":\"ProducerProjectGrant persistence upgrade\",\"kind\":\"schema_migration_gap\",\"text\":\"One active grant per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.\",\"question\":\"How is an existing SQLite producer-grant table with a full UNIQUE `(service_principal_id, project_id)` constraint upgraded to permit a new grant after revocation?\",\"options\":[\"Rebuild and migrate the table, replacing the full constraint with a partial unique index\",\"Introduce a new schema/table version and copy existing rows\",\"Apply the partial index only to fresh databases and leave existing databases unchanged\"],\"default_guess\":\"Use a transactional table rebuild that preserves rows and replaces the full unique constraint with a partial unique index on active rows.\",\"witness\":{\"initial\":\"A deployed database has the old full UNIQUE constraint and a revoked grant for principal S and project P.\",\"events\":[\"The deployment is upgraded.\",\"An administrator grants S access to P again.\"],\"outcomes\":[\"The old constraint was removed and the new active grant is inserted.\",\"The old constraint remains and rejects the insert.\"],\"observer\":\"The administrator and the service principal attempting its next import\"}},{\"subject\":\"revocation after a pair has been granted again\",\"kind\":\"ambiguous_target\",\"text\":\"A revoked grant is terminal and no operation reactivates it; giving the pair access again creates a new grant record.\",\"question\":\"After a pair has historical revoked records and a new active record, do the viewer, staff-assignment and producer revocation operations identify the active record by pair or identify one exact record by `grant_id` or `assignment_id`, and what must happen to a stale repeated revocation request?\",\"options\":[\"Commands identify the pair and always revoke its current active record\",\"Commands identify the exact record id and cannot revoke a later replacement\",\"Commands carry both pair and record id and reject a mismatch\"],\"default_guess\":\"Identify the exact active record by id, verify its pair, and make a stale request leave a later replacement active.\",\"witness\":{\"initial\":\"Grant G1 for a pair was revoked and replacement grant G2 is active.\",\"events\":[\"An administrator or delayed client repeats the revocation request originally intended for G1.\"],\"outcomes\":[\"Pair-based revocation resolves the current active row and revokes G2.\",\"Record-based revocation finds G1 already revoked and leaves G2 active.\"],\"observer\":\"The principal whose replacement access either remains available or is unexpectedly removed\"}},{\"subject\":\"simultaneous re-grant or reassignment\",\"kind\":\"conflict_semantics\",\"text\":\"at most one active grant per `(viewer_id, project_id)`; revoked grants of the pair stay as history.\",\"question\":\"When two administrators concurrently create replacement active records for the same pair, what domain result must the losing operation return when the partial unique index rejects it?\",\"options\":[\"Return the same typed active-duplicate refusal used when an active record was observed before insertion\",\"Return the active record created by the winning operation as an idempotent result\",\"Expose a persistence failure or HTTP 500\"],\"default_guess\":\"Translate the constraint conflict into the operation's typed active-duplicate refusal and roll back all effects, including audit, from the losing operation.\",\"witness\":{\"initial\":\"A pair has only revoked historical records and therefore no active grant.\",\"events\":[\"Administrator A and administrator B concurrently request access for the same pair.\",\"Both operations reach creation before either has observed the other's committed active row.\"],\"outcomes\":[\"The loser receives a stable typed duplicate refusal and writes nothing.\",\"The partial-index violation escapes as a persistence error or HTTP 500.\"],\"observer\":\"The losing administrator\"}}]}",
+ "set_aside": []
+}

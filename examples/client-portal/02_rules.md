@@ -184,6 +184,12 @@ Transitions outside these tables are rejected.
 
 ### Carried changes
 
+INV-009 moved here from A8 on 2026-11-22: it is the lifecycle of `GrantStatus`
+records, not an idempotency identity, and A8's owner `snapshot_import` held a
+rule the access modules carry out (State 3 round 57). It now covers staff
+assignments too and allows a new record after revocation (owner 2026-11-22,
+`open_questions.md` Q29 (a); State 1 M04, M07, M15).
+
 The row `Challenges/tokens: issued → consumed | expired | revoked` is removed
 with the challenges, and authentication no longer requires a verified email
 besides `active` status (owner 2026-11-07, `00_product.md` R0-23). Every path
@@ -193,11 +199,16 @@ to every account stays the one the accepted spec gave.
 ### Formal invariants
 
 - INV-014: a staff account authenticates only in active status; pending_verification cannot log in
+- INV-009: at most one active record per (staff_id, project_id) assignment, per (viewer_id, project_id) grant and per (service_principal_id, project_id) grant; revoked records of the pair stay, and a new grant after revocation is a new record
 
 ### Required tests
 
 - INV-014: a focused test at `authenticate_staff` showing the invariant holds; a violating input is refused and changes nothing.
 - Witnesses, the focused Factory verification checks that assert it: INV-014 [witness: verification:staff_identity_uow_client_portal].
+- INV-009: at `assign_staff_project`, `grant_viewer_project` and `grant_producer_project`: a pair whose only record is revoked receives a new active record and the revoked one is unchanged; a pair with an active record is refused and nothing changes; and the storage refuses a second active record for a pair inserted past that check.
+- Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:service_identity_consumer_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:viewer_access_sqlite_uow_client_portal].
+- Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:staff_identity_uow_client_portal].
 
 ### Consequence
 
@@ -551,7 +562,6 @@ current service behaviour accepted; technical decisions delegated).
 
 ### Formal invariants
 
-- INV-009: at most one active grant per (viewer_id, project_id) and per (service_principal_id, project_id)
 - INV-021: re-publication with identical (project, estimate_id, estimate_version) and identical fingerprint is an idempotent replay; a different fingerprint for the same identity is an integrity conflict storing no snapshot; either changes no business state and is recorded as its own import result and `snapshot.import` audit
 - INV-030: one recognized_document_id creates at most one Expense and one ExpenseDocument; equal intake_fingerprint replay returns the existing records, while a different fingerprint is an integrity conflict changing nothing
 - INV-042: a WorkPayment is idempotent by payment_id and is never a factura or accounting posting; payments total is derived
@@ -559,13 +569,10 @@ current service behaviour accepted; technical decisions delegated).
 
 ### Required tests
 
-- INV-009: a focused test at `PortalTransaction.commit` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-021: a re-publication with an equal fingerprint is classified an idempotent replay of the existing snapshot, which is not stored again, one with a different fingerprint an integrity conflict storing no snapshot; either changes no business state and is recorded as its own import result and `snapshot.import` audit.
 - INV-030: a focused test at `create_expense_from_recognition` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-042: a focused test at `register_work_payment` showing the invariant holds; a violating input is refused and changes nothing.
 - INV-043: a focused test at `publish_progress_photo` showing the invariant holds; a violating input is refused and changes nothing.
-- Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:service_identity_consumer_uow_client_portal].
-- Witnesses, the focused Factory verification checks that assert it: INV-009 [witness: verification:viewer_access_sqlite_uow_client_portal].
 - Witnesses, the focused Factory verification checks that assert it: INV-021 [witness: verification:snapshot_import_sqlite_uow_client_portal].
 - Witnesses, the focused Factory verification checks that assert it: INV-030 [witness: verification:expense_intake_uow_client_portal].
 - Witnesses, the focused Factory verification checks that assert it: INV-042 [witness: verification:project_tracking_audit_writer_sqlite_uow_client_portal].
