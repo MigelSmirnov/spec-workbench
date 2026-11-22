@@ -1077,3 +1077,36 @@ def test_builders_stdlib_lines_group_by_source(tmp_path, monkeypatch) -> None:
         "from typing import Any",
         "from uuid import UUID",
     ]
+
+
+def _codec_specs(version: int):
+    from spec_projection_workbench.service import _persistence_codec_edges
+
+    projected = {"rules": {"persistence_backend": {
+        "schema_version": version,
+        "tables": [{"table": "audit", "columns": [
+            {"column": "audit_id", "storage": "uuid", "element_model": None},
+            {"column": "action", "storage": "enum", "element_model": "AuditAction"},
+            {"column": "actor_kind", "storage": "enum", "element_model": "ActorKind"},
+        ]}],
+        "repositories": [
+            {"repository": "SqliteAuditRepository", "module": "audit_repository", "emission": "table",
+             "methods": [{"method": "insert_audit", "query": "insert", "table": "audit"}]},
+            {"repository": "SqliteOther", "module": "other_repository", "emission": "irregular",
+             "methods": [{"method": "x", "query": "insert", "table": "audit"}]},
+        ],
+    }}}
+    current = {"imports": {"module_internal": {
+        "audit_repository": {"models": ["AuditRecord", "ActorKind"]},
+    }}}
+    return _persistence_codec_edges(projected, current)
+
+
+def test_v3_table_repositories_import_their_codec_models() -> None:
+    assert _codec_specs(3) == {
+        "audit_repository": {"models": ["AuditRecord", "ActorKind", "AuditAction"]},
+    }
+
+
+def test_v2_persistence_projects_no_codec_edges() -> None:
+    assert _codec_specs(2) == {}
