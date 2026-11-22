@@ -488,10 +488,10 @@ def _names(ports):
 def test_proposal_ports_out_of_name_order(semantic_runtime):
     """[witness: verification:kernel_a08_proposal_ports_out_of_name_order]
 
-    A08 Required test 8: a proposal whose input and output ports are given out
-    of name order is recorded, and the answer is that one binding with its
-    ports in name order; another proposal of the same operation already in the
-    store is not the answer.
+    A08 Required test 8: a proposal that passes every check of rule 5 but
+    gives its input and output ports out of name order is recorded, and the
+    answer is that one binding with its ports in name order; another proposal
+    of the same operation already in the store is not the answer.
     """
     stub = semantic_runtime.stub_service()
     save = _capability(

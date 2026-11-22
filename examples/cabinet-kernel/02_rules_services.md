@@ -120,9 +120,11 @@ digest_mismatch -> operation_failed(binding_stale) AND nothing_sent
 7. A proposal for an operation whose `exposed_as.http_api` names two routes, or
    one route with text before the method, is refused naming rule 3.
    [witness: verification:kernel_a08_several_http_routes_not_invocable]
-8. A proposal whose input and output ports are given out of name order is
-   recorded, and the answer is that one binding with its ports in name order;
-   another proposal of the same operation already in the store is not the answer.
+8. A proposal that passes every check of rule 5 but gives its input and output
+   ports out of name order is recorded, and the answer is that one binding with
+   its ports in name order; another proposal of the same operation already in
+   the store is not the answer. A proposal failing a check of rule 5 is refused
+   whatever its port order.
    [witness: verification:kernel_a08_proposal_ports_out_of_name_order]
 
 ### Consequence
