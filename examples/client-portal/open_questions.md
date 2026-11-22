@@ -475,6 +475,9 @@ codes broke connections first, fixed in `5175229f`); this is read from A25 and
 2. (b) Revise A25: trust a forwarded client address only from a configured
    proxy address. A spec change with a new setting.
 
+Owner 2026-11-22: (a). A25 stays; viewer entry is limited at the proxy by the
+real client address. An operations change, no spec change.
+
 ### Q29 — Access cannot be given again after it was revoked
 
 Found 2026-11-22 by the same pass. Re-assigning an operator to a project after
@@ -488,6 +491,10 @@ not yet checked against its table.
 1. (a) Allow it: uniqueness only among active rows, the revoked row stays as
    history. Recommended.
 2. (b) Forbid it: answer 409 and require a new operator.
+
+Owner 2026-11-22: (a). A revoked assignment or grant stays as history and a
+new one may be given; uniqueness holds only among active rows. To be designed
+(persistence contract and the notes of the grant operations).
 
 ### Q30 — A foreign object under the own project path tells that it exists
 
