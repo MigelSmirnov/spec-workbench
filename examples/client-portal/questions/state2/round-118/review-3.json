@@ -1,0 +1,211 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "INV-005 and renewed ProjectViewerGrant or ProducerProjectGrant",
+   "kind": "contradictory authorization guarantee",
+   "text": "INV-005: a revoked grant, credential, viewer, or session blocks the next authorization check immediately, per the revocation cascade table\ngiving the pair access again creates a new grant record.\ngranting the pair again creates a new grant record.",
+   "question": "If a revoked grant is replaced by a new active grant before the pair's next authorization check, must that check still be refused because it is the next check after revocation, or must the new active grant restore access immediately?",
+   "options": [
+    "The replacement active grant restores access immediately; revocation blocks checks only while no replacement active grant exists.",
+    "The first check after revocation is refused even if a replacement active grant was created first.",
+    "Viewer and producer grants follow different rules."
+   ],
+   "default_guess": "The replacement active grant restores access immediately; INV-005 should say that revocation removes the revoked record's authority rather than reserving a mandatory future refusal.",
+   "witness": {
+    "initial": "A viewer or granted-projects producer has active grant G1 for project P.",
+    "events": [
+     "An administrator revokes G1.",
+     "Before the principal makes another project-scoped request, an administrator grants the same pair again, creating active grant G2.",
+     "The principal makes the next authorization request for P."
+    ],
+    "outcomes": [
+     "The request is refused because INV-005 says the revoked grant blocks the next authorization check.",
+     "The request is admitted because G2 is an active grant and the renewed-grant rule restores the pair's access."
+    ],
+    "observer": "The viewer or producer making the request"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "INV-017 and renewed StaffProjectAssignment",
+   "kind": "contradictory authorization guarantee",
+   "text": "INV-017: an operator may access a project only through one active StaffProjectAssignment; revocation blocks the next project-scoped authorization check immediately; current administrators derive project scope from the single administrative area policy\nassigning the pair again creates a new assignment record.",
+   "question": "If an operator receives a new active assignment after revocation but before the next project-scoped check, does the old revocation still force that check to fail?",
+   "options": [
+    "The new active assignment restores access immediately; the revocation blocks checks only while no replacement assignment exists.",
+    "The first check after revocation must fail even after reassignment.",
+    "Reassignment is not effective until one refused check has occurred."
+   ],
+   "default_guess": "The new active assignment restores access immediately, and INV-017 should qualify its next-check guarantee accordingly.",
+   "witness": {
+    "initial": "Operator O has active assignment A1 for project P.",
+    "events": [
+     "An administrator revokes A1.",
+     "Before O makes another project-scoped request, an administrator assigns O to P again, creating A2.",
+     "O makes the next project-scoped request for P."
+    ],
+    "outcomes": [
+     "The request is refused because INV-017 requires revocation to block the next check.",
+     "The request is admitted because A2 is the one active assignment through which O may access P."
+    ],
+    "observer": "Operator O"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "renewable grant and assignment constraints",
+   "kind": "missing invariant and required test",
+   "text": "at most one active grant per `(viewer_id, project_id)`; revoked grants of the pair stay as history.\nat most one active assignment per `(staff_id, project_id)`; revoked assignments of the pair stay as history.\nat most one active grant per `(principal, project)`; revoked grants of the pair stay as history.",
+   "question": "Which State 2 formal invariant and Required tests must show, for all three record types, that there is never more than one active record, revocation is terminal for the old record, renewal creates a distinct record, revoked history remains unchanged, and pair lookup exposes only the current active record?",
+   "options": [
+    "Add one cross-cutting invariant and a Required tests item covering all three record types and every listed guarantee.",
+    "Add a separate invariant and Required tests item for each record type.",
+    "Treat only active uniqueness as an invariant and leave history, distinct renewal, and active-only lookup unguaranteed."
+   ],
+   "default_guess": "Add one cross-cutting invariant with explicit cases for viewer grants, staff assignments, and producer grants, including revoke-then-renew histories and unchanged old records.",
+   "witness": {
+    "initial": "A pair has active record R1.",
+    "events": [
+     "An administrator revokes R1.",
+     "The administrator creates access for the same pair again, producing R2.",
+     "The pair is read through the product lookup and the stored records are inspected by the invariant check."
+    ],
+    "outcomes": [
+     "A test checks only that R2 is active, permitting R1 to be overwritten, deleted, reactivated, or returned by the product lookup.",
+     "A test requires distinct R1 and R2, preserves revoked R1 unchanged, returns only R2 through the product lookup, and proves that no second active record can coexist."
+    ],
+    "observer": "The Factory verification gate and later implementers"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "revoked_by provenance",
+   "kind": "undefined actor meaning",
+   "text": "`revoked_by: UUID | None`",
+   "question": "Whose UUID must `revoked_by` contain, and must it equal the authenticated administrator whose action performs the revocation and appears in the corresponding audit record?",
+   "options": [
+    "It is the authenticated acting administrator's staff_id and must match audit actor provenance.",
+    "It is an administrator UUID supplied in the request.",
+    "It may identify another principal or a system actor.",
+    "Only non-nullness is guaranteed; its identity has no required meaning."
+   ],
+   "default_guess": "It is the authenticated acting administrator's staff_id and must match the audit actor for the same revocation.",
+   "witness": {
+    "initial": "Administrator A is authenticated and revokes a record associated with principal B.",
+    "events": [
+     "The revocation writes `revoked_by`.",
+     "The operation appends its required revoke audit record."
+    ],
+    "outcomes": [
+     "`revoked_by` is A and matches the audit actor.",
+     "`revoked_by` is B, a request-supplied administrator, or another UUID while still satisfying the stated non-null invariant."
+    ],
+    "observer": "A forensic reader comparing the revoked record with its audit entry"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "revoked records as an audit trail",
+   "kind": "vague retention guarantee",
+   "text": "No product operation lists revoked records: a read by pair returns the active record only, and the history serves the audit trail.",
+   "question": "What does “serves the audit trail” require when no product operation can read the history: permanent retention only, deploy-time forensic access, linkage from AuditRecord, or a future product-readable history?",
+   "options": [
+    "Revoked rows are permanently retained as internal forensic evidence, while product APIs expose only active rows and AuditRecord remains the product audit interface.",
+    "Each revoke AuditRecord must link to the retained revoked row so the history is navigable.",
+    "A product history operation must expose revoked rows despite the statement that no product operation lists them.",
+    "The phrase promises only that rows are not immediately deleted, with no durable audit guarantee."
+   ],
+   "default_guess": "Require permanent unchanged retention as internal forensic evidence, keep product lookup active-only, and use the existing AuditRecord catalog as the product-visible audit trail.",
+   "witness": {
+    "initial": "A pair has been granted, revoked, granted again, and revoked again.",
+    "events": [
+     "An auditor investigates the sequence after both records are revoked.",
+     "The auditor uses the interfaces and retained data allowed by the design."
+    ],
+    "outcomes": [
+     "The two revoked records are durably retained and can be correlated with their audit records through an explicitly guaranteed forensic path.",
+     "The rows may be pruned or are inaccessible and uncorrelated, while an implementation still claims that they ‘serve the audit trail.’"
+    ],
+    "observer": "The person conducting an access-history audit"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "partial unique indexes for renewable access records",
+   "kind": "later-layer choice",
+   "text": "One active grant per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.",
+   "question": "How will generation express the three partial unique indexes, including their exact active-status predicates and migration from the former whole-pair uniqueness constraints?",
+   "decision_owner": "generation",
+   "options": [
+    "Generate one partial unique index per table with a predicate selecting the active status and replace the former whole-pair unique constraint.",
+    "Generate an equivalent schema pattern supported by the selected persistence backend while retaining the specified partial-index guarantee.",
+    "Leave the former whole-pair unique constraint in place alongside the partial index."
+   ],
+   "consequences": [
+    "Direct partial indexes preserve renewable history and reject concurrent active duplicates.",
+    "A backend-equivalent pattern may improve portability but must be proved to preserve the same uniqueness and history guarantees.",
+    "Keeping the former constraint makes renewal after revocation fail, contradicting the accepted product requirement."
+   ],
+   "requirement": "at most one active grant per `(viewer_id, project_id)`; revoked grants of the pair stay as history.",
+   "default_guess": "Generate explicit active-status partial unique indexes and remove the former whole-pair uniqueness constraints; the exact DDL and migration belong to generation."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"INV-005 and renewed ProjectViewerGrant or ProducerProjectGrant\",\"kind\":\"contradictory authorization guarantee\",\"text\":\"INV-005: a revoked grant, credential, viewer, or session blocks the next authorization check immediately, per the revocation cascade table\\ngiving the pair access again creates a new grant record.\\ngranting the pair again creates a new grant record.\",\"question\":\"If a revoked grant is replaced by a new active grant before the pair's next authorization check, must that check still be refused because it is the next check after revocation, or must the new active grant restore access immediately?\",\"options\":[\"The replacement active grant restores access immediately; revocation blocks checks only while no replacement active grant exists.\",\"The first check after revocation is refused even if a replacement active grant was created first.\",\"Viewer and producer grants follow different rules.\"],\"default_guess\":\"The replacement active grant restores access immediately; INV-005 should say that revocation removes the revoked record's authority rather than reserving a mandatory future refusal.\",\"witness\":{\"initial\":\"A viewer or granted-projects producer has active grant G1 for project P.\",\"events\":[\"An administrator revokes G1.\",\"Before the principal makes another project-scoped request, an administrator grants the same pair again, creating active grant G2.\",\"The principal makes the next authorization request for P.\"],\"outcomes\":[\"The request is refused because INV-005 says the revoked grant blocks the next authorization check.\",\"The request is admitted because G2 is an active grant and the renewed-grant rule restores the pair's access.\"],\"observer\":\"The viewer or producer making the request\"}},{\"unit\":\"context\",\"subject\":\"INV-017 and renewed StaffProjectAssignment\",\"kind\":\"contradictory authorization guarantee\",\"text\":\"INV-017: an operator may access a project only through one active StaffProjectAssignment; revocation blocks the next project-scoped authorization check immediately; current administrators derive project scope from the single administrative area policy\\nassigning the pair again creates a new assignment record.\",\"question\":\"If an operator receives a new active assignment after revocation but before the next project-scoped check, does the old revocation still force that check to fail?\",\"options\":[\"The new active assignment restores access immediately; the revocation blocks checks only while no replacement assignment exists.\",\"The first check after revocation must fail even after reassignment.\",\"Reassignment is not effective until one refused check has occurred.\"],\"default_guess\":\"The new active assignment restores access immediately, and INV-017 should qualify its next-check guarantee accordingly.\",\"witness\":{\"initial\":\"Operator O has active assignment A1 for project P.\",\"events\":[\"An administrator revokes A1.\",\"Before O makes another project-scoped request, an administrator assigns O to P again, creating A2.\",\"O makes the next project-scoped request for P.\"],\"outcomes\":[\"The request is refused because INV-017 requires revocation to block the next check.\",\"The request is admitted because A2 is the one active assignment through which O may access P.\"],\"observer\":\"Operator O\"}},{\"unit\":\"context\",\"subject\":\"renewable grant and assignment constraints\",\"kind\":\"missing invariant and required test\",\"text\":\"at most one active grant per `(viewer_id, project_id)`; revoked grants of the pair stay as history.\\nat most one active assignment per `(staff_id, project_id)`; revoked assignments of the pair stay as history.\\nat most one active grant per `(principal, project)`; revoked grants of the pair stay as history.\",\"question\":\"Which State 2 formal invariant and Required tests must show, for all three record types, that there is never more than one active record, revocation is terminal for the old record, renewal creates a distinct record, revoked history remains unchanged, and pair lookup exposes only the current active record?\",\"options\":[\"Add one cross-cutting invariant and a Required tests item covering all three record types and every listed guarantee.\",\"Add a separate invariant and Required tests item for each record type.\",\"Treat only active uniqueness as an invariant and leave history, distinct renewal, and active-only lookup unguaranteed.\"],\"default_guess\":\"Add one cross-cutting invariant with explicit cases for viewer grants, staff assignments, and producer grants, including revoke-then-renew histories and unchanged old records.\",\"witness\":{\"initial\":\"A pair has active record R1.\",\"events\":[\"An administrator revokes R1.\",\"The administrator creates access for the same pair again, producing R2.\",\"The pair is read through the product lookup and the stored records are inspected by the invariant check.\"],\"outcomes\":[\"A test checks only that R2 is active, permitting R1 to be overwritten, deleted, reactivated, or returned by the product lookup.\",\"A test requires distinct R1 and R2, preserves revoked R1 unchanged, returns only R2 through the product lookup, and proves that no second active record can coexist.\"],\"observer\":\"The Factory verification gate and later implementers\"}},{\"unit\":\"context\",\"subject\":\"duplicate active grant or assignment creation under concurrency\",\"kind\":\"missing refusal guarantee\",\"text\":\"the operation refuses an active duplicate itself, State 4\",\"question\":\"What required result applies when two concurrent creations for the same pair both pass the active-duplicate check and one loses at the uniqueness boundary?\",\"options\":[\"Return the same typed duplicate/conflict refusal as a sequential active duplicate, write no new access record for the loser, and roll back its other effects.\",\"Expose the persistence conflict as an internal error while preserving uniqueness.\",\"Treat the losing request as an idempotent success naming the winning active record.\"],\"default_guess\":\"Return a typed duplicate/conflict refusal with no effects from the losing operation; concurrency must not change the product-visible refusal into a 500.\",\"witness\":{\"initial\":\"No active record exists for a viewer-project, staff-project, or producer-project pair.\",\"events\":[\"Two administrator requests concurrently check for an active record and both see none.\",\"Both attempt to create access; the uniqueness constraint accepts one and rejects the other.\"],\"outcomes\":[\"The losing caller receives a controlled duplicate refusal and its transaction changes nothing.\",\"The losing caller receives an internal persistence error or an idempotent success.\"],\"observer\":\"The administrator issuing the losing request\"}},{\"unit\":\"context\",\"subject\":\"created_at, revoked_at, and operation time for renewable access records\",\"kind\":\"missing time decision\",\"text\":\"`created_at: datetime`,\\n`revoked_at: datetime | None`\",\"question\":\"For creation and revocation of each grant or assignment, where does the instant come from, is the datetime UTC-aware or otherwise normalized, and how many clock readings does one operation take—including whether the access record and its audit record share one instant?\",\"options\":[\"Use one authoritative UTC-aware clock reading per operation and reuse it for every timestamp written by that operation.\",\"Read an authoritative clock separately for each record or timestamp written by the operation.\",\"Accept timestamps from the administrator request.\",\"Use naive local datetimes from the process clock.\"],\"default_guess\":\"Use one injected authoritative UTC-aware clock reading per operation and reuse it for the access mutation and its audit effects.\",\"witness\":{\"initial\":\"An administrator renews or revokes access near a clock or date boundary.\",\"events\":[\"The operation writes the grant or assignment timestamp and its audit timestamp.\",\"A later reader orders the access history and audit history by their recorded instants.\"],\"outcomes\":[\"Both records carry one normalized operation instant and order consistently.\",\"Separate, naive, or caller-supplied instants disagree in timezone or ordering.\"],\"observer\":\"An administrator or forensic reader comparing access and audit history\"}},{\"unit\":\"context\",\"subject\":\"revoked_by provenance\",\"kind\":\"undefined actor meaning\",\"text\":\"`revoked_by: UUID | None`\",\"question\":\"Whose UUID must `revoked_by` contain, and must it equal the authenticated administrator whose action performs the revocation and appears in the corresponding audit record?\",\"options\":[\"It is the authenticated acting administrator's staff_id and must match audit actor provenance.\",\"It is an administrator UUID supplied in the request.\",\"It may identify another principal or a system actor.\",\"Only non-nullness is guaranteed; its identity has no required meaning.\"],\"default_guess\":\"It is the authenticated acting administrator's staff_id and must match the audit actor for the same revocation.\",\"witness\":{\"initial\":\"Administrator A is authenticated and revokes a record associated with principal B.\",\"events\":[\"The revocation writes `revoked_by`.\",\"The operation appends its required revoke audit record.\"],\"outcomes\":[\"`revoked_by` is A and matches the audit actor.\",\"`revoked_by` is B, a request-supplied administrator, or another UUID while still satisfying the stated non-null invariant.\"],\"observer\":\"A forensic reader comparing the revoked record with its audit entry\"}},{\"unit\":\"context\",\"subject\":\"revoked records as an audit trail\",\"kind\":\"vague retention guarantee\",\"text\":\"No product operation lists revoked records: a read by pair returns the active record only, and the history serves the audit trail.\",\"question\":\"What does “serves the audit trail” require when no product operation can read the history: permanent retention only, deploy-time forensic access, linkage from AuditRecord, or a future product-readable history?\",\"options\":[\"Revoked rows are permanently retained as internal forensic evidence, while product APIs expose only active rows and AuditRecord remains the product audit interface.\",\"Each revoke AuditRecord must link to the retained revoked row so the history is navigable.\",\"A product history operation must expose revoked rows despite the statement that no product operation lists them.\",\"The phrase promises only that rows are not immediately deleted, with no durable audit guarantee.\"],\"default_guess\":\"Require permanent unchanged retention as internal forensic evidence, keep product lookup active-only, and use the existing AuditRecord catalog as the product-visible audit trail.\",\"witness\":{\"initial\":\"A pair has been granted, revoked, granted again, and revoked again.\",\"events\":[\"An auditor investigates the sequence after both records are revoked.\",\"The auditor uses the interfaces and retained data allowed by the design.\"],\"outcomes\":[\"The two revoked records are durably retained and can be correlated with their audit records through an explicitly guaranteed forensic path.\",\"The rows may be pruned or are inaccessible and uncorrelated, while an implementation still claims that they ‘serve the audit trail.’\"],\"observer\":\"The person conducting an access-history audit\"}},{\"unit\":\"context\",\"subject\":\"partial unique indexes for renewable access records\",\"kind\":\"later-layer choice\",\"text\":\"One active grant per pair is now kept by a partial unique index (SPEC_STANDARD §6.3, tenth addition); the revoked records stay as history.\",\"question\":\"How will generation express the three partial unique indexes, including their exact active-status predicates and migration from the former whole-pair uniqueness constraints?\",\"decision_owner\":\"generation\",\"options\":[\"Generate one partial unique index per table with a predicate selecting the active status and replace the former whole-pair unique constraint.\",\"Generate an equivalent schema pattern supported by the selected persistence backend while retaining the specified partial-index guarantee.\",\"Leave the former whole-pair unique constraint in place alongside the partial index.\"],\"consequences\":[\"Direct partial indexes preserve renewable history and reject concurrent active duplicates.\",\"A backend-equivalent pattern may improve portability but must be proved to preserve the same uniqueness and history guarantees.\",\"Keeping the former constraint makes renewal after revocation fail, contradicting the accepted product requirement.\"],\"requirement\":\"at most one active grant per `(viewer_id, project_id)`; revoked grants of the pair stay as history.\",\"default_guess\":\"Generate explicit active-status partial unique indexes and remove the former whole-pair uniqueness constraints; the exact DDL and migration belong to generation.\"}]}",
+ "set_aside": [
+  {
+   "unit": "context",
+   "subject": "duplicate active grant or assignment creation under concurrency",
+   "kind": "missing refusal guarantee",
+   "text": "the operation refuses an active duplicate itself, State 4",
+   "question": "What required result applies when two concurrent creations for the same pair both pass the active-duplicate check and one loses at the uniqueness boundary?",
+   "options": [
+    "Return the same typed duplicate/conflict refusal as a sequential active duplicate, write no new access record for the loser, and roll back its other effects.",
+    "Expose the persistence conflict as an internal error while preserving uniqueness.",
+    "Treat the losing request as an idempotent success naming the winning active record."
+   ],
+   "default_guess": "Return a typed duplicate/conflict refusal with no effects from the losing operation; concurrency must not change the product-visible refusal into a 500.",
+   "witness": {
+    "initial": "No active record exists for a viewer-project, staff-project, or producer-project pair.",
+    "events": [
+     "Two administrator requests concurrently check for an active record and both see none.",
+     "Both attempt to create access; the uniqueness constraint accepts one and rejects the other."
+    ],
+    "outcomes": [
+     "The losing caller receives a controlled duplicate refusal and its transaction changes nothing.",
+     "The losing caller receives an internal persistence error or an idempotent success."
+    ],
+    "observer": "The administrator issuing the losing request"
+   },
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  },
+  {
+   "unit": "context",
+   "subject": "created_at, revoked_at, and operation time for renewable access records",
+   "kind": "missing time decision",
+   "text": "`created_at: datetime`,\n`revoked_at: datetime | None`",
+   "question": "For creation and revocation of each grant or assignment, where does the instant come from, is the datetime UTC-aware or otherwise normalized, and how many clock readings does one operation take—including whether the access record and its audit record share one instant?",
+   "options": [
+    "Use one authoritative UTC-aware clock reading per operation and reuse it for every timestamp written by that operation.",
+    "Read an authoritative clock separately for each record or timestamp written by the operation.",
+    "Accept timestamps from the administrator request.",
+    "Use naive local datetimes from the process clock."
+   ],
+   "default_guess": "Use one injected authoritative UTC-aware clock reading per operation and reuse it for the access mutation and its audit effects.",
+   "witness": {
+    "initial": "An administrator renews or revokes access near a clock or date boundary.",
+    "events": [
+     "The operation writes the grant or assignment timestamp and its audit timestamp.",
+     "A later reader orders the access history and audit history by their recorded instants."
+    ],
+    "outcomes": [
+     "Both records carry one normalized operation instant and order consistently.",
+     "Separate, naive, or caller-supplied instants disagree in timezone or ordering."
+    ],
+    "observer": "An administrator or forensic reader comparing access and audit history"
+   },
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  }
+ ]
+}

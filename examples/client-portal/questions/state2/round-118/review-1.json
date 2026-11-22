@@ -1,0 +1,220 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "ProjectViewerGrant, StaffProjectAssignment and ProducerProjectGrant active-record and history constraints",
+   "kind": "missing_invariant_and_required_test",
+   "text": "at most one active grant per `(viewer_id, project_id)`; revoked\n  grants of the pair stay as history.",
+   "question": "Which formal invariant and Required tests must prove, for each of the three changed record types, that concurrent or repeated creation never leaves two active records, revocation preserves the old record, re-grant or reassignment creates a distinct record, terminal records never reactivate, and pair lookup returns only the active record?",
+   "options": [
+    "Add one common invariant covering all three record types, with a Required tests item exercising creation, revocation, replacement, history retention, active-only lookup and concurrent duplicate creation.",
+    "Add a separate invariant and Required tests item for each record type.",
+    "Treat the State 1 rules as sufficient and add no State 2 invariant or test."
+   ],
+   "default_guess": "Add separate invariants or an explicitly parameterized common invariant, with tests covering both sequential and concurrent histories."
+  },
+  {
+   "unit": "context",
+   "subject": "viewer authorization after a replacement ProjectViewerGrant",
+   "kind": "contradictory_guarantees",
+   "text": "INV-005: a revoked grant, credential, viewer, or session blocks the next authorization check immediately, per the revocation cascade table",
+   "question": "If a viewer grant is revoked and a new active grant for the same pair is created before the next authorization check, must that check be admitted by the new grant or refused because the revoked grant must block the next check?",
+   "options": [
+    "The replacement active grant admits the check; “blocks the next authorization check” applies only while no later active grant exists.",
+    "The revocation forces the next check to fail even if a replacement grant has already been created.",
+    "Re-granting is not effective until one failed authorization check has occurred."
+   ],
+   "default_guess": "The replacement active grant admits the check; revocation blocks checks only during the interval with no active grant.",
+   "witness": {
+    "initial": "Viewer V has an active grant G1 for project P and a valid session.",
+    "events": [
+     "An administrator revokes G1.",
+     "Before V makes another request, an administrator grants V access to P again, creating active grant G2.",
+     "V makes the next project-scoped read request for P."
+    ],
+    "outcomes": [
+     "The request succeeds because G2 is active.",
+     "The request is refused because revoking G1 must block the next authorization check immediately."
+    ],
+    "observer": "Viewer V"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "operator authorization after a replacement StaffProjectAssignment",
+   "kind": "contradictory_guarantees",
+   "text": "INV-017: an operator may access a project only through one active StaffProjectAssignment; revocation blocks the next project-scoped authorization check immediately; current administrators derive project scope from the single administrative area policy",
+   "question": "If an assignment is revoked and a new active assignment for the same staff/project pair is created before the next authorization check, does the new assignment admit that check or must the revocation still make it fail?",
+   "options": [
+    "The new active assignment admits the check; the immediate block lasts only while no active assignment exists.",
+    "The next check fails despite the new assignment.",
+    "The new assignment becomes effective only after one refused check."
+   ],
+   "default_guess": "The new active assignment admits the check.",
+   "witness": {
+    "initial": "Operator S has active assignment A1 to project P and an otherwise valid session.",
+    "events": [
+     "An administrator revokes A1.",
+     "Before S makes another request, an administrator assigns S to P again, creating A2.",
+     "S makes the next project-scoped request for P."
+    ],
+    "outcomes": [
+     "The request succeeds through active assignment A2.",
+     "The request is refused because revocation of A1 must block the next project-scoped authorization check."
+    ],
+    "observer": "Operator S"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "producer authorization after a replacement ProducerProjectGrant",
+   "kind": "contradictory_guarantees",
+   "text": "INV-005: a revoked grant, credential, viewer, or session blocks the next authorization check immediately, per the revocation cascade table",
+   "question": "If a granted-projects producer grant is revoked and replaced before the producer's next authorization check, does the new active grant authorize the import?",
+   "options": [
+    "The new active grant authorizes the import; the old revocation blocks access only while no replacement is active.",
+    "The next import is refused despite the replacement grant.",
+    "The replacement becomes effective only after one refused import."
+   ],
+   "default_guess": "The new active grant authorizes the import.",
+   "witness": {
+    "initial": "A granted-projects producer has active grant G1 for active project P and a usable credential.",
+    "events": [
+     "An administrator revokes G1.",
+     "An administrator creates replacement grant G2 for the same producer and project.",
+     "The producer submits its next otherwise valid import for P."
+    ],
+    "outcomes": [
+     "The import passes the scope step because G2 is active.",
+     "The import is refused because G1's revocation must block the next authorization check."
+    ],
+    "observer": "The producer"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "duplicate and concurrent grant or assignment creation",
+   "kind": "missing_refusal_result",
+   "text": "at most one active assignment per `(staff_id, project_id)`;",
+   "question": "What required result must each create operation return when the pair already has an active record, including when two concurrent creates race, and must the losing attempt be guaranteed to change and audit nothing?",
+   "options": [
+    "Return the existing active record as an idempotent success.",
+    "Return a typed conflict or duplicate refusal and change nothing.",
+    "Expose a generic persistence/server failure.",
+    "Specify different outcomes for viewer grants, staff assignments and producer grants."
+   ],
+   "default_guess": "Return a typed conflict/duplicate refusal, leaving all records and audit unchanged; the same guarantee applies to the loser of a race.",
+   "witness": {
+    "initial": "No active record exists for a pair.",
+    "events": [
+     "Two administrators concurrently submit creation for that pair.",
+     "Both requests pass their pre-insert duplicate checks."
+    ],
+    "outcomes": [
+     "One succeeds and the other receives a defined typed conflict with no effects.",
+     "One succeeds and the other surfaces an unspecified persistence or HTTP 500 failure."
+    ],
+    "observer": "The administrator whose request loses the race"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "timestamps written by grant creation, assignment creation and revocation",
+   "kind": "missing_time_semantics",
+   "text": "`revoked_at` and `revoked_by` are both null while the record is active and\n  are both set, once, when it becomes revoked.",
+   "question": "What time source supplies `created_at` and `revoked_at`, what instant and timezone/normalization does `datetime` represent, and how many readings may each create, revoke or replacement operation take when it also writes an AuditRecord?",
+   "options": [
+    "Use one authoritative UTC instant read once per operation and reuse it for the entity transition and its audit record.",
+    "Read the authoritative clock separately for each written record.",
+    "Let repositories or the database assign timestamps independently.",
+    "Use naive datetimes in a declared timezone."
+   ],
+   "default_guess": "Use an injected authoritative UTC clock, read once per operation and reuse that aware datetime for all records written atomically by the operation."
+  },
+  {
+   "unit": "context",
+   "subject": "revocation target for ProjectViewerGrant",
+   "kind": "later_layer_question",
+   "text": "giving the pair access again\n  creates a new grant record.",
+   "question": "Once a pair can have several historical grant IDs, what must `revoke_viewer_project` receive and what may its caller rely on when there is no active grant or a stale historical ID is supplied?",
+   "decision_owner": "state5",
+   "options": [
+    "Supply `(viewer_id, project_id)` and revoke the currently active record.",
+    "Supply `grant_id` and revoke only that exact active record.",
+    "Support both forms with explicit stale/no-active results."
+   ],
+   "consequences": [
+    "Pair-based revocation hides historical identity and naturally targets the current active grant.",
+    "ID-based revocation prevents a stale request from accidentally revoking a later replacement but requires callers to retain the active ID.",
+    "Supporting both expands the contract and requires precedence between stale-ID and pair lookup failures."
+   ],
+   "requirement": "A revoked grant is\n  terminal and no operation reactivates it; giving the pair access again\n  creates a new grant record.",
+   "default_guess": "Use the pair and revoke its current active record, with a defined no-active refusal; require compare-and-revoke protection if stale administration requests matter."
+  },
+  {
+   "unit": "context",
+   "subject": "revocation target for StaffProjectAssignment",
+   "kind": "later_layer_question",
+   "text": "assigning the pair again creates\n  a new assignment record.",
+   "question": "Once a staff/project pair can have several historical assignment IDs, what must `revoke_staff_project_assignment` receive and what result does it expose for no active assignment or a stale ID?",
+   "decision_owner": "state5",
+   "options": [
+    "Supply `(staff_id, project_id)` and revoke the current active assignment.",
+    "Supply `assignment_id` and revoke that exact active assignment.",
+    "Support both forms with explicit stale/no-active results."
+   ],
+   "consequences": [
+    "Pair-based revocation is simple but a delayed request can revoke a replacement assignment.",
+    "ID-based revocation gives precise stale-request behavior but requires the caller to know the active assignment ID.",
+    "Supporting both requires additional contract rules and failure precedence."
+   ],
+   "requirement": "A revoked assignment is\n  terminal and no operation reactivates it; assigning the pair again creates\n  a new assignment record.",
+   "default_guess": "Use the assignment ID when available so a delayed revocation cannot revoke a later replacement."
+  },
+  {
+   "unit": "context",
+   "subject": "revocation target for ProducerProjectGrant",
+   "kind": "later_layer_question",
+   "text": "granting the pair again creates a new grant\n  record.",
+   "question": "Once a producer/project pair can have multiple historical grant IDs, what must `revoke_producer_project` receive and what result is guaranteed for no active grant or a stale ID?",
+   "decision_owner": "state5",
+   "options": [
+    "Supply `(service_principal_id, project_id)` and revoke the current active grant.",
+    "Supply `grant_id` and revoke that exact active grant.",
+    "Support both forms with explicit stale/no-active results."
+   ],
+   "consequences": [
+    "Pair-based revocation automatically finds the current scope grant but permits a delayed request to revoke a replacement.",
+    "ID-based revocation makes stale requests harmless or explicitly refused but requires callers to know the active ID.",
+    "Supporting both expands the contract and requires defined precedence."
+   ],
+   "requirement": "A revoked grant is terminal and no\n  operation reactivates it; granting the pair again creates a new grant\n  record.",
+   "default_guess": "Use the grant ID and return a defined stale/already-revoked refusal."
+  },
+  {
+   "unit": "context",
+   "subject": "A31 security-review invariant",
+   "kind": "underspecified_required_test",
+   "text": "`python tools/design_lint.py examples/client-portal --state 2`.",
+   "question": "What must this Required tests item demonstrate about the invariant—category completeness, the validity of every APPLICABLE reference, the rationale on every NOT_APPLICABLE category, and the absence of UNRESOLVED categories—rather than merely that the command exits successfully?",
+   "options": [
+    "Require the lint to assert every stated part of the invariant.",
+    "Require only that the lint command exits successfully.",
+    "Split the invariant into separately asserted completeness, resolution and rationale checks."
+   ],
+   "default_guess": "State explicitly that the lint must assert every category is present and has exactly one permitted outcome, all APPLICABLE references resolve, every NOT_APPLICABLE entry has a project-specific rationale, and no category is UNRESOLVED."
+  },
+  {
+   "unit": "context",
+   "subject": "A7 HTTP error policy reference",
+   "kind": "standard_violation",
+   "text": "Every refusal before the replay check answers\nHTTP 422 with an empty body (`rules.http_router_backend.error_policy`), so\nwhich of them failed first is not observable to the caller; a replay with\nother content is the conflict of A8 (409).",
+   "rule": "Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.",
+   "section": "15.3.1",
+   "question": "The passage must either state the complete HTTP behavior as the normative behavior that later notes carry, without treating `rules.http_router_backend.error_policy` as a delivered value, or route the policy through one of §15.3.1's valid value paths and name it in the required form."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"ProjectViewerGrant, StaffProjectAssignment and ProducerProjectGrant active-record and history constraints\",\"kind\":\"missing_invariant_and_required_test\",\"text\":\"at most one active grant per `(viewer_id, project_id)`; revoked\\n  grants of the pair stay as history.\",\"question\":\"Which formal invariant and Required tests must prove, for each of the three changed record types, that concurrent or repeated creation never leaves two active records, revocation preserves the old record, re-grant or reassignment creates a distinct record, terminal records never reactivate, and pair lookup returns only the active record?\",\"options\":[\"Add one common invariant covering all three record types, with a Required tests item exercising creation, revocation, replacement, history retention, active-only lookup and concurrent duplicate creation.\",\"Add a separate invariant and Required tests item for each record type.\",\"Treat the State 1 rules as sufficient and add no State 2 invariant or test.\"],\"default_guess\":\"Add separate invariants or an explicitly parameterized common invariant, with tests covering both sequential and concurrent histories.\"},{\"unit\":\"context\",\"subject\":\"viewer authorization after a replacement ProjectViewerGrant\",\"kind\":\"contradictory_guarantees\",\"text\":\"INV-005: a revoked grant, credential, viewer, or session blocks the next authorization check immediately, per the revocation cascade table\",\"question\":\"If a viewer grant is revoked and a new active grant for the same pair is created before the next authorization check, must that check be admitted by the new grant or refused because the revoked grant must block the next check?\",\"options\":[\"The replacement active grant admits the check; “blocks the next authorization check” applies only while no later active grant exists.\",\"The revocation forces the next check to fail even if a replacement grant has already been created.\",\"Re-granting is not effective until one failed authorization check has occurred.\"],\"default_guess\":\"The replacement active grant admits the check; revocation blocks checks only during the interval with no active grant.\",\"witness\":{\"initial\":\"Viewer V has an active grant G1 for project P and a valid session.\",\"events\":[\"An administrator revokes G1.\",\"Before V makes another request, an administrator grants V access to P again, creating active grant G2.\",\"V makes the next project-scoped read request for P.\"],\"outcomes\":[\"The request succeeds because G2 is active.\",\"The request is refused because revoking G1 must block the next authorization check immediately.\"],\"observer\":\"Viewer V\"}},{\"unit\":\"context\",\"subject\":\"operator authorization after a replacement StaffProjectAssignment\",\"kind\":\"contradictory_guarantees\",\"text\":\"INV-017: an operator may access a project only through one active StaffProjectAssignment; revocation blocks the next project-scoped authorization check immediately; current administrators derive project scope from the single administrative area policy\",\"question\":\"If an assignment is revoked and a new active assignment for the same staff/project pair is created before the next authorization check, does the new assignment admit that check or must the revocation still make it fail?\",\"options\":[\"The new active assignment admits the check; the immediate block lasts only while no active assignment exists.\",\"The next check fails despite the new assignment.\",\"The new assignment becomes effective only after one refused check.\"],\"default_guess\":\"The new active assignment admits the check.\",\"witness\":{\"initial\":\"Operator S has active assignment A1 to project P and an otherwise valid session.\",\"events\":[\"An administrator revokes A1.\",\"Before S makes another request, an administrator assigns S to P again, creating A2.\",\"S makes the next project-scoped request for P.\"],\"outcomes\":[\"The request succeeds through active assignment A2.\",\"The request is refused because revocation of A1 must block the next project-scoped authorization check.\"],\"observer\":\"Operator S\"}},{\"unit\":\"context\",\"subject\":\"producer authorization after a replacement ProducerProjectGrant\",\"kind\":\"contradictory_guarantees\",\"text\":\"INV-005: a revoked grant, credential, viewer, or session blocks the next authorization check immediately, per the revocation cascade table\",\"question\":\"If a granted-projects producer grant is revoked and replaced before the producer's next authorization check, does the new active grant authorize the import?\",\"options\":[\"The new active grant authorizes the import; the old revocation blocks access only while no replacement is active.\",\"The next import is refused despite the replacement grant.\",\"The replacement becomes effective only after one refused import.\"],\"default_guess\":\"The new active grant authorizes the import.\",\"witness\":{\"initial\":\"A granted-projects producer has active grant G1 for active project P and a usable credential.\",\"events\":[\"An administrator revokes G1.\",\"An administrator creates replacement grant G2 for the same producer and project.\",\"The producer submits its next otherwise valid import for P.\"],\"outcomes\":[\"The import passes the scope step because G2 is active.\",\"The import is refused because G1's revocation must block the next authorization check.\"],\"observer\":\"The producer\"}},{\"unit\":\"context\",\"subject\":\"duplicate and concurrent grant or assignment creation\",\"kind\":\"missing_refusal_result\",\"text\":\"at most one active assignment per `(staff_id, project_id)`;\",\"question\":\"What required result must each create operation return when the pair already has an active record, including when two concurrent creates race, and must the losing attempt be guaranteed to change and audit nothing?\",\"options\":[\"Return the existing active record as an idempotent success.\",\"Return a typed conflict or duplicate refusal and change nothing.\",\"Expose a generic persistence/server failure.\",\"Specify different outcomes for viewer grants, staff assignments and producer grants.\"],\"default_guess\":\"Return a typed conflict/duplicate refusal, leaving all records and audit unchanged; the same guarantee applies to the loser of a race.\",\"witness\":{\"initial\":\"No active record exists for a pair.\",\"events\":[\"Two administrators concurrently submit creation for that pair.\",\"Both requests pass their pre-insert duplicate checks.\"],\"outcomes\":[\"One succeeds and the other receives a defined typed conflict with no effects.\",\"One succeeds and the other surfaces an unspecified persistence or HTTP 500 failure.\"],\"observer\":\"The administrator whose request loses the race\"}},{\"unit\":\"context\",\"subject\":\"timestamps written by grant creation, assignment creation and revocation\",\"kind\":\"missing_time_semantics\",\"text\":\"`revoked_at` and `revoked_by` are both null while the record is active and\\n  are both set, once, when it becomes revoked.\",\"question\":\"What time source supplies `created_at` and `revoked_at`, what instant and timezone/normalization does `datetime` represent, and how many readings may each create, revoke or replacement operation take when it also writes an AuditRecord?\",\"options\":[\"Use one authoritative UTC instant read once per operation and reuse it for the entity transition and its audit record.\",\"Read the authoritative clock separately for each written record.\",\"Let repositories or the database assign timestamps independently.\",\"Use naive datetimes in a declared timezone.\"],\"default_guess\":\"Use an injected authoritative UTC clock, read once per operation and reuse that aware datetime for all records written atomically by the operation.\"},{\"unit\":\"context\",\"subject\":\"revocation target for ProjectViewerGrant\",\"kind\":\"later_layer_question\",\"text\":\"giving the pair access again\\n  creates a new grant record.\",\"question\":\"Once a pair can have several historical grant IDs, what must `revoke_viewer_project` receive and what may its caller rely on when there is no active grant or a stale historical ID is supplied?\",\"decision_owner\":\"state5\",\"options\":[\"Supply `(viewer_id, project_id)` and revoke the currently active record.\",\"Supply `grant_id` and revoke only that exact active record.\",\"Support both forms with explicit stale/no-active results.\"],\"consequences\":[\"Pair-based revocation hides historical identity and naturally targets the current active grant.\",\"ID-based revocation prevents a stale request from accidentally revoking a later replacement but requires callers to retain the active ID.\",\"Supporting both expands the contract and requires precedence between stale-ID and pair lookup failures.\"],\"requirement\":\"A revoked grant is\\n  terminal and no operation reactivates it; giving the pair access again\\n  creates a new grant record.\",\"default_guess\":\"Use the pair and revoke its current active record, with a defined no-active refusal; require compare-and-revoke protection if stale administration requests matter.\"},{\"unit\":\"context\",\"subject\":\"revocation target for StaffProjectAssignment\",\"kind\":\"later_layer_question\",\"text\":\"assigning the pair again creates\\n  a new assignment record.\",\"question\":\"Once a staff/project pair can have several historical assignment IDs, what must `revoke_staff_project_assignment` receive and what result does it expose for no active assignment or a stale ID?\",\"decision_owner\":\"state5\",\"options\":[\"Supply `(staff_id, project_id)` and revoke the current active assignment.\",\"Supply `assignment_id` and revoke that exact active assignment.\",\"Support both forms with explicit stale/no-active results.\"],\"consequences\":[\"Pair-based revocation is simple but a delayed request can revoke a replacement assignment.\",\"ID-based revocation gives precise stale-request behavior but requires the caller to know the active assignment ID.\",\"Supporting both requires additional contract rules and failure precedence.\"],\"requirement\":\"A revoked assignment is\\n  terminal and no operation reactivates it; assigning the pair again creates\\n  a new assignment record.\",\"default_guess\":\"Use the assignment ID when available so a delayed revocation cannot revoke a later replacement.\"},{\"unit\":\"context\",\"subject\":\"revocation target for ProducerProjectGrant\",\"kind\":\"later_layer_question\",\"text\":\"granting the pair again creates a new grant\\n  record.\",\"question\":\"Once a producer/project pair can have multiple historical grant IDs, what must `revoke_producer_project` receive and what result is guaranteed for no active grant or a stale ID?\",\"decision_owner\":\"state5\",\"options\":[\"Supply `(service_principal_id, project_id)` and revoke the current active grant.\",\"Supply `grant_id` and revoke that exact active grant.\",\"Support both forms with explicit stale/no-active results.\"],\"consequences\":[\"Pair-based revocation automatically finds the current scope grant but permits a delayed request to revoke a replacement.\",\"ID-based revocation makes stale requests harmless or explicitly refused but requires callers to know the active ID.\",\"Supporting both expands the contract and requires defined precedence.\"],\"requirement\":\"A revoked grant is terminal and no\\n  operation reactivates it; granting the pair again creates a new grant\\n  record.\",\"default_guess\":\"Use the grant ID and return a defined stale/already-revoked refusal.\"},{\"unit\":\"context\",\"subject\":\"A31 security-review invariant\",\"kind\":\"underspecified_required_test\",\"text\":\"`python tools/design_lint.py examples/client-portal --state 2`.\",\"question\":\"What must this Required tests item demonstrate about the invariant—category completeness, the validity of every APPLICABLE reference, the rationale on every NOT_APPLICABLE category, and the absence of UNRESOLVED categories—rather than merely that the command exits successfully?\",\"options\":[\"Require the lint to assert every stated part of the invariant.\",\"Require only that the lint command exits successfully.\",\"Split the invariant into separately asserted completeness, resolution and rationale checks.\"],\"default_guess\":\"State explicitly that the lint must assert every category is present and has exactly one permitted outcome, all APPLICABLE references resolve, every NOT_APPLICABLE entry has a project-specific rationale, and no category is UNRESOLVED.\"},{\"unit\":\"context\",\"subject\":\"A7 HTTP error policy reference\",\"kind\":\"standard_violation\",\"text\":\"Every refusal before the replay check answers\\nHTTP 422 with an empty body (`rules.http_router_backend.error_policy`), so\\nwhich of them failed first is not observable to the caller; a replay with\\nother content is the conflict of A8 (409).\",\"rule\":\"Адрес, записанный без `=` — в обратных кавычках или словами, — не разыменовывается вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение сочинить. Обе формы невалидны для значения, которое читает генерируемый код.\",\"section\":\"15.3.1\",\"question\":\"The passage must either state the complete HTTP behavior as the normative behavior that later notes carry, without treating `rules.http_router_backend.error_policy` as a delivered value, or route the policy through one of §15.3.1's valid value paths and name it in the required form.\"}]}",
+ "set_aside": []
+}
