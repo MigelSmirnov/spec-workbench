@@ -501,6 +501,17 @@ Owner 2026-11-22: (a). A revoked assignment or grant stays as history and a
 new one may be given; uniqueness holds only among active rows. To be designed
 (persistence contract and the notes of the grant operations).
 
+Found on the stand 2026-11-22 while preparing it: the schema change alone is
+not enough. With the grant table rebuilt (uniqueness among active rows) and
+the current code, a re-grant answered 201 and the operator still got 404:
+`get_staff_assignment` reads one row by staff and project and met the revoked
+one first. The design must therefore also say which row the reads return
+(`get_staff_assignment`, `get_viewer_grant`, `get_producer_grant`): the active
+one, else the latest revoked. Existing databases get the new schema from
+code-factory `deploy/migrate_db.py` (#250, a mandatory step of `release.sh`);
+its grant-table rebuild is written and tested but registered only in the
+release that ships the Q29 code.
+
 ### Q30 — A foreign object under the own project path tells that it exists
 
 Found 2026-11-22 by the same pass. An operator of project Alpha who names an
