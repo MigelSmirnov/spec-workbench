@@ -477,6 +477,11 @@ codes broke connections first, fixed in `5175229f`); this is read from A25 and
 
 Owner 2026-11-22: (a). A25 stays; viewer entry is limited at the proxy by the
 real client address. An operations change, no spec change.
+Applied 2026-11-22 on the production proxy: `limit_req_zone` in
+`/etc/nginx/conf.d/portal-viewer-entry-limit.conf` (10 per minute per address,
+burst 10, answer 429) on `location = /api/auth/viewer/enter` only; backup
+`client-portal.conf.before-entry-limit-20261122`. Checked: 22 attempts gave
+11 passed to the service and 11 × 429; the portal answered 200.
 
 ### Q29 — Access cannot be given again after it was revoked
 
