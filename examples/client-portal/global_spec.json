@@ -543,7 +543,7 @@
     "ProjectTrackingRepository.list_project_payments: [ORCHESTRATION] Every implementation of ProjectTrackingRepository MUST preserve transitional compatibility by delegating exactly once to project_tracking().list_project_payments with project_id.",
     "ProjectTrackingRepository.list_project_progress: [ORCHESTRATION] Every implementation of ProjectTrackingRepository MUST preserve transitional compatibility by delegating exactly once to project_tracking().list_project_progress with project_id.",
     "ProjectTrackingRepository.upsert_section_progress: [ORCHESTRATION] Every implementation of ProjectTrackingRepository MUST preserve transitional compatibility by delegating exactly once to project_tracking().upsert_section_progress with progress.",
-    "ServiceIdentityRepository.get_producer_grant: [RETURN_SHAPE] Every implementation of ServiceIdentityRepository MUST select the principal_id/project_id pair and return its ProducerProjectGrant or None.",
+    "ServiceIdentityRepository.get_producer_grant: [RETURN_SHAPE] Every implementation of ServiceIdentityRepository MUST return the one ProducerProjectGrant of the principal_id/project_id pair whose status is the ACTIVE member of = models.GrantStatus, or None when the pair has no active grant; revoked grants of the pair are never returned.",
     "ServiceIdentityRepository.get_producer_grant_by_id: [RETURN_SHAPE] Every implementation of ServiceIdentityRepository MUST select only grant_id and return its ProducerProjectGrant or None.",
     "ServiceIdentityRepository.get_service_credential: [RETURN_SHAPE] Every implementation of ServiceIdentityRepository MUST select only credential_id and return its ServiceCredential or None.",
     "ServiceIdentityRepository.get_service_principal: [RETURN_SHAPE] Every implementation of ServiceIdentityRepository MUST select only principal_id and return its ServicePrincipal or None.",
@@ -559,7 +559,7 @@
     "SnapshotImportRepository.insert_snapshot: [SCHEMA_CONSTRAINT] Every implementation of SnapshotImportRepository MUST append exactly snapshot and reject duplicate snapshot_id or publication identity; no update/delete operation exists.",
     "SnapshotImportRepository.insert_snapshot_import: [SCHEMA_CONSTRAINT] Every implementation of SnapshotImportRepository MUST append exactly record and reject duplicate import_id; no update/delete operation exists.",
     "StaffAccessRepository.get_staff: [RETURN_SHAPE] Every implementation of StaffAccessRepository MUST select only staff_id and return its StaffAccount or None.",
-    "StaffAccessRepository.get_staff_assignment: [RETURN_SHAPE] Every implementation of StaffAccessRepository MUST select the staff_id/project_id pair and return its StaffProjectAssignment or None.",
+    "StaffAccessRepository.get_staff_assignment: [RETURN_SHAPE] Every implementation of StaffAccessRepository MUST return the one StaffProjectAssignment of the staff_id/project_id pair whose status is the ACTIVE member of = models.GrantStatus, or None when the pair has no active assignment; revoked assignments of the pair are never returned.",
     "StaffAccessRepository.get_staff_assignment_by_id: [RETURN_SHAPE] Every implementation of StaffAccessRepository MUST select only assignment_id and return its StaffProjectAssignment or None.",
     "StaffAccessRepository.get_staff_by_email: [RETURN_SHAPE] Every implementation of StaffAccessRepository MUST select by the complete normalized_email unique key and return its StaffAccount or None.",
     "StaffAccessRepository.get_staff_session: [RETURN_SHAPE] Every implementation of StaffAccessRepository MUST select only session_id and return its StaffSession or None.",
@@ -572,7 +572,7 @@
     "StaffAccessRepository.update_staff_sessions: [SCHEMA_CONSTRAINT] Every implementation of StaffAccessRepository MUST update every supplied session by session_id in the current transaction or fail the whole batch.",
     "ViewerAccessRepository.get_viewer: [RETURN_SHAPE] Every implementation of ViewerAccessRepository MUST select only viewer_id and return its ClientViewer or None.",
     "ViewerAccessRepository.get_viewer_credential: [RETURN_SHAPE] Every implementation of ViewerAccessRepository MUST select only credential_id and return its ViewerAccessCredential or None.",
-    "ViewerAccessRepository.get_viewer_grant: [RETURN_SHAPE] Every implementation of ViewerAccessRepository MUST select the viewer_id/project_id pair and return its ProjectViewerGrant or None.",
+    "ViewerAccessRepository.get_viewer_grant: [RETURN_SHAPE] Every implementation of ViewerAccessRepository MUST return the one ProjectViewerGrant of the viewer_id/project_id pair whose status is the ACTIVE member of = models.GrantStatus, or None when the pair has no active grant; revoked grants of the pair are never returned.",
     "ViewerAccessRepository.get_viewer_grant_by_id: [RETURN_SHAPE] Every implementation of ViewerAccessRepository MUST select only grant_id and return its ProjectViewerGrant or None.",
     "ViewerAccessRepository.get_viewer_session: [RETURN_SHAPE] Every implementation of ViewerAccessRepository MUST select only session_id and return its ViewerSession or None.",
     "ViewerAccessRepository.insert_viewer: [SCHEMA_CONSTRAINT] Every implementation of ViewerAccessRepository MUST insert exactly viewer and reject duplicate viewer_id.",
@@ -933,6 +933,7 @@
     "sign_out_staff: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff of the staff_access repository of that transaction, and through its get_staff_session and its update_staff_sessions.",
     "assign_staff_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "assign_staff_project: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff of the staff_access repository of that transaction, and through its get_staff_assignment and its insert_staff_assignment.",
+    "assign_staff_project: [BEHAVIOR] MUST give a pair whose earlier assignments are all revoked a new assignment, built and inserted exactly as for a pair that never had one, and MUST leave every revoked assignment of the pair unchanged; it never updates or reactivates an earlier record.",
     "authenticate_staff: [FIELD_ASSIGNMENT] MUST allocate session_id with uuid4 before calling issue_verification_secret with that session_id as record_id and the imported CREDENTIAL_SECRET_BYTES constant as entropy_bytes; IssuedSecret exposes only plaintext and verification_hash and MUST NOT be used as an identifier source.",
     "authenticate_staff: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "authenticate_staff: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the StaffAccessRepository holds through get_staff_by_email and insert_staff_session of the staff_access repository of that transaction.",
@@ -980,6 +981,7 @@
     "grant_viewer_project: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, because the transaction type provides no context-manager protocol and entering one raises TypeError before any read. It MUST reach viewer persistence only through the viewer_access repository of that transaction and append audits only with the imported append_audit into the audit repository of that transaction, use no legacy transaction-level viewer method, and close the transaction exactly once: a successful write commits once, a successful read rolls back once, and a failure rolls back only while the transaction is still open and re-raises the original failure unchanged.",
     "grant_viewer_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "grant_viewer_project: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the ViewerAccessRepository holds through get_viewer of the viewer_access repository of that transaction, and through its get_viewer_grant and its insert_viewer_grant.",
+    "grant_viewer_project: [BEHAVIOR] MUST give a pair whose earlier grants are all revoked a new grant, built and inserted exactly as for a pair that never had one, and MUST leave every revoked grant of the pair unchanged; it never updates or reactivates an earlier record.",
     "revoke_viewer_project: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, because the transaction type provides no context-manager protocol and entering one raises TypeError before any read. It MUST reach viewer persistence only through the viewer_access repository of that transaction and append audits only with the imported append_audit into the audit repository of that transaction, use no legacy transaction-level viewer method, and close the transaction exactly once: a successful write commits once, a successful read rolls back once, and a failure rolls back only while the transaction is still open and re-raises the original failure unchanged.",
     "list_viewer_project_grants: [DEPENDENCY_BOUNDARY] MUST open its transaction with an explicit assignment, never as a context manager, because the transaction type provides no context-manager protocol and entering one raises TypeError before any read. It MUST reach viewer persistence only through the viewer_access repository of that transaction and append audits only with the imported append_audit into the audit repository of that transaction, use no legacy transaction-level viewer method, and close the transaction exactly once: a successful write commits once, a successful read rolls back once, and a failure rolls back only while the transaction is still open and re-raises the original failure unchanged.",
     "list_viewer_project_grants: [DEPENDENCY_BOUNDARY] MUST make its own reads, wherever its other notes call for them, of the records the ViewerAccessRepository holds through list_viewer_grants of the viewer_access repository of that transaction.",
@@ -1070,6 +1072,7 @@
     "create_service_principal: [DEPENDENCY_BOUNDARY] MUST make its own writes, wherever its other notes call for them, of the records the ServiceIdentityRepository holds through insert_service_principal of the service_identity repository of that transaction.",
     "grant_producer_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "grant_producer_project: [DEPENDENCY_BOUNDARY] MUST make its own reads and writes, wherever its other notes call for them, of the records the ServiceIdentityRepository holds through get_producer_grant of the service_identity repository of that transaction, and through its get_service_principal and its insert_producer_grant.",
+    "grant_producer_project: [BEHAVIOR] MUST give a pair whose earlier grants are all revoked a new grant, built and inserted exactly as for a pair that never had one, and MUST leave every revoked grant of the pair unchanged; it never updates or reactivates an earlier record.",
     "issue_service_credential: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself. A supplied `expires_at` that carries a UTC offset MUST be converted to UTC, keeping its instant, before it is stored offset-naive; a supplied offset-naive value is taken as UTC.",
     "revoke_producer_project: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
     "revoke_service_credential: [BEHAVIOR] MUST read the current UTC time once per operation, by one call of utc_now, and use that single instant for every timestamp it writes and every current-time comparison it makes; it MUST NOT read a host clock itself.",
@@ -6545,7 +6548,7 @@
     },
     "persistence_backend": {
       "kind": "persistence_backend",
-      "schema_version": 2,
+      "schema_version": 3,
       "backend": {
         "engine": "sqlite",
         "emitter": "sqlite_sync_v2"
@@ -7579,10 +7582,20 @@
             "grant_id"
           ],
           "unique": [
-            [
-              "service_principal_id",
-              "project_id"
-            ]
+            {
+              "columns": [
+                "service_principal_id",
+                "project_id"
+              ],
+              "where": [
+                {
+                  "column": "status",
+                  "bind": "constant",
+                  "enum": "GrantStatus",
+                  "member": "ACTIVE"
+                }
+              ]
+            }
           ]
         },
         {
@@ -8062,10 +8075,20 @@
             "assignment_id"
           ],
           "unique": [
-            [
-              "staff_id",
-              "project_id"
-            ]
+            {
+              "columns": [
+                "staff_id",
+                "project_id"
+              ],
+              "where": [
+                {
+                  "column": "status",
+                  "bind": "constant",
+                  "enum": "GrantStatus",
+                  "member": "ACTIVE"
+                }
+              ]
+            }
           ]
         },
         {
@@ -8339,10 +8362,20 @@
             "grant_id"
           ],
           "unique": [
-            [
-              "viewer_id",
-              "project_id"
-            ]
+            {
+              "columns": [
+                "viewer_id",
+                "project_id"
+              ],
+              "where": [
+                {
+                  "column": "status",
+                  "bind": "constant",
+                  "enum": "GrantStatus",
+                  "member": "ACTIVE"
+                }
+              ]
+            }
           ]
         },
         {
@@ -8542,14 +8575,16 @@
                 "reason_code"
               ]
             }
-          ]
+          ],
+          "transaction": "external"
         },
         {
           "repository": "SqliteBudgetRepository",
           "module": "budget_repository",
           "schema_function": "create_budget_schema",
           "emission": "irregular",
-          "irregular_reason": "доменное условие source MANUAL остаётся обязательством repository boundary"
+          "irregular_reason": "доменное условие source MANUAL остаётся обязательством repository boundary",
+          "transaction": "external"
         },
         {
           "repository": "SqliteExpenseRepository",
@@ -8677,7 +8712,8 @@
                 }
               ]
             }
-          ]
+          ],
+          "transaction": "external"
         },
         {
           "repository": "SqliteProgressPhotoRepository",
@@ -8812,7 +8848,8 @@
               ],
               "require_existing": true
             }
-          ]
+          ],
+          "transaction": "external"
         },
         {
           "repository": "SqliteProjectSectionRepository",
@@ -8888,7 +8925,8 @@
                 }
               ]
             }
-          ]
+          ],
+          "transaction": "external"
         },
         {
           "repository": "SqliteProjectTrackingRepository",
@@ -9032,7 +9070,8 @@
                 "updated_by"
               ]
             }
-          ]
+          ],
+          "transaction": "external"
         },
         {
           "repository": "SqliteServiceIdentityRepository",
@@ -9042,7 +9081,7 @@
           "methods": [
             {
               "method": "get_producer_grant",
-              "query": "get_by_key",
+              "query": "get_unique",
               "table": "producer_project_grants",
               "filter": [
                 {
@@ -9054,6 +9093,12 @@
                   "column": "project_id",
                   "bind": "argument",
                   "argument": "project_id"
+                },
+                {
+                  "column": "status",
+                  "bind": "constant",
+                  "enum": "GrantStatus",
+                  "member": "ACTIVE"
                 }
               ],
               "select": [
@@ -9065,7 +9110,8 @@
                 "created_by",
                 "revoked_at",
                 "revoked_by"
-              ]
+              ],
+              "on_multiple": "error"
             },
             {
               "method": "get_producer_grant_by_id",
@@ -9268,7 +9314,8 @@
               ],
               "require_existing": true
             }
-          ]
+          ],
+          "transaction": "external"
         },
         {
           "repository": "SqliteSnapshotImportRepository",
@@ -9384,7 +9431,8 @@
                 "key_version"
               ]
             }
-          ]
+          ],
+          "transaction": "external"
         },
         {
           "repository": "SqliteStaffAccessRepository",
@@ -9417,7 +9465,7 @@
             },
             {
               "method": "get_staff_assignment",
-              "query": "get_by_key",
+              "query": "get_unique",
               "table": "staff_project_assignments",
               "filter": [
                 {
@@ -9429,6 +9477,12 @@
                   "column": "project_id",
                   "bind": "argument",
                   "argument": "project_id"
+                },
+                {
+                  "column": "status",
+                  "bind": "constant",
+                  "enum": "GrantStatus",
+                  "member": "ACTIVE"
                 }
               ],
               "select": [
@@ -9440,7 +9494,8 @@
                 "created_by",
                 "revoked_at",
                 "revoked_by"
-              ]
+              ],
+              "on_multiple": "error"
             },
             {
               "method": "get_staff_assignment_by_id",
@@ -9636,7 +9691,8 @@
               ],
               "require_existing": true
             }
-          ]
+          ],
+          "transaction": "external"
         },
         {
           "repository": "SqliteViewerAccessRepository",
@@ -9688,7 +9744,7 @@
             },
             {
               "method": "get_viewer_grant",
-              "query": "get_by_key",
+              "query": "get_unique",
               "table": "project_viewer_grants",
               "filter": [
                 {
@@ -9700,6 +9756,12 @@
                   "column": "project_id",
                   "bind": "argument",
                   "argument": "project_id"
+                },
+                {
+                  "column": "status",
+                  "bind": "constant",
+                  "enum": "GrantStatus",
+                  "member": "ACTIVE"
                 }
               ],
               "select": [
@@ -9711,7 +9773,8 @@
                 "created_by",
                 "revoked_at",
                 "revoked_by"
-              ]
+              ],
+              "on_multiple": "error"
             },
             {
               "method": "get_viewer_grant_by_id",
@@ -9974,7 +10037,8 @@
               ],
               "require_existing": true
             }
-          ]
+          ],
+          "transaction": "external"
         }
       ]
     },
