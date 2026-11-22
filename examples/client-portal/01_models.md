@@ -254,13 +254,18 @@ None.
 - **Kind:** persisted entity.
 - **Purpose:** read-only access of one viewer to one Registry project.
 - **Fields:** `grant_id: UUID`, `viewer_id: UUID`, `project_id: UUID`,
-  `status: GrantStatus (active | revoked)`, `created_at`, `created_by`,
-  `revoked_at | None`, `revoked_by | None`.
+  `status: GrantStatus (active | revoked)`, `created_at: datetime`,
+  `created_by: UUID (administrator)`, `revoked_at: datetime | None`,
+  `revoked_by: UUID | None`.
 - **Rules:** at most one active grant per `(viewer_id, project_id)`; revoked
   grants of the pair stay as history. Revoking one grant affects only that
   project; Registry archival never changes grant status. A revoked grant is
   terminal and no operation reactivates it; giving the pair access again
   creates a new grant record.
+  `revoked_at` and `revoked_by` are both null while the record is active and
+  are both set, once, when it becomes revoked. No product operation lists
+  revoked records: a read by pair returns the active record only, and the
+  history serves the audit trail.
 - **Created/modified by:** administrator only (R0-14).
 
 ### Carried changes
@@ -426,13 +431,18 @@ None.
 - **Purpose:** explicit operator scope for one Registry project; operator role
   capability alone never grants access to every project.
 - **Fields:** `assignment_id: UUID`, `staff_id: UUID`, `project_id: UUID`,
-  `status: GrantStatus (active | revoked)`, `created_at`,
+  `status: GrantStatus (active | revoked)`, `created_at: datetime`,
   `created_by: UUID (administrator)`, `revoked_at: datetime | None`,
   `revoked_by: UUID | None`.
 - **Rules:** at most one active assignment per `(staff_id, project_id)`;
   revoked assignments of the pair stay as history. A revoked assignment is
   terminal and no operation reactivates it; assigning the pair again creates
-  a new assignment record. Revocation blocks the next
+  a new assignment record.
+  `revoked_at` and `revoked_by` are both null while the record is active and
+  are both set, once, when it becomes revoked. No product operation lists
+  revoked records: a read by pair returns the active record only, and the
+  history serves the audit trail.
+  Revocation blocks the next
   project-scoped authorization check without changing project records or
   other assignments. In the current documented
   single administrative area, administrators cover all projects through that
@@ -606,11 +616,17 @@ None.
 - **Kind:** persisted entity.
 - **Fields:** `grant_id: UUID`, `service_principal_id: UUID`,
   `project_id: UUID`, `status: GrantStatus (active | revoked)`,
-  `created_at`, `created_by`, `revoked_at | None`, `revoked_by | None`.
+  `created_at: datetime`, `created_by: UUID (administrator)`,
+  `revoked_at: datetime | None`, `revoked_by: UUID | None`.
 - **Rules:** at most one active grant per `(principal, project)`; revoked
   grants of the pair stay as history. A revoked grant is terminal and no
   operation reactivates it; granting the pair again creates a new grant
-  record. Grants are consulted only when the principal's `scope_mode` is
+  record.
+  `revoked_at` and `revoked_by` are both null while the record is active and
+  are both set, once, when it becomes revoked. No product operation lists
+  revoked records: a read by pair returns the active record only, and the
+  history serves the audit trail.
+  Grants are consulted only when the principal's `scope_mode` is
   `granted_projects`.
 
 ### Carried changes
