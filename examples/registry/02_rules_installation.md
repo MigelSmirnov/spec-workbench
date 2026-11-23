@@ -275,8 +275,16 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
 1. A configuration with some service tokens but without Client Portal's
    stops the start and names the missing item; one with none of the four
    and no service API address is an owner-only start.
-2. Two services with one token stop the start.
-3. A 16-byte token stops the start.
+2. Two services with one token stop the start, and so does each other pair
+   of equal secrets: a token and the owner credential, a token and the
+   backup key, the owner credential and the backup key.
+3. A 16-byte token stops the start. For each kind of secret — a service
+   token, the owner credential and the backup key — a value one byte shorter
+   than `SECRET_MIN_BYTES` stops the start and one of exactly
+   `SECRET_MIN_BYTES` bytes is accepted. The length is counted in UTF-8
+   bytes, not characters: a token of 16 two-byte characters (32 bytes) is
+   accepted, and one of 15 two-byte characters and one one-byte character
+   (31 bytes) stops the start.
 4. The start diagnostic never contains a secret's value.
 5. A start whose store is made new and whose listener then cannot be opened
    stops, serves nothing and removes that store — or, when the removal
@@ -320,8 +328,8 @@ secret cannot be shared between holders.
    SPEC_STANDARD §15.3.1), while Registry runs with its service tokens, it
    makes one backup run; "03:00" in this decision reads as that constant; a 03:00 that finds Registry stopped, or in an
    owner-only start (rule 9), makes no run, and none is made later in its
-   place. The process looks at the clock every imported
-   `BACKUP_LOOK_SECONDS` (60 seconds); a date's
+   place. The process looks at the clock at least once in each interval of
+   the imported `BACKUP_LOOK_SECONDS` constant (60 seconds); a date's
    run starts at its first look at or after 03:00 of that date when an
    earlier look of the same process saw that date before 03:00, and no kept
    backup of that date exists — a kept backup's date being the UTC date of
@@ -689,8 +697,13 @@ are. Reviewed under authentication_credential_abuse (A13, A17), secrets (A14,
 A17, A18), browser_boundary (A13) and concurrency (A13, A14, A17, A18): the
 session values and every secret keep their 32 bytes, now through
 `SECRET_MIN_BYTES`, and the backup's daily time and look interval keep 03:00
-UTC and 60 seconds through `BACKUP_DAILY_TIME_UTC` and `BACKUP_LOOK_SECONDS`;
-no rule's behaviour moved. No outcome changed.
+UTC and 60 seconds through `BACKUP_DAILY_TIME_UTC` and `BACKUP_LOOK_SECONDS`.
+A18 rule 1 still asks a look at the clock at least once in each interval —
+the constant is the longest gap, as "at least once a minute" was — so no
+rule's behaviour moved. Reviewed under files_artifacts (A18): the backups
+are made, encrypted, checked and kept as before; only how the daily time and
+the look interval are named changed, and no file, path, size, key or
+retention moved. No outcome changed.
 
 ### Consequence
 
