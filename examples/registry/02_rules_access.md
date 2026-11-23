@@ -197,7 +197,8 @@ sees every change as a new version.
    which a change of the wall clock does not move and which counts the time
    the host or its VM was suspended, so a session does not outlive a
    suspension; instants Registry records
-   and the 03:00 of A18 are UTC wall-clock time. Each duration is one value
+   and A18's daily time, the imported `BACKUP_DAILY_TIME_UTC` constant, are
+   UTC wall-clock time. Each duration is one value
    of the release, the data provider's constant the code imports
    (SPEC_STANDARD §15.3.1): `OWNER_SESSION_MAX_HOURS` (8),
    `OWNER_SESSION_IDLE_MINUTES` (30), `SIGN_IN_WINDOW_MINUTES` and
@@ -278,8 +279,9 @@ sees every change as a new version.
    gives. It is not
    the confirmation id, which Registry mints only when the action is accepted
    (A14).
-7. The session's identity, its CSRF value and a confirmation value are each at
-   least 32 bytes from the operating system's random source; each is compared
+7. The session's identity, its CSRF value and a confirmation value are each
+   as many bytes from the operating system's random source as the imported
+   `SECRET_MIN_BYTES` constant names (32, SPEC_STANDARD §15.3.1); each is compared
    in constant time and never appears in a URL, a log line, a diagnostic or an
    audit entry (R0-29, R0-37). The identity travels only in the cookie, the
    other two only in the forms the interface serves.

