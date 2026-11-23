@@ -967,7 +967,9 @@ through Cabinet Kernel and so the agent's AI provider (R0-25, R0-26).
 
 Narrowed by R0-82: the projection carries the project's alias, under the same
 writer rule. Narrowed by R0-88: "a producer publishes" reads "the agent,
-through Kernel, and the owner publish"; the rule binds them.
+through Kernel, and the owner publish"; the rule binds them. Narrowed by
+R0-96: a room is named by its purpose and number; the rule also forbids a
+person's condition, health or needs.
 
 ### R0-69 — No project named and none active is refused (proposed to the owner 2026-10-27 after round 19 T10, accepted; narrows R0-46)
 
@@ -1111,6 +1113,8 @@ under a person's name (R0-79) are renamed by the owner after the import.
 
 Narrowed by R0-85: they are renamed in the import itself, which also reaches
 archived projects.
+Narrowed by R0-96: the alias, like a room name, names no person's condition,
+health or needs.
 
 ### R0-83 — The billing read returns what is recorded (owner, 2026-10-27, after round 24 T1; narrows R0-80)
 
@@ -1358,6 +1362,34 @@ provider (R0-74), so neither is a recipient to tell. Naming the recipients to
 a customer who asks is part of the governance's answer to a data subject's
 request (R0-93).
 
+### R0-96 — Room names and the alias carry no special category of data (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q6; narrows R0-68, R0-82)
+
+A room name reaches the agent and so its AI provider (R0-68), and the agent
+may write one itself (R0-41). A name such as "bathroom for the wheelchair"
+says something about the health of a person living there: data of a special
+category (GDPR Art. 9), which the platform must not hand to an agent. Within
+the platform the project leads to its customer, so such a name is that
+customer's data even though the agent sees no customer.
+
+A room is named by its purpose and, where needed, its number or position —
+"Bathroom 1", "Kitchen", "Bedroom with balcony" — never by a person, nor by a
+person's condition, health, disability, age or other need. What the work
+does for such a need — an adapted shower, a ramp — is the content of the
+work and lives in the documents of the service that owns them, PresuPro's
+estimate among them, never in a room name. The alias (R0-82) follows the
+same rule.
+
+As in R0-68 and R0-90, this is a rule on the writer — the owner, and the agent
+through Kernel — not a check of Registry: Registry cannot tell what a word
+means, refuses no name for its content and searches no text for words; a
+name that breaks the rule does reach the agent. The writers learn the rule
+where they write: the owner from the governance and the owner interface, the
+agent from the description of the room name and the alias in Registry's
+manifest record (R0-78). That description is changed with the changes
+planned after the first release is assembled (R0-93, R0-94); until then the
+rule binds the owner, and the agent through the governance's instructions to
+it.
+
 ## Explicit exclusions
 
 - The operator script `onboard_object`: retired (R0-63); its role is taken by
@@ -1398,7 +1430,7 @@ round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
 State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
 (2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
 rounds 5–9; R0-90 (2026-11-11) records the owner's answer during the
-pre-contract data closure. R0-91 to R0-95 (2026-11-23) answer Q2, Q1, Q3, Q4 and Q5 of the
+pre-contract data closure. R0-91 to R0-96 (2026-11-23) answer Q1 to Q6 of the
 data-protection requirements matrix.
 
 ## Carried to later states
