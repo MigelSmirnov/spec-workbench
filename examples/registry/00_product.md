@@ -1399,10 +1399,14 @@ installs in the agent's home on the home server (Factory
 `platform/home_server/workspace/AGENTS.md`); adding the rule there is the
 platform's change, made before the first release goes into production. In
 the second release (R0-100) the description of the room name and the alias in
-Registry's manifest record (R0-78) carries it as well. Whatever the agent was
-told, each room it adds waits for the owner's approval of the exact request,
-its name included (R0-99), unless the owner gave a standing approval; the
-owner refuses a name that breaks the rule before it is written.
+Registry's manifest record (R0-78) carries it as well. Without a standing
+approval, each room the agent adds waits for the owner's approval of the
+exact request, its name included (R0-99), and the owner refuses a name that
+breaks the rule before it is written. Under a standing approval for that node
+(K-08) the room is written without the owner seeing its name, and the agent's
+instructions are then the only protection; the governance's rule against a
+standing approval for a Registry write inside a map over a collection
+(R0-99) still holds.
 
 ### R0-97 — Refused attempts are counted and shown to the owner at sign-in (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q7; narrows R0-58, State 2 A13, A14)
 
