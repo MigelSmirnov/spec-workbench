@@ -1426,34 +1426,45 @@ a second human principal who signs in to it, or a surface reachable other
 than through the owner's VPN and the WireGuard channel (R0-39, R0-48). Until
 then the count shown at sign-in is the measure.
 
-### R0-98 — Registry's import does not wait for the DPIA screening; the screening is the platform's, now (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q8; narrows R0-79)
+### R0-98 — Registry's import does not wait for the DPIA screening; the screening is the platform's, now (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q8; narrows R0-79; corrected the same day by the owner)
 
 GDPR Art. 35 asks for an impact assessment before processing likely to
 result in a high risk. Screened against the AEPD's list of processing that
 requires one and the EDPB's criteria, the platform as a whole meets one firm
-criterion — agents built on AI work with the business's data — and one or two
-arguable ones: data of several services joined by one `project_id`, and
-special categories that photos of a home or work done for a resident's need
-may reveal. That is a borderline case, which calls at least for a written
-screening with its conclusion; its likely outcome is that a DPIA is needed,
-for the agents. The screening and the DPIA are the governance's, platform-wide
-(Explicit exclusions); this specification's matrix
-(`sources/privacy_requirements_20261123.md`) is their section on the measures
-Registry takes.
+criterion — agents built on AI work with the business's data — and arguable
+ones: data of several services joined by one `project_id`, and special
+categories that photos of a home may reveal. The screening and, when needed,
+the DPIA are the governance's, platform-wide (Explicit exclusions); this
+specification's matrix (`sources/privacy_requirements_20261123.md`) is their
+section on the measures Registry takes.
 
 Registry is not where the risk lies: no value it holds as `personal_data`
-reaches an agent (R0-74). The processing the screening must weigh first is
-elsewhere — the agent processing a photo itself, outside the kernel (case
-`cabinet-kernel`, K-17), which hands a photo of a customer's home to its AI
-provider — and is decided in the cases of the services concerned.
+reaches an agent (R0-74). Photos of the objects — homes — do not reach the
+agent either: on the home server the objects folder belongs to the `cabinet`
+user and the agent's user cannot read it (Factory
+`platform/home_server/README.md`), and Kernel moves a file between services
+through its run's spool without ever handing it to a caller (case
+`cabinet-kernel`, K-10); the agent names a photo for Client Portal, it never
+sees one. The images that pass through an agent's AI provider are receipts and
+suppliers' invoices for materials. A company supplier's data is not personal
+data; a sole-trader supplier's name and tax id are, processed in the business
+relationship with that trader (LOPDGDD art. 19). What such a document may also
+carry is the customer's: a delivery address at the object, a customer's name in
+an order. The governance's rule is that orders name no customer and that a
+delivery address is not given to the agent. That the agent reads these
+documents from a folder of its own, holding them alone, is a change of the
+platform outside this case.
+
+On these facts the screening's likely conclusion is that a DPIA is not
+required, with that conclusion, its reasons and these measures written down.
+It holds once the owner's earlier machine no longer gives the agent the
+objects folder (the cleanup step of the home server's move).
 
 The processing already goes on: the legacy v1 instances hold the real data
 (R0-79). The import moves it into one protected home, out of every agent's
 reach, with erasure and restriction; it lowers the risk. So Registry's
-production start and its one import (R0-79) do not wait for the screening.
-The screening is made now, in parallel; until it concludes, the governance
-keeps out of operation the agent functions that process photos or customers'
-data, a bound on Kernel and Client Portal, not on Registry.
+production start and its one import (R0-79) do not wait for the screening,
+which is made now, in parallel.
 
 ## Explicit exclusions
 
