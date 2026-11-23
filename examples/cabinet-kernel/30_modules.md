@@ -62,11 +62,11 @@ The list runs from the bottom of the stack up: a module may know only modules
 on earlier lines of the list, never one on a later line, and modules on one
 line do not know each other.
 
-A module's `Knows` section is the module-level edge only. Which symbols a
-consumer imports from each provider is the imports closure (`65_imports.json`,
-projected into `imports.module_internal`, SPEC_STANDARD §7), the one
-authoritative consumer → provider → symbols map, beside the types its
-contracts name, which §7 imports structurally; `Knows` repeats none of it.
+A module's `Knows` section bounds which modules it may know, by the order
+above; it declares no dependency edge and no symbol. The edges and the
+symbols on each are the imports closure (`65_imports.json`, projected into
+`imports.module_internal`, SPEC_STANDARD §7), the one authoritative source,
+beside the types its contracts name, which §7 imports structurally.
 
 A21, the State 0–2 security review, has no runtime owner: it is an evidence
 record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
