@@ -982,6 +982,10 @@ and the stale check before every send.
 `models`, `data_provider`, `canonical_values`, `clock`, `store`,
 `installation`, `service_invoker` (request shape).
 
+These are the modules `bindings` depends on, not the symbols it imports: which
+models, enums and interfaces of `models` its code names is fixed by its
+`imports.module_internal` (SPEC_STANDARD §7), not by this list.
+
 ### Must not own
 
 Sending, the request's encoding, authority, or writing the manifest.
@@ -1021,6 +1025,10 @@ The proof-time reach of disclosure classes (A07 rule 2).
 `models`, `data_provider`, `canonical_values`, `clock`, `store`,
 `functions` (contract versions), `bindings` (binding status and declared
 classes).
+
+These are the modules `flows` depends on, not the symbols it imports: which
+models, enums and interfaces of `models` its code names is fixed by its
+`imports.module_internal` (SPEC_STANDARD §7), not by this list.
 
 ### Must not own
 
