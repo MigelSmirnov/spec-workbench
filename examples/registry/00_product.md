@@ -1329,6 +1329,35 @@ some value must be blocked, blocking enters the same change, as one mechanism
 with the review page. The design of both is decided then, by a new owner
 decision here.
 
+### R0-95 — Recipients learn of a change by reading it; the remaining copies are the owner's to follow (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q5; narrows R0-80, R0-81)
+
+GDPR Art. 19 asks that a rectification, erasure or restriction be
+communicated to each recipient the data was disclosed to. Within the
+platform the measure is R0-80's: the services keep no customer record and
+no copy of the values Registry holds as `personal_data`; they read them by
+`customer_ref` or project id when they use them, so a change in Registry is
+what every later read returns, and there is nothing to send. Registry gains
+no feed of changes and tells no service of one: it orchestrates no
+downstream service (R0-18), and a feed would have no reader that does not
+already read on use.
+
+What still holds a value is followed by the owner, by the governance's
+procedure, after each such change:
+
+- a document a service issued keeps the values of its date (R0-80); it is
+  kept under its lawful ground, and an error in it is put right by that
+  service's own corrective document, never by rewriting it;
+- each copy R0-81 lists, until its service removes it, is corrected or
+  erased by the owner by hand;
+- Client Portal's offline projection (R0-39) is Portal's; whether Portal keeps
+  one and how it follows a change is stated in Portal's case;
+- Registry's backups lose an erased value within the period A18 states.
+
+No value Registry holds as `personal_data` reaches an agent or its AI
+provider (R0-74), so neither is a recipient to tell. Naming the recipients to
+a customer who asks is part of the governance's answer to a data subject's
+request (R0-93).
+
 ## Explicit exclusions
 
 - The operator script `onboard_object`: retired (R0-63); its role is taken by
@@ -1369,7 +1398,7 @@ round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
 State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
 (2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
 rounds 5–9; R0-90 (2026-11-11) records the owner's answer during the
-pre-contract data closure. R0-91 to R0-94 (2026-11-23) answer Q2, Q1, Q3 and Q4 of the
+pre-contract data closure. R0-91 to R0-95 (2026-11-23) answer Q2, Q1, Q3, Q4 and Q5 of the
 data-protection requirements matrix.
 
 ## Carried to later states
