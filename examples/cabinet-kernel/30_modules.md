@@ -65,8 +65,8 @@ line do not know each other.
 A module's `Knows` section bounds which modules it may know, by the order
 above; it declares no dependency edge and no symbol. The edges and the
 symbols on each are the imports closure (`65_imports.json`, projected into
-`imports.module_internal`, SPEC_STANDARD §7), the one authoritative source,
-beside the types its contracts name, which §7 imports structurally.
+`imports.module_internal`), the one authoritative source by SPEC_STANDARD §7,
+which also says which types are imported structurally besides.
 
 A21, the State 0–2 security review, has no runtime owner: it is an evidence
 record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
