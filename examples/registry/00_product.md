@@ -1393,7 +1393,13 @@ name that breaks the rule does reach the agent.
 The owner learns the rule from the governance's rules for writers, read
 before the import (R0-79), where the names of imported projects are set
 (R0-85); the owner interface does not show it, and Registry promises nothing
-of a name the owner writes against it, as for R0-68 and R0-90. In the first
+of a name the owner writes against it, as for R0-68 and R0-90. The import
+renames no room: it stores a picked project's rooms under the names the v1
+instance gave them (A16), and a room is never renamed or removed afterwards
+(R0-10). So the owner, before making the export on the VPS (R0-72), corrects
+there every room name of the projects to be picked that breaks this rule
+(owner, 2026-11-23, State 0 round-59 T1). The import then copies names the
+owner has already checked; it writes no name of its own and refuses none. In the first
 release the agent learns it from its instructions, which the platform
 installs in the agent's home on the home server (Factory
 `platform/home_server/workspace/AGENTS.md`); adding the rule there is the
