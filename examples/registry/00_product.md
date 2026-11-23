@@ -1388,9 +1388,9 @@ same rule.
 As in R0-68 and R0-90, this is a rule on the writer — the owner, and the agent
 through Kernel — not a check of Registry: Registry cannot tell what a word
 means, refuses no name for its content and searches no text for words; a
-name that breaks the rule does reach the agent. The writers learn the rule
-where they write: the owner from the governance and the owner interface, the
-agent from the description of the room name and the alias in Registry's
+name that breaks the rule does reach the agent. The owner learns the rule
+from the governance; the owner interface does not show it. The agent learns
+it from the description of the room name and the alias in Registry's
 manifest record (R0-78). That description is changed in the second release
 (R0-100); until then the rule binds the owner, and the agent through the
 governance's instructions to it.
@@ -1487,6 +1487,13 @@ agent waits for the owner's approval of its exact request, unless the owner
 gave that flow version a standing approval for the node (K-08). A request for
 access stays `draft-write`: it changes no access, replaces the session's
 earlier request (R0-47) and is itself a question to the owner.
+
+R0-78's idempotency key belongs to the writes whose retry could make a
+second record (R0-36): adding a room and publishing a pointer carry one
+(State 2 A01, R0-88). Withdrawing a pointer makes nothing; it names the
+pointer only and carries no idempotency key, and a repeated withdrawal is
+refused as withdrawing a pointer already withdrawn (Primary actions, R0-14).
+Its replay behaviour in the manifest record is that a repeat is refused.
 
 The owner's approvals are the bound on how much the agent writes; Registry
 sets no count of rooms, pointers or requests. The governance's rule is that
