@@ -864,7 +864,8 @@ governance documents (R0-60) and the owner applies (R0-66). The platform manifes
 contracts; the log records changes of state only.
 
 Narrowed by R0-92: the trace of the agent's actions is Cabinet Kernel's; this
-log stays as it is.
+log stays as it is. Narrowed by R0-97: refused attempts are counted
+for the owner, outside this log.
 
 ### R0-59 — The simplest answers to round 6 T3, T5 (drafted 2026-10-27 under the owner's instruction "do not complicate, add no responsibilities"; confirmed by the owner 2026-10-27)
 
@@ -1390,6 +1391,41 @@ planned after the first release is assembled (R0-93, R0-94); until then the
 rule binds the owner, and the agent through the governance's instructions to
 it.
 
+### R0-97 — Refused attempts are counted and shown to the owner at sign-in (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q7; narrows R0-58, State 2 A13, A14)
+
+GDPR Art. 33 gives the owner 72 hours from becoming aware of a breach. Some
+signs of an attempt only Registry sees: to the infrastructure they are
+ordinary HTTPS. Today Registry refuses them and keeps no trace (A14 rule 2),
+and the sign-in lockout of A13 rule 3 is runtime state the owner never sees,
+so a locked-out owner cannot tell why the sign-in is refused.
+
+After the first release is assembled, with the changes R0-93, R0-94 and
+R0-96 planned, Registry counts refused attempts in memory from its start and
+shows them to the owner on the first page after sign-in, with the instant of
+the start and of the latest of each kind: refused sign-ins and lockouts;
+calls on the service API with a token Registry does not know; calls whose
+token does not allow the operation or class asked; and, apart from these,
+Kernel's agent-authority calls refused for a session or a project outside
+its set, the weakest sign, since a revocation by the owner yields them too.
+The counters hold no value, no credential, no address and no request; a
+restart clears them, as it clears the lockout. The audit log stays a record
+of accepted changes (R0-58).
+
+Registry's principals do not change: one human, the owner (R0-30), and the
+services by their tokens (R0-27). The agent is not a principal of Registry;
+it acts through Cabinet Kernel, whose token Registry checks (R0-31, R0-92). A
+person who would act through Kernel — an accountant, for example — would be
+Kernel's principal, not Registry's: Kernel's trace records that person's
+actions and Kernel's case states its own signals of attempts. Such a person
+receives no `personal_data` value of Registry through Kernel (R0-74); the
+customer's fiscal values reach them only from the documents a service issued.
+
+A durable log of security events, kept apart from the audit log with its own
+period, is reconsidered — by a new owner decision here — when Registry gains
+a second human principal who signs in to it, or a surface reachable other
+than through the owner's VPN and the WireGuard channel (R0-39, R0-48). Until
+then the count shown at sign-in is the measure.
+
 ## Explicit exclusions
 
 - The operator script `onboard_object`: retired (R0-63); its role is taken by
@@ -1430,7 +1466,7 @@ round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
 State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
 (2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
 rounds 5–9; R0-90 (2026-11-11) records the owner's answer during the
-pre-contract data closure. R0-91 to R0-96 (2026-11-23) answer Q1 to Q6 of the
+pre-contract data closure. R0-91 to R0-97 (2026-11-23) answer Q1 to Q7 of the
 data-protection requirements matrix.
 
 ## Carried to later states
