@@ -1500,9 +1500,15 @@ The **first release** is the release assembled from this specification as it
 stands with R0-99 (State 8) and admitted by the Code Factory (Stage 9).
 Registry goes into production with it, and with it makes the one import
 (R0-79, R0-98). It holds neither the counters of R0-97 nor the review page of
-R0-94; until the second release the owner meets their purposes by hand —
-the yearly review from the governance's schedule, and signs of an attempt
-from the infrastructure.
+R0-94. Until the second release the owner meets the review's purpose by
+hand, from the governance's schedule. The signs of an attempt that only
+Registry tells apart — a sign-in lockout, a call with a token Registry does not
+know, a token asking beyond its rights, Kernel's calls outside a session's
+set — stay unseen by the owner until then: Registry refuses them and keeps no
+trace (A13 rule 3, A14 rule 2), and the infrastructure, to which they are
+ordinary HTTPS, sees only what it sees of its own. The owner accepts that gap
+for the first release; closing it is what the second release's counters are
+for (R0-97).
 
 The **second release** is the next change of this specification. It starts
 when the first release is admitted, and holds, each required:
