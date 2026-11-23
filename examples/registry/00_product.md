@@ -1303,8 +1303,8 @@ judgement is the owner's, under the governance, not Registry's (R0-65).
 What other services hold about the customer is answered from those services.
 
 A read-only owner operation that gathers a customer with every project
-naming it, as one page and a JSON download, is a candidate change once the
-first release is assembled; adopting it is a new owner decision here.
+naming it, as one page and a JSON download, is a candidate for a release
+after the first (R0-100); adopting it is a new owner decision here.
 
 ### R0-94 — The retention schedule has three stages; Registry will show what is due (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q4; narrows R0-60, R0-91)
 
@@ -1328,14 +1328,14 @@ The legal review is therefore asked concretely which values Registry holds
 must be kept blocked after a relationship ends or a project is archived, and
 for how long.
 
-Registry keeps erasing nothing on its own (R0-60). After the first release is
-assembled, it gains a read-only review page in the owner interface: the
+Registry keeps erasing nothing on its own (R0-60). The second release
+(R0-100) gives it a read-only review page in the owner interface: the
 customers whose relationship ended, and the archived projects archived, longer
 ago than periods the owner sets in the configuration from the schedule. The
 owner acts on each with the existing actions. If the legal review answers that
 some value must be blocked, blocking enters the same change, as one mechanism
-with the review page. The design of both is decided then, by a new owner
-decision here.
+with the review page, in the release R0-100 names. Their design is settled
+by the rounds of that release's change.
 
 ### R0-95 — Recipients learn of a change by reading it; the remaining copies are the owner's to follow (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q5; narrows R0-80, R0-81)
 
@@ -1371,9 +1371,11 @@ request (R0-93).
 A room name reaches the agent and so its AI provider (R0-68), and the agent
 may write one itself (R0-41). A name such as "bathroom for the wheelchair"
 says something about the health of a person living there: data of a special
-category (GDPR Art. 9), which the platform must not hand to an agent. Within
-the platform the project leads to its customer, so such a name is that
-customer's data even though the agent sees no customer.
+category (GDPR Art. 9). Written, it would reach the agent and its AI
+provider, since Registry stops no name (below); within the platform the
+project leads to its customer, so such a name is that customer's data even
+though the agent sees no customer. The protection is that no writer writes
+one.
 
 A room is named by its purpose and, where needed, its number or position —
 "Bathroom 1", "Kitchen", "Bedroom with balcony" — never by a person, nor by a
@@ -1389,10 +1391,9 @@ means, refuses no name for its content and searches no text for words; a
 name that breaks the rule does reach the agent. The writers learn the rule
 where they write: the owner from the governance and the owner interface, the
 agent from the description of the room name and the alias in Registry's
-manifest record (R0-78). That description is changed with the changes
-planned after the first release is assembled (R0-93, R0-94); until then the
-rule binds the owner, and the agent through the governance's instructions to
-it.
+manifest record (R0-78). That description is changed in the second release
+(R0-100); until then the rule binds the owner, and the agent through the
+governance's instructions to it.
 
 ### R0-97 — Refused attempts are counted and shown to the owner at sign-in (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q7; narrows R0-58, State 2 A13, A14)
 
@@ -1402,8 +1403,8 @@ ordinary HTTPS. Today Registry refuses them and keeps no trace (A14 rule 2),
 and the sign-in lockout of A13 rule 3 is runtime state the owner never sees,
 so a locked-out owner cannot tell why the sign-in is refused.
 
-After the first release is assembled, with the changes R0-93, R0-94 and
-R0-96 planned, Registry counts refused attempts in memory from its start and
+In the second release (R0-100), Registry counts refused attempts in memory
+from its start and
 shows them to the owner on the first page after sign-in, with the instant of
 the start and of the latest of each kind: refused sign-ins and lockouts;
 calls on the service API with a token Registry does not know; calls whose
@@ -1493,6 +1494,35 @@ no standing approval is given to a node that writes to Registry inside a map
 over a collection. A count enforced by Registry is reconsidered, by a new
 owner decision here, if standing approvals for such writes become needed.
 
+### R0-100 — The first and the second release (owner, 2026-11-23, after State 0 round-55 T10, T17; narrows R0-93, R0-94, R0-96, R0-97)
+
+The **first release** is the release assembled from this specification as it
+stands with R0-99 (State 8) and admitted by the Code Factory (Stage 9).
+Registry goes into production with it, and with it makes the one import
+(R0-79, R0-98). It holds neither the counters of R0-97 nor the review page of
+R0-94; until the second release the owner meets their purposes by hand —
+the yearly review from the governance's schedule, and signs of an attempt
+from the infrastructure.
+
+The **second release** is the next change of this specification. It starts
+when the first release is admitted, and holds, each required:
+
+- the counters of refused attempts and their display at sign-in (R0-97);
+- the retention review page (R0-94);
+- the description of the room name and the alias in Registry's manifest
+  record (R0-96).
+
+Blocking under LOPDGDD art. 32 (R0-91, R0-94) joins the second release when
+the legal review has answered, before that change starts, that a value of
+Registry must be blocked; an answer that comes later puts it in the next
+change that starts after the answer. The operation that gathers a customer's
+data (R0-93) is in neither release: it stays a candidate, adopted only by a
+new owner decision here.
+
+The design of what the second release holds — models, rules, routes,
+contracts — is decided by that change's own states and rounds, as any change
+of this specification; this decision fixes what it must hold, not how.
+
 ## Explicit exclusions
 
 - The operator script `onboard_object`: retired (R0-63); its role is taken by
@@ -1534,7 +1564,8 @@ State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
 (2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
 rounds 5–9; R0-90 (2026-11-11) records the owner's answer during the
 pre-contract data closure. R0-91 to R0-99 (2026-11-23) answer Q1 to Q9 of the
-data-protection requirements matrix.
+data-protection requirements matrix; R0-100 answers State 0 round-55 T10
+and T17.
 
 ## Carried to later states
 
