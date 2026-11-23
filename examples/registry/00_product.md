@@ -1398,8 +1398,13 @@ renames no room: it stores a picked project's rooms under the names the v1
 instance gave them (A16), and a room is never renamed or removed afterwards
 (R0-10). So the owner, before making the export on the VPS (R0-72), corrects
 there every room name of the projects to be picked that breaks this rule
-(owner, 2026-11-23, State 0 round-59 T1). The import then copies names the
-owner has already checked; it writes no name of its own and refuses none. In the first
+(owner, 2026-11-23, State 0 round-59 T1). That correction is made in the
+legacy v1 instance, by its own means, before the export; the legacy instances
+stand outside this document's guarantees (Actors). R0-10's "never renamed or
+removed" and R0-12's "cannot be corrected" bind rooms and projects in
+Registry, from the import on, and do not reach the legacy instance. The
+import then copies names the owner has already checked; it writes no name of
+its own and refuses none. In the first
 release the agent learns it from its instructions, which the platform
 installs in the agent's home on the home server (Factory
 `platform/home_server/workspace/AGENTS.md`); adding the rule there is the
