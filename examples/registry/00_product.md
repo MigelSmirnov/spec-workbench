@@ -1388,12 +1388,21 @@ same rule.
 As in R0-68 and R0-90, this is a rule on the writer — the owner, and the agent
 through Kernel — not a check of Registry: Registry cannot tell what a word
 means, refuses no name for its content and searches no text for words; a
-name that breaks the rule does reach the agent. The owner learns the rule
-from the governance; the owner interface does not show it. The agent learns
-it from the description of the room name and the alias in Registry's
-manifest record (R0-78). That description is changed in the second release
-(R0-100); until then the rule binds the owner, and the agent through the
-governance's instructions to it.
+name that breaks the rule does reach the agent.
+
+The owner learns the rule from the governance's rules for writers, read
+before the import (R0-79), where the names of imported projects are set
+(R0-85); the owner interface does not show it, and Registry promises nothing
+of a name the owner writes against it, as for R0-68 and R0-90. In the first
+release the agent learns it from its instructions, which the platform
+installs in the agent's home on the home server (Factory
+`platform/home_server/workspace/AGENTS.md`); adding the rule there is the
+platform's change, made before the first release goes into production. In
+the second release (R0-100) the description of the room name and the alias in
+Registry's manifest record (R0-78) carries it as well. Whatever the agent was
+told, each room it adds waits for the owner's approval of the exact request,
+its name included (R0-99), unless the owner gave a standing approval; the
+owner refuses a name that breaks the rule before it is written.
 
 ### R0-97 — Refused attempts are counted and shown to the owner at sign-in (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q7; narrows R0-58, State 2 A13, A14)
 
