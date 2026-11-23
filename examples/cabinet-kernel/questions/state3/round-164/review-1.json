@@ -1,0 +1,151 @@
+{
+ "open_points": [
+  {
+   "subject": "30_modules.md:`bindings` — internal dependency surface",
+   "kind": "missing_dependency_declaration",
+   "text": "This list says which modules' knowledge `bindings` may rely on; it declares no\ndependency edge and no imported symbol. Its edges and the exact symbols on\neach are its `imports.module_internal` (SPEC_STANDARD §7), the one\nauthoritative source.",
+   "question": "Which of `models`, `data_provider`, `canonical_values`, `clock`, `store`, `installation` and `service_invoker` are actual direct providers of `bindings`, and what exact minimal symbols does `bindings` import from each?",
+   "options": [
+    "Declare a `module_internal.bindings` edge with its exact symbols for every provider directly named by the implementation",
+    "Omit providers whose knowledge is only permitted but whose symbols are not directly named",
+    "Move required shared contracts to another provider and declare edges to that provider"
+   ],
+   "default_guess": "Declare only the edges required by the owned binding operations: models used directly, manifest access from data_provider, digest/JCS operations from canonical_values, timestamps from clock, persistence from store, configured revision and selected instance from installation, and request-shape validation from service_invoker, with the exact exported symbols still needing names.",
+   "witness": {
+    "initial": "An agent proposes a binding for a manifest operation and the implementation of `bindings` must read configuration, parse the capability, compute its digest, validate request shape and persist the proposal.",
+    "events": [
+     "The `bindings` implementer reads the Knows list.",
+     "No `imports.module_internal.bindings` declaration or imported-symbol list is present.",
+     "One implementer creates direct edges to all seven listed modules; another imports only the modules whose functions happen to be called and duplicates or relocates the remaining work."
+    ],
+    "outcomes": [
+     "The generated module has seven provider edges and uses provider-owned helpers for all listed knowledge.",
+     "The generated module has a smaller, different graph and locally implements or obtains some of the same knowledge elsewhere."
+    ],
+    "observer": "The projector, generated module imports, affected-set calculation and maintainers changing any provider see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`bindings` — stale-check/invocation boundary",
+   "kind": "unclear_dependency_direction",
+   "text": "A08: reading one service record at the configured revision, the operation's\n`record_digest`, proposal checks in their fixed order, the owner's acceptance,\nand the stale check before every send.",
+   "question": "Does `service_invoker` call a public `bindings` stale-check operation before sending, does `bindings` orchestrate the call into `service_invoker`, or is a third module responsible for coordinating the check and send?",
+   "options": [
+    "`service_invoker` depends on `bindings` and calls `check_binding_current` before each send",
+    "`bindings` depends on `service_invoker` and owns the entire pre-send orchestration",
+    "A coordinating module depends on both, keeping `bindings` and `service_invoker` from depending on each other"
+   ],
+   "default_guess": "Have the run/invocation coordinator call `bindings.check_binding_current` and then invoke `service_invoker`; keep `bindings` responsible for the check and `service_invoker` responsible for encoding and sending.",
+   "witness": {
+    "initial": "A run reaches an operation node whose accepted binding pins digest D1; the configured manifest now yields D2.",
+    "events": [
+     "The run executor asks for the operation to be sent.",
+     "The stale check must occur before the first request byte is written."
+    ],
+    "outcomes": [
+     "`service_invoker` imports and calls the binding check, creating a `service_invoker` to `bindings` edge.",
+     "`bindings` imports the invoker and controls the send, creating a `bindings` to `service_invoker` edge and potentially a cycle if the invoker also needs binding data."
+    ],
+    "observer": "Module generation, dependency-cycle validation and maintainers of the send path see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`flows` — internal dependency surface",
+   "kind": "missing_dependency_declaration",
+   "text": "This list says which modules' knowledge `flows` may rely on; it declares no\ndependency edge and no imported symbol. Its edges and the exact symbols on\neach are its `imports.module_internal` (SPEC_STANDARD §7), the one\nauthoritative source.",
+   "question": "Which of `models`, `data_provider`, `canonical_values`, `clock`, `store`, `functions` and `bindings` are actual direct providers of `flows`, and what exact minimal symbols does `flows` import from each?",
+   "options": [
+    "Declare a `module_internal.flows` edge with exact symbols for every provider directly named by the implementation",
+    "Omit listed providers whose symbols are not directly named",
+    "Introduce narrower provider interfaces and declare edges to those instead"
+   ],
+   "default_guess": "Declare direct edges for the models named in proof and activation code, storage, time, function-contract lookup and binding lookup; use data_provider or canonical_values only where their exported constants or canonicalization operations are directly named, with exact symbol names still needing definition.",
+   "witness": {
+    "initial": "An agent composes a flow containing a function node, an accepted operation binding, guarded edges and constants.",
+    "events": [
+     "The `flows` implementation must resolve contract versions and binding status, compute or return the content identity, prove the graph and persist the version.",
+     "The Knows list supplies permissions but no authoritative edges or symbols."
+    ],
+    "outcomes": [
+     "One implementer imports lookup operations from `functions` and `bindings`, canonicalization from `canonical_values`, and persistence/time providers directly.",
+     "Another reads the needed records through `store`, computes identity locally and creates no edges to some listed modules."
+    ],
+    "observer": "The projector, generated imports, dependency graph and later changes to contract or binding lookup APIs see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`bindings` — public API",
+   "kind": "undecided_public_surface",
+   "text": "propose_binding\nread_binding\ncheck_installed_instances\naccept_binding\ncheck_binding_current",
+   "question": "Are all five candidate capabilities required exported functions with these exact names and contracts, or which subset or replacements form the public surface of `bindings`?",
+   "options": [
+    "Export all five names",
+    "Export only mutation and stale-check operations, using generic inspection for reads",
+    "Rename, merge or split the candidates before contracts and imports are generated"
+   ],
+   "default_guess": "Export all five because each corresponds to a distinct proposal, inspection, installation validation, acceptance or pre-send check responsibility.",
+   "witness": {
+    "initial": "The module implementation and its consumers are generated from the closed State 3 design.",
+    "events": [
+     "A surface adapter needs to propose and accept a binding, while the send path needs to test whether it is current.",
+     "The design labels the listed names only as candidates and carries no later decision."
+    ],
+    "outcomes": [
+     "All five functions are generated and may be imported by consumers.",
+     "Only `propose_binding`, `accept_binding` and `check_binding_current` are generated; reads and instance checks are handled elsewhere."
+    ],
+    "observer": "Surface callers, the send path, import projection and tests see different callable APIs."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`flows` — public API",
+   "kind": "undecided_public_surface",
+   "text": "compose_flow_version\nread_flow_version\nprove_flow_version\nactivate_flow_version\nactive_flow_version",
+   "question": "Are all five candidate capabilities required exported functions with these exact names and contracts, or which subset or replacements form the public surface of `flows`?",
+   "options": [
+    "Export all five names",
+    "Export composition and activation only, returning proof and inspection through those or through generic inspection",
+    "Rename, merge or split the candidates before contracts and imports are generated"
+   ],
+   "default_guess": "Export all five so composition, on-demand proof, activation and both direct and active-version reads remain separate operations.",
+   "witness": {
+    "initial": "A caller composes an unproven version, later accepts its binding, asks to prove it again and then activates it.",
+    "events": [
+     "The caller needs operations to retrieve the version, recompute proof and find the active version.",
+     "The design supplies only candidate capability names."
+    ],
+    "outcomes": [
+     "The caller invokes separate `read_flow_version`, `prove_flow_version` and `active_flow_version` exports.",
+     "The implementation folds proof into activation and serves both reads through a generic inspection operation, so those exports do not exist."
+    ],
+    "observer": "Surface adapters, generated contracts, imports and required tests see the difference."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`bindings` — imports declaration",
+   "kind": "standard_violation",
+   "text": "This list says which modules' knowledge `bindings` may rely on; it declares no\ndependency edge and no imported symbol. Its edges and the exact symbols on\neach are its `imports.module_internal` (SPEC_STANDARD §7), the one\nauthoritative source.",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "The passage must become or be accompanied by an explicit `module_internal` declaration for `bindings`, naming every actual provider edge and its exact imported symbols.",
+   "unit": "?"
+  },
+  {
+   "subject": "30_modules.md:`flows` — imports declaration",
+   "kind": "standard_violation",
+   "text": "This list says which modules' knowledge `flows` may rely on; it declares no\ndependency edge and no imported symbol. Its edges and the exact symbols on\neach are its `imports.module_internal` (SPEC_STANDARD §7), the one\nauthoritative source.",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "The passage must become or be accompanied by an explicit `module_internal` declaration for `flows`, naming every actual provider edge and its exact imported symbols.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"30_modules.md:`bindings` — internal dependency surface\",\"kind\":\"missing_dependency_declaration\",\"text\":\"This list says which modules' knowledge `bindings` may rely on; it declares no\\ndependency edge and no imported symbol. Its edges and the exact symbols on\\neach are its `imports.module_internal` (SPEC_STANDARD §7), the one\\nauthoritative source.\",\"question\":\"Which of `models`, `data_provider`, `canonical_values`, `clock`, `store`, `installation` and `service_invoker` are actual direct providers of `bindings`, and what exact minimal symbols does `bindings` import from each?\",\"options\":[\"Declare a `module_internal.bindings` edge with its exact symbols for every provider directly named by the implementation\",\"Omit providers whose knowledge is only permitted but whose symbols are not directly named\",\"Move required shared contracts to another provider and declare edges to that provider\"],\"default_guess\":\"Declare only the edges required by the owned binding operations: models used directly, manifest access from data_provider, digest/JCS operations from canonical_values, timestamps from clock, persistence from store, configured revision and selected instance from installation, and request-shape validation from service_invoker, with the exact exported symbols still needing names.\",\"witness\":{\"initial\":\"An agent proposes a binding for a manifest operation and the implementation of `bindings` must read configuration, parse the capability, compute its digest, validate request shape and persist the proposal.\",\"events\":[\"The `bindings` implementer reads the Knows list.\",\"No `imports.module_internal.bindings` declaration or imported-symbol list is present.\",\"One implementer creates direct edges to all seven listed modules; another imports only the modules whose functions happen to be called and duplicates or relocates the remaining work.\"],\"outcomes\":[\"The generated module has seven provider edges and uses provider-owned helpers for all listed knowledge.\",\"The generated module has a smaller, different graph and locally implements or obtains some of the same knowledge elsewhere.\"],\"observer\":\"The projector, generated module imports, affected-set calculation and maintainers changing any provider see the difference.\"}},{\"subject\":\"30_modules.md:`bindings` — stale-check/invocation boundary\",\"kind\":\"unclear_dependency_direction\",\"text\":\"A08: reading one service record at the configured revision, the operation's\\n`record_digest`, proposal checks in their fixed order, the owner's acceptance,\\nand the stale check before every send.\",\"question\":\"Does `service_invoker` call a public `bindings` stale-check operation before sending, does `bindings` orchestrate the call into `service_invoker`, or is a third module responsible for coordinating the check and send?\",\"options\":[\"`service_invoker` depends on `bindings` and calls `check_binding_current` before each send\",\"`bindings` depends on `service_invoker` and owns the entire pre-send orchestration\",\"A coordinating module depends on both, keeping `bindings` and `service_invoker` from depending on each other\"],\"default_guess\":\"Have the run/invocation coordinator call `bindings.check_binding_current` and then invoke `service_invoker`; keep `bindings` responsible for the check and `service_invoker` responsible for encoding and sending.\",\"witness\":{\"initial\":\"A run reaches an operation node whose accepted binding pins digest D1; the configured manifest now yields D2.\",\"events\":[\"The run executor asks for the operation to be sent.\",\"The stale check must occur before the first request byte is written.\"],\"outcomes\":[\"`service_invoker` imports and calls the binding check, creating a `service_invoker` to `bindings` edge.\",\"`bindings` imports the invoker and controls the send, creating a `bindings` to `service_invoker` edge and potentially a cycle if the invoker also needs binding data.\"],\"observer\":\"Module generation, dependency-cycle validation and maintainers of the send path see the difference.\"}},{\"subject\":\"30_modules.md:`flows` — internal dependency surface\",\"kind\":\"missing_dependency_declaration\",\"text\":\"This list says which modules' knowledge `flows` may rely on; it declares no\\ndependency edge and no imported symbol. Its edges and the exact symbols on\\neach are its `imports.module_internal` (SPEC_STANDARD §7), the one\\nauthoritative source.\",\"question\":\"Which of `models`, `data_provider`, `canonical_values`, `clock`, `store`, `functions` and `bindings` are actual direct providers of `flows`, and what exact minimal symbols does `flows` import from each?\",\"options\":[\"Declare a `module_internal.flows` edge with exact symbols for every provider directly named by the implementation\",\"Omit listed providers whose symbols are not directly named\",\"Introduce narrower provider interfaces and declare edges to those instead\"],\"default_guess\":\"Declare direct edges for the models named in proof and activation code, storage, time, function-contract lookup and binding lookup; use data_provider or canonical_values only where their exported constants or canonicalization operations are directly named, with exact symbol names still needing definition.\",\"witness\":{\"initial\":\"An agent composes a flow containing a function node, an accepted operation binding, guarded edges and constants.\",\"events\":[\"The `flows` implementation must resolve contract versions and binding status, compute or return the content identity, prove the graph and persist the version.\",\"The Knows list supplies permissions but no authoritative edges or symbols.\"],\"outcomes\":[\"One implementer imports lookup operations from `functions` and `bindings`, canonicalization from `canonical_values`, and persistence/time providers directly.\",\"Another reads the needed records through `store`, computes identity locally and creates no edges to some listed modules.\"],\"observer\":\"The projector, generated imports, dependency graph and later changes to contract or binding lookup APIs see the difference.\"}},{\"subject\":\"30_modules.md:`bindings` — public API\",\"kind\":\"undecided_public_surface\",\"text\":\"propose_binding\\nread_binding\\ncheck_installed_instances\\naccept_binding\\ncheck_binding_current\",\"question\":\"Are all five candidate capabilities required exported functions with these exact names and contracts, or which subset or replacements form the public surface of `bindings`?\",\"options\":[\"Export all five names\",\"Export only mutation and stale-check operations, using generic inspection for reads\",\"Rename, merge or split the candidates before contracts and imports are generated\"],\"default_guess\":\"Export all five because each corresponds to a distinct proposal, inspection, installation validation, acceptance or pre-send check responsibility.\",\"witness\":{\"initial\":\"The module implementation and its consumers are generated from the closed State 3 design.\",\"events\":[\"A surface adapter needs to propose and accept a binding, while the send path needs to test whether it is current.\",\"The design labels the listed names only as candidates and carries no later decision.\"],\"outcomes\":[\"All five functions are generated and may be imported by consumers.\",\"Only `propose_binding`, `accept_binding` and `check_binding_current` are generated; reads and instance checks are handled elsewhere.\"],\"observer\":\"Surface callers, the send path, import projection and tests see different callable APIs.\"}},{\"subject\":\"30_modules.md:`flows` — public API\",\"kind\":\"undecided_public_surface\",\"text\":\"compose_flow_version\\nread_flow_version\\nprove_flow_version\\nactivate_flow_version\\nactive_flow_version\",\"question\":\"Are all five candidate capabilities required exported functions with these exact names and contracts, or which subset or replacements form the public surface of `flows`?\",\"options\":[\"Export all five names\",\"Export composition and activation only, returning proof and inspection through those or through generic inspection\",\"Rename, merge or split the candidates before contracts and imports are generated\"],\"default_guess\":\"Export all five so composition, on-demand proof, activation and both direct and active-version reads remain separate operations.\",\"witness\":{\"initial\":\"A caller composes an unproven version, later accepts its binding, asks to prove it again and then activates it.\",\"events\":[\"The caller needs operations to retrieve the version, recompute proof and find the active version.\",\"The design supplies only candidate capability names.\"],\"outcomes\":[\"The caller invokes separate `read_flow_version`, `prove_flow_version` and `active_flow_version` exports.\",\"The implementation folds proof into activation and serves both reads through a generic inspection operation, so those exports do not exist.\"],\"observer\":\"Surface adapters, generated contracts, imports and required tests see the difference.\"}},{\"subject\":\"30_modules.md:`bindings` — imports declaration\",\"kind\":\"standard_violation\",\"text\":\"This list says which modules' knowledge `bindings` may rely on; it declares no\\ndependency edge and no imported symbol. Its edges and the exact symbols on\\neach are its `imports.module_internal` (SPEC_STANDARD §7), the one\\nauthoritative source.\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"The passage must become or be accompanied by an explicit `module_internal` declaration for `bindings`, naming every actual provider edge and its exact imported symbols.\"},{\"subject\":\"30_modules.md:`flows` — imports declaration\",\"kind\":\"standard_violation\",\"text\":\"This list says which modules' knowledge `flows` may rely on; it declares no\\ndependency edge and no imported symbol. Its edges and the exact symbols on\\neach are its `imports.module_internal` (SPEC_STANDARD §7), the one\\nauthoritative source.\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"The passage must become or be accompanied by an explicit `module_internal` declaration for `flows`, naming every actual provider edge and its exact imported symbols.\"}]}",
+ "set_aside": []
+}
