@@ -62,6 +62,12 @@ The list runs from the bottom of the stack up: a module may know only modules
 on earlier lines of the list, never one on a later line, and modules on one
 line do not know each other.
 
+A module's `Knows` section is the module-level edge only. Which symbols a
+consumer imports from each provider is the imports closure (`65_imports.json`,
+projected into `imports.module_internal`, SPEC_STANDARD §7), the one
+authoritative consumer → provider → symbols map, beside the types its
+contracts name, which §7 imports structurally; `Knows` repeats none of it.
+
 A21, the State 0–2 security review, has no runtime owner: it is an evidence
 record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
 
@@ -982,11 +988,6 @@ and the stale check before every send.
 `models`, `data_provider`, `canonical_values`, `clock`, `store`,
 `installation`, `service_invoker` (request shape).
 
-This list says which modules' knowledge `bindings` may rely on; it declares no
-dependency edge and no imported symbol. Its edges and the exact symbols on
-each are its `imports.module_internal` (SPEC_STANDARD §7), the one
-authoritative source.
-
 ### Must not own
 
 Sending, the request's encoding, authority, or writing the manifest.
@@ -1026,11 +1027,6 @@ The proof-time reach of disclosure classes (A07 rule 2).
 `models`, `data_provider`, `canonical_values`, `clock`, `store`,
 `functions` (contract versions), `bindings` (binding status and declared
 classes).
-
-This list says which modules' knowledge `flows` may rely on; it declares no
-dependency edge and no imported symbol. Its edges and the exact symbols on
-each are its `imports.module_internal` (SPEC_STANDARD §7), the one
-authoritative source.
 
 ### Must not own
 
