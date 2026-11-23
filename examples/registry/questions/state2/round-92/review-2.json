@@ -1,0 +1,128 @@
+{
+ "open_points": [
+  {
+   "subject": "A18 backup scheduler",
+   "kind": "time_source_and_first_read",
+   "text": "The process looks at the clock every imported\n   `BACKUP_LOOK_SECONDS` (60 seconds);",
+   "question": "Which clock measures the interval between looks, when is the process's first look after starting, and is the interval measured between look starts or after a look finishes?",
+   "options": [
+    "Use the monotonic clock, look immediately at process start, then every 60 seconds from each scheduled look start.",
+    "Use the monotonic clock, with the first look 60 seconds after process start.",
+    "Use UTC wall-clock scheduling, so wall-clock changes also move the cadence.",
+    "Schedule the next look 60 seconds after the preceding look finishes."
+   ],
+   "default_guess": "Use the monotonic clock, look immediately at process start, and schedule subsequent look starts 60 seconds apart.",
+   "witness": {
+    "initial": "Registry starts at 02:59:45 UTC with service tokens, no kept backup for that UTC date and no earlier look by this process.",
+    "events": [
+     "The process starts its backup scheduler.",
+     "UTC reaches 03:00:00.",
+     "The scheduler either made an immediate pre-03:00 look or waits 60 seconds for its first look."
+    ],
+    "outcomes": [
+     "An immediate look at 02:59:45 followed by a look at 03:00:45 satisfies the earlier-look condition and starts the date's backup.",
+     "A first look at 03:00:45 has no earlier look before 03:00, so that date receives no backup."
+    ],
+    "observer": "The owner reading the newest-kept-backup display."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A18 BACKUP_DAILY_TIME_UTC",
+   "kind": "time_representation",
+   "text": "the daily time, the imported `BACKUP_DAILY_TIME_UTC` constant (03:00 UTC,\n   SPEC_STANDARD §15.3.1)",
+   "question": "What representation does the daily UTC time have when supplied to and compared by generated code?",
+   "options": [
+    "A UTC time-of-day value with hour, minute and second.",
+    "An integer number of seconds after 00:00 UTC.",
+    "A fixed text value with a declared syntax.",
+    "Separate numeric hour and minute fields."
+   ],
+   "default_guess": "Use a typed UTC time-of-day value representing 03:00:00 with no date or local-time interpretation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 secret-length invariant and its Required tests",
+   "kind": "ambiguous_invariant_test",
+   "text": "for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYTES",
+   "question": "Must `len` mean the number of bytes in the value's UTF-8 encoding, and which Required tests must show the boundary for every kind of configured secret and the distinctness of every pair?",
+   "options": [
+    "Define `len` as `len(UTF-8(value))` and require tests for values immediately below, exactly at and above the boundary, including multibyte text, plus equality across every pair of secret kinds.",
+    "Count Unicode code points instead of UTF-8 bytes.",
+    "Keep UTF-8 byte length as the rule but test only the example 16-byte service token and one pair of service tokens."
+   ],
+   "default_guess": "Define `len` as UTF-8 byte length and add boundary and pairwise-distinctness tests covering tokens, the owner credential and the backup key.",
+   "witness": {
+    "initial": "A complete configuration contains a service token consisting of 16 copies of `é`; its UTF-8 encoding is 32 bytes, but the string has 16 Unicode code points.",
+    "events": [
+     "Registry performs A17's secret-length check during start."
+    ],
+    "outcomes": [
+     "The normative UTF-8-byte rule accepts the token's length.",
+     "An implementation reading the formal invariant's bare `len` as character count refuses the start."
+    ],
+    "observer": "The owner starting Registry."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A18 and A21 review of BACKUP_LOOK_SECONDS",
+   "kind": "contradictory_change_assessment",
+   "text": "the backup's daily time and look interval keep 03:00\nUTC and 60 seconds through `BACKUP_DAILY_TIME_UTC` and `BACKUP_LOOK_SECONDS`;\nno rule's behaviour moved. No outcome changed.",
+   "question": "Is the required cadence exactly one look every 60 seconds, or does the earlier requirement of at least one look per minute remain, allowing more frequent looks? If exact cadence is intended, A21 must acknowledge and review that behavioral narrowing instead of saying no rule behavior moved.",
+   "options": [
+    "Require exactly 60 seconds between scheduled looks and revise A21's review statement.",
+    "Preserve the former requirement of at least one look per 60 seconds, allowing more frequent looks, and revise A18's wording.",
+    "Define a different cadence rule and review its observable backup-timing consequences."
+   ],
+   "default_guess": "Preserve the former at-least-once-per-60-seconds guarantee unless the owner explicitly chooses exact cadence.",
+   "witness": {
+    "initial": "The process looked at 02:59:50 UTC, no kept backup exists for the date, and Registry remains running with service tokens.",
+    "events": [
+     "UTC passes 03:00.",
+     "An implementation either looks every 15 seconds or exactly every 60 seconds."
+    ],
+    "outcomes": [
+     "Under the former at-least-once-per-minute rule, a permitted 15-second cadence starts the backup at 03:00:05.",
+     "Under the new exact-60-second reading, the next look and backup start are at 03:00:50."
+    ],
+    "observer": "The owner observing when the new kept backup appears."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-session random values at HTTP boundaries",
+   "kind": "later_layer_choice",
+   "text": "The identity travels only in the cookie, the\n   other two only in the forms the interface serves.",
+   "question": "How are the random bytes serialized into cookie and form values and decoded for comparison?",
+   "options": [
+    "Unpadded base64url.",
+    "Padded base64url.",
+    "Hexadecimal text.",
+    "Another explicitly declared reversible text encoding."
+   ],
+   "default_guess": "Use unpadded base64url while preserving all random bytes.",
+   "decision_owner": "6",
+   "consequences": [
+    "Base64url is compact and safe in cookie and form fields, but padding and canonical-decoding rules must be fixed.",
+    "Padded base64url is conventional but introduces `=` characters and requires consistent form handling.",
+    "Hexadecimal is simple and canonical but doubles the transmitted length.",
+    "Another encoding changes accepted syntax, interoperability and malformed-value refusal behavior."
+   ],
+   "requirement": "The session's identity, its CSRF value and a confirmation value are each\n   as many bytes from the operating system's random source as the imported\n   `SECRET_MIN_BYTES` constant names (32, SPEC_STANDARD §15.3.1); each is compared\n   in constant time and never appears in a URL, a log line, a diagnostic or an\n   audit entry (R0-29, R0-37). The identity travels only in the cookie, the\n   other two only in the forms the interface serves.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 rule 1",
+   "kind": "standard_violation",
+   "text": "The process looks at the clock every imported\n   `BACKUP_LOOK_SECONDS` (60 seconds);",
+   "rule": "| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |",
+   "section": "15.3.1",
+   "question": "The passage must name this value as “the imported `BACKUP_LOOK_SECONDS` constant” so the required data-provider-constant path is stated in the prescribed form.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A18 backup scheduler\",\"kind\":\"time_source_and_first_read\",\"text\":\"The process looks at the clock every imported\\n   `BACKUP_LOOK_SECONDS` (60 seconds);\",\"question\":\"Which clock measures the interval between looks, when is the process's first look after starting, and is the interval measured between look starts or after a look finishes?\",\"options\":[\"Use the monotonic clock, look immediately at process start, then every 60 seconds from each scheduled look start.\",\"Use the monotonic clock, with the first look 60 seconds after process start.\",\"Use UTC wall-clock scheduling, so wall-clock changes also move the cadence.\",\"Schedule the next look 60 seconds after the preceding look finishes.\"],\"default_guess\":\"Use the monotonic clock, look immediately at process start, and schedule subsequent look starts 60 seconds apart.\",\"witness\":{\"initial\":\"Registry starts at 02:59:45 UTC with service tokens, no kept backup for that UTC date and no earlier look by this process.\",\"events\":[\"The process starts its backup scheduler.\",\"UTC reaches 03:00:00.\",\"The scheduler either made an immediate pre-03:00 look or waits 60 seconds for its first look.\"],\"outcomes\":[\"An immediate look at 02:59:45 followed by a look at 03:00:45 satisfies the earlier-look condition and starts the date's backup.\",\"A first look at 03:00:45 has no earlier look before 03:00, so that date receives no backup.\"],\"observer\":\"The owner reading the newest-kept-backup display.\"}},{\"subject\":\"A18 BACKUP_DAILY_TIME_UTC\",\"kind\":\"time_representation\",\"text\":\"the daily time, the imported `BACKUP_DAILY_TIME_UTC` constant (03:00 UTC,\\n   SPEC_STANDARD §15.3.1)\",\"question\":\"What representation does the daily UTC time have when supplied to and compared by generated code?\",\"options\":[\"A UTC time-of-day value with hour, minute and second.\",\"An integer number of seconds after 00:00 UTC.\",\"A fixed text value with a declared syntax.\",\"Separate numeric hour and minute fields.\"],\"default_guess\":\"Use a typed UTC time-of-day value representing 03:00:00 with no date or local-time interpretation.\"},{\"subject\":\"A17 secret-length invariant and its Required tests\",\"kind\":\"ambiguous_invariant_test\",\"text\":\"for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYTES\",\"question\":\"Must `len` mean the number of bytes in the value's UTF-8 encoding, and which Required tests must show the boundary for every kind of configured secret and the distinctness of every pair?\",\"options\":[\"Define `len` as `len(UTF-8(value))` and require tests for values immediately below, exactly at and above the boundary, including multibyte text, plus equality across every pair of secret kinds.\",\"Count Unicode code points instead of UTF-8 bytes.\",\"Keep UTF-8 byte length as the rule but test only the example 16-byte service token and one pair of service tokens.\"],\"default_guess\":\"Define `len` as UTF-8 byte length and add boundary and pairwise-distinctness tests covering tokens, the owner credential and the backup key.\",\"witness\":{\"initial\":\"A complete configuration contains a service token consisting of 16 copies of `é`; its UTF-8 encoding is 32 bytes, but the string has 16 Unicode code points.\",\"events\":[\"Registry performs A17's secret-length check during start.\"],\"outcomes\":[\"The normative UTF-8-byte rule accepts the token's length.\",\"An implementation reading the formal invariant's bare `len` as character count refuses the start.\"],\"observer\":\"The owner starting Registry.\"}},{\"subject\":\"A18 and A21 review of BACKUP_LOOK_SECONDS\",\"kind\":\"contradictory_change_assessment\",\"text\":\"the backup's daily time and look interval keep 03:00\\nUTC and 60 seconds through `BACKUP_DAILY_TIME_UTC` and `BACKUP_LOOK_SECONDS`;\\nno rule's behaviour moved. No outcome changed.\",\"question\":\"Is the required cadence exactly one look every 60 seconds, or does the earlier requirement of at least one look per minute remain, allowing more frequent looks? If exact cadence is intended, A21 must acknowledge and review that behavioral narrowing instead of saying no rule behavior moved.\",\"options\":[\"Require exactly 60 seconds between scheduled looks and revise A21's review statement.\",\"Preserve the former requirement of at least one look per 60 seconds, allowing more frequent looks, and revise A18's wording.\",\"Define a different cadence rule and review its observable backup-timing consequences.\"],\"default_guess\":\"Preserve the former at-least-once-per-60-seconds guarantee unless the owner explicitly chooses exact cadence.\",\"witness\":{\"initial\":\"The process looked at 02:59:50 UTC, no kept backup exists for the date, and Registry remains running with service tokens.\",\"events\":[\"UTC passes 03:00.\",\"An implementation either looks every 15 seconds or exactly every 60 seconds.\"],\"outcomes\":[\"Under the former at-least-once-per-minute rule, a permitted 15-second cadence starts the backup at 03:00:05.\",\"Under the new exact-60-second reading, the next look and backup start are at 03:00:50.\"],\"observer\":\"The owner observing when the new kept backup appears.\"}},{\"subject\":\"A13 owner-session random values at HTTP boundaries\",\"kind\":\"later_layer_choice\",\"text\":\"The identity travels only in the cookie, the\\n   other two only in the forms the interface serves.\",\"question\":\"How are the random bytes serialized into cookie and form values and decoded for comparison?\",\"options\":[\"Unpadded base64url.\",\"Padded base64url.\",\"Hexadecimal text.\",\"Another explicitly declared reversible text encoding.\"],\"default_guess\":\"Use unpadded base64url while preserving all random bytes.\",\"decision_owner\":\"6\",\"consequences\":[\"Base64url is compact and safe in cookie and form fields, but padding and canonical-decoding rules must be fixed.\",\"Padded base64url is conventional but introduces `=` characters and requires consistent form handling.\",\"Hexadecimal is simple and canonical but doubles the transmitted length.\",\"Another encoding changes accepted syntax, interoperability and malformed-value refusal behavior.\"],\"requirement\":\"The session's identity, its CSRF value and a confirmation value are each\\n   as many bytes from the operating system's random source as the imported\\n   `SECRET_MIN_BYTES` constant names (32, SPEC_STANDARD §15.3.1); each is compared\\n   in constant time and never appears in a URL, a log line, a diagnostic or an\\n   audit entry (R0-29, R0-37). The identity travels only in the cookie, the\\n   other two only in the forms the interface serves.\"},{\"subject\":\"A18 rule 1\",\"kind\":\"standard_violation\",\"text\":\"The process looks at the clock every imported\\n   `BACKUP_LOOK_SECONDS` (60 seconds);\",\"rule\":\"| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |\",\"section\":\"15.3.1\",\"question\":\"The passage must name this value as “the imported `BACKUP_LOOK_SECONDS` constant” so the required data-provider-constant path is stated in the prescribed form.\"}]}",
+ "set_aside": []
+}
