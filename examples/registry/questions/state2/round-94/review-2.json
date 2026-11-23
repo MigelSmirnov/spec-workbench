@@ -1,0 +1,363 @@
+{
+ "open_points": [
+  {
+   "subject": "A01 create-repeat invariant",
+   "kind": "contradiction",
+   "text": "create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:\n  rights fail or project archived => refused, store unchanged",
+   "question": "Does “project archived” apply only to room and pointer creates, or also to a repeated project create, which rule 4 and Required test 4 require to answer the archived project?",
+   "options": [
+    "Limit the archived-project refusal to adding rooms and publishing pointers",
+    "Refuse every repeated create associated with an archived project",
+    "Remove the special case and rely on each operation's stated admission rules"
+   ],
+   "default_guess": "Limit the archived-project refusal to adding rooms and publishing pointers.",
+   "witness": {
+    "initial": "An active project was created with request id K and was later archived.",
+    "events": [
+     "The owner repeats 'create a project' with request id K and the original facts."
+    ],
+    "outcomes": [
+     "A01 Required test 4: Registry answers the archived project and changes nothing.",
+     "A01's formal invariant: Registry refuses because the project is archived."
+    ],
+    "observer": "The owner repeating the create"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A01 request-id form",
+   "kind": "ambiguous constraint",
+   "text": "printable text of at most 128 characters",
+   "question": "Which characters are printable, and what unit is used for the 128-character limit?",
+   "options": [
+    "Printable ASCII, counted as bytes/ASCII characters",
+    "Unicode characters excluding control and separator characters, counted as Unicode code points",
+    "Any nonblank Unicode text, counted as Unicode code points"
+   ],
+   "default_guess": "Printable ASCII with a maximum of 128 characters.",
+   "witness": {
+    "initial": "A caller has generated a request id containing 128 non-ASCII printable characters.",
+    "events": [
+     "The caller submits a create using that request id."
+    ],
+    "outcomes": [
+     "Registry accepts it because it contains 128 Unicode code points.",
+     "Registry refuses it because request ids are restricted to printable ASCII or exceed a byte-based limit."
+    ],
+    "observer": "The caller"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 migration file digest",
+   "kind": "undefined identity rule",
+   "text": "The mapping names\nthe file by its digest.",
+   "question": "What digest algorithm, byte domain and textual representation define the file identity used by the mapping, confirmation, closure and audit entry, and what collision guarantee is required?",
+   "options": [
+    "SHA-256 of the exact uploaded file-part bytes, encoded as lowercase hexadecimal",
+    "SHA-256 of a canonicalized parsed import representation",
+    "Another release-fixed digest algorithm and encoding"
+   ],
+   "default_guess": "SHA-256 of the exact uploaded file-part bytes, encoded as lowercase hexadecimal.",
+   "witness": {
+    "initial": "Two upload byte streams parse to the same import records but differ in whitespace or encoding.",
+    "events": [
+     "The owner uploads the first file and sees its mapping.",
+     "The owner uploads the second file and attempts to confirm the first mapping."
+    ],
+    "outcomes": [
+     "The files have different identities because the digest covers exact uploaded bytes.",
+     "The files have the same identity because the digest covers canonical parsed content."
+    ],
+    "observer": "The owner and the stored migration closure"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 import transaction timestamps",
+   "kind": "time reading undecided",
+   "text": "A Customer the import makes is\n  created at the import's instant with revision 1.",
+   "question": "Must the new Customers, migration closure and audit entry written by one accepted import share one clock reading, or may each receive a separately read instant?",
+   "options": [
+    "Read once and use the same instant for every fresh timestamp of the import transaction",
+    "Read separately for each created record",
+    "Read once per record category"
+   ],
+   "default_guess": "Read once and use the same instant throughout the transaction.",
+   "witness": {
+    "initial": "An import begins immediately before a clock tick or UTC date boundary.",
+    "events": [
+     "The owner confirms the import.",
+     "Registry creates Customers, the closure and the audit entry in one transaction."
+    ],
+    "outcomes": [
+     "Every newly written fact carries one identical import instant.",
+     "Customers, closure and audit entry carry different instants from separate clock readings."
+    ],
+    "observer": "The owner reading the imported Customers and audit log"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "State 2 time authority and representation",
+   "kind": "missing time decision",
+   "text": "Every \"today\" in Registry is the current date in UTC, as every\ninstant is (L16).",
+   "question": "What authoritative source supplies current time, what precise aware-datetime representation and precision are used, and how many readings does each operation take?",
+   "options": [
+    "An injected UTC clock, one reading per operation, stored as timezone-aware UTC datetimes at fixed precision",
+    "A declared authority module, with each timestamp request reading it independently",
+    "A datetime supplied explicitly to every operation, normalized to a fixed UTC precision"
+   ],
+   "default_guess": "Use an injected UTC clock, read once per operation, and normalize to timezone-aware UTC datetimes at microsecond precision.",
+   "witness": {
+    "initial": "An operation starts just before midnight UTC and writes or compares more than one time-dependent fact.",
+    "events": [
+     "The operation validates a value against today.",
+     "The operation writes its result and audit facts after midnight."
+    ],
+    "outcomes": [
+     "One clock reading makes validation and every written timestamp belong to the same operation instant/date.",
+     "Separate readings make validation use one date while stored facts use another."
+    ],
+    "observer": "The owner and any test around the UTC boundary"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "State 6 clock contract",
+   "kind": "later_layer_choice",
+   "text": "Every time Registry records is an instant in UTC with time zone (L16).",
+   "question": "Once State 2 fixes the authority and reading semantics, how does each timestamp-writing operation receive that authority in its exact contract?",
+   "options": [
+    "A datetime parameter on each mutating operation",
+    "A clock port supplied through __init__",
+    "A declared authority module used by timestamp-writing modules"
+   ],
+   "default_guess": "A clock port supplied through __init__.",
+   "decision_owner": "state6",
+   "consequences": [
+    "A datetime parameter makes readings explicit per call but expands every mutation contract.",
+    "A clock port centralizes time and supports deterministic tests while preserving operation-level control.",
+    "An authority module reduces parameters but introduces a process-wide dependency."
+   ],
+   "requirement": "every mutating operation that writes a fresh timestamp receives the time source State 2 decided, in its contract (a datetime parameter, a clock port in __init__, or a declared authority module)",
+   "unit": "?"
+  },
+  {
+   "subject": "A09 disclosure-class invariant",
+   "kind": "missing invariant test",
+   "text": "class(answer(op)) <= highest_class(s)\nhighest_class(Cabinet Kernel) = business_confidential",
+   "question": "Which Required tests item must show both the general answer-class ceiling and that Cabinet Kernel's ceiling is exactly business_confidential? Test 2 can refuse Kernel's context call solely because `context` is absent from Kernel's operation row.",
+   "options": [
+    "Add a table-wide test that every allowed operation's possible answers are at or below its service ceiling",
+    "Add focused tests for every operation capable of returning personal_data, including an operation Kernel otherwise may call",
+    "Bind the invariant to a generated policy check that explicitly asserts both statements"
+   ],
+   "default_guess": "Add a table-wide policy test and a focused Kernel boundary test.",
+   "unit": "?"
+  },
+  {
+   "subject": "A22 first-release vocabulary invariant",
+   "kind": "missing invariant test",
+   "text": "declared_types(first release) = {estimate -> PresuPro}",
+   "question": "Which Required tests item must show that the first release declares exactly `estimate` and maps it to PresuPro, rather than merely showing that `wall_plan` is unknown?",
+   "options": [
+    "Assert the complete first-release mapping",
+    "Assert the derived manifest and runtime mapping both equal the complete mapping",
+    "Test only publication of estimate and rejection of one undeclared example"
+   ],
+   "default_guess": "Assert that both the runtime vocabulary and derived manifest equal the complete mapping.",
+   "unit": "?"
+  },
+  {
+   "subject": "A22 vocabulary-change preservation invariant",
+   "kind": "underspecified invariant test",
+   "text": "pointers are never removed or rewritten by a vocabulary change",
+   "question": "Must the required test compare every fact of every affected pointer before and after the release change, or only show that pointers remain listed with their statuses?",
+   "options": [
+    "Compare every pointer fact before and after the vocabulary change",
+    "Compare identity and status only",
+    "Require only that the pointers remain listable"
+   ],
+   "default_guess": "Compare every pointer fact before and after the vocabulary change.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 rendering invariant",
+   "kind": "missing invariant test",
+   "text": "render(v) = escape(v) for every stored value v",
+   "question": "Which Required tests item must establish escaping for every rendering context that can display a stored value, rather than only room names and access-request text?",
+   "options": [
+    "A context-complete test matrix for HTML text, attributes and every other rendering context used",
+    "A property test over every owner-interface presenter",
+    "Keep the two examples as sufficient witnesses"
+   ],
+   "default_guess": "Use a context-complete test matrix over every owner-interface presenter.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 interpreted-input invariant",
+   "kind": "missing invariant test",
+   "text": "no stored value is ever evaluated or executed",
+   "question": "Which Required tests item must show that caller and import values cannot alter query, command or template structure or otherwise be evaluated?",
+   "options": [
+    "Tests for each interpreted boundary and fixed-alternative selector",
+    "A structural factory check plus representative runtime injection tests",
+    "Treat the quote-and-semicolon round trip as sufficient"
+   ],
+   "default_guess": "Require a structural check and representative runtime tests for every interpreted boundary.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 browser script prohibition",
+   "kind": "missing safety test",
+   "text": "The owner interface sends no script of its own (R0-29) and forbids the\n   browser to run any, by its content security policy.",
+   "question": "What Required tests item must show both that responses contain no application script and that the effective content security policy prohibits script execution?",
+   "options": [
+    "Assert response bodies and the exact effective CSP on every owner-interface response",
+    "Use a browser test proving inline and external scripts do not execute",
+    "Use both header assertions and a browser execution test"
+   ],
+   "default_guess": "Use both header assertions and a browser execution test.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19 multipart-head bound",
+   "kind": "missing policy value",
+   "text": "at most the imported\n   `UPLOAD_FORM_HEAD_MAX_BYTES` constant",
+   "question": "What release-fixed value does `UPLOAD_FORM_HEAD_MAX_BYTES` have, and exactly which bytes before the file part count toward it?",
+   "options": [
+    "64 KiB covering all multipart bytes received before the first file byte",
+    "1 MiB covering all multipart bytes received before the first file byte",
+    "Another explicit release-fixed byte limit"
+   ],
+   "default_guess": "64 KiB covering every received multipart byte before the file part's content.",
+   "witness": {
+    "initial": "A valid upload has an unusually large CSRF field or multipart headers before a small file.",
+    "events": [
+     "The owner submits the multipart upload."
+    ],
+    "outcomes": [
+     "Registry admits the request because its pre-file head is within the chosen bound.",
+     "Registry refuses it because another implementation chose a smaller bound or counted different framing bytes."
+    ],
+    "observer": "The owner uploading the import"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A02 required-value invariant",
+   "kind": "missing invariant test",
+   "text": "for every stored required value v: not missing(v)",
+   "question": "Which Required tests must show the invariant for every required-value source, including object address, Customer name and kind, and session access-request text?",
+   "options": [
+    "A test matrix covering every required field and every operation that supplies it",
+    "A property test parameterized by the required-field catalogue",
+    "Keep the project-name and room-name examples as sufficient"
+   ],
+   "default_guess": "Add a parameterized test covering every required field and supplying operation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A02 numeric domain",
+   "kind": "later_layer_choice",
+   "text": "a floor area not\n   greater than zero, a number of rooms that is not a whole number of at\n   least 1, or a floor that is not a whole number",
+   "question": "Which numeric domain and wire forms do the fields accept, including whether non-finite values, exponent notation and numerically integral decimals are admissible?",
+   "options": [
+    "Finite JSON numbers, with rooms and floor requiring mathematically integral values",
+    "Decimal strings in a canonical format",
+    "Integer wire types for rooms and floor and a finite decimal wire type for area"
+   ],
+   "default_guess": "Use integer wire types for rooms and floor and a finite decimal type for area.",
+   "decision_owner": "state6",
+   "consequences": [
+    "Generic JSON numbers require explicit rejection of NaN and infinity and a rule for values such as 2.0.",
+    "Canonical decimal strings preserve exact written values but change the public field representation.",
+    "Separate integer and finite-decimal types make the form constraints structural."
+   ],
+   "requirement": "No accepted requirement states the admissible numeric wire representation or whether non-finite values are allowed.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 imported-instant syntax",
+   "kind": "later_layer_choice",
+   "text": "an instant cannot be read",
+   "question": "What exact import syntax, precision and offset rules make an instant readable?",
+   "options": [
+    "RFC 3339 timestamps with an explicit offset, normalized to UTC",
+    "Only canonical timestamps ending in Z at fixed precision",
+    "The exact legacy v1 timestamp syntax, with an explicit normalization rule"
+   ],
+   "default_guess": "Accept the documented legacy v1 syntax with an explicit offset and normalize it to canonical UTC.",
+   "decision_owner": "state5_and_state6",
+   "consequences": [
+    "Broad RFC 3339 acceptance eases migration but permits multiple textual forms for one instant.",
+    "Canonical Z-only input simplifies validation but may reject legacy exports.",
+    "Legacy-specific parsing preserves migration compatibility but must be fully declared and tested."
+   ],
+   "requirement": "Every time Registry records is an instant in UTC with time zone (L16).",
+   "unit": "?"
+  },
+  {
+   "subject": "A01 owner-interface request-id generation",
+   "kind": "later_layer_choice",
+   "text": "The owner interface makes\n   one when it renders a create form",
+   "question": "Which generator and encoding does the owner interface use to produce a printable request id from at least 16 random bytes, and is the same id preserved across a form resubmission?",
+   "options": [
+    "UUIDv4 generated once per rendered form and carried unchanged on resubmission",
+    "Base64url encoding of 16 or more cryptographically random bytes",
+    "A longer cryptographically random token encoded as lowercase hexadecimal"
+   ],
+   "default_guess": "Generate one UUIDv4 per rendered form and preserve it across resubmissions of that form.",
+   "decision_owner": "generation",
+   "consequences": [
+    "UUIDv4 is interoperable and compact but its fixed version and variant bits affect the literal entropy interpretation.",
+    "Base64url preserves compact random bytes but requires an explicit accepted alphabet.",
+    "Hexadecimal is simplest to validate but produces longer identifiers."
+   ],
+   "requirement": "an opaque value the caller makes, unique for every create it means as new — printable text of at most 128 characters, made from at least 16 random bytes, as a random UUID is",
+   "unit": "?"
+  },
+  {
+   "subject": "R0-96 agent instruction installation",
+   "kind": "later_layer_choice",
+   "text": "adding the rule there is the\nplatform's change, made before the first release goes into production.",
+   "question": "What later-layer check proves that the required room-name and alias rule is present in the agent-home instructions actually deployed before production admission?",
+   "options": [
+    "A factory check parses the generated AGENTS.md and requires the rule",
+    "A deployment check verifies the installed file and its approved digest",
+    "Factory generation and deployment verification both enforce it"
+   ],
+   "default_guess": "Use both a factory content check and deployment verification of the installed file.",
+   "decision_owner": "factory_checks",
+   "consequences": [
+    "A factory-only check proves the produced artifact but not that the admitted artifact was installed.",
+    "A deployment-only check can verify installation but may discover omissions late.",
+    "Both checks cover artifact creation and the production installation boundary."
+   ],
+   "requirement": "In the first\nrelease the agent learns it from its instructions, which the platform\ninstalls in the agent's home on the home server (Factory\n`platform/home_server/workspace/AGENTS.md`); adding the rule there is the\nplatform's change, made before the first release goes into production.",
+   "unit": "?"
+  },
+  {
+   "subject": "A09 service-rights policy",
+   "kind": "standard_violation",
+   "text": "Registry knows from its own release\n   which operations that service may call and the highest disclosure class it\n   may receive (R0-26, R0-27).",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The passage must name the service-rights and class table through its permitted generated-code path, such as an imported data-provider policy constant, rather than saying only that it comes from the release.",
+   "unit": "?"
+  },
+  {
+   "subject": "A22 artifact vocabulary policy",
+   "kind": "standard_violation",
+   "text": "The declared types are part of the specification and of the release; a\n   running instance reads them from its release, never from its configuration\n   or its store (R0-33).",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The passage must place the closed type-to-owner-service mapping on one permitted path to generated code—model enumeration for the closed type names and an imported policy constant for the mapping—instead of introducing “the release” as an unnamed path.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A01 create-repeat invariant\",\"kind\":\"contradiction\",\"text\":\"create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:\\n  rights fail or project archived => refused, store unchanged\",\"question\":\"Does “project archived” apply only to room and pointer creates, or also to a repeated project create, which rule 4 and Required test 4 require to answer the archived project?\",\"options\":[\"Limit the archived-project refusal to adding rooms and publishing pointers\",\"Refuse every repeated create associated with an archived project\",\"Remove the special case and rely on each operation's stated admission rules\"],\"default_guess\":\"Limit the archived-project refusal to adding rooms and publishing pointers.\",\"witness\":{\"initial\":\"An active project was created with request id K and was later archived.\",\"events\":[\"The owner repeats 'create a project' with request id K and the original facts.\"],\"outcomes\":[\"A01 Required test 4: Registry answers the archived project and changes nothing.\",\"A01's formal invariant: Registry refuses because the project is archived.\"],\"observer\":\"The owner repeating the create\"}},{\"subject\":\"A01 request-id form\",\"kind\":\"ambiguous constraint\",\"text\":\"printable text of at most 128 characters\",\"question\":\"Which characters are printable, and what unit is used for the 128-character limit?\",\"options\":[\"Printable ASCII, counted as bytes/ASCII characters\",\"Unicode characters excluding control and separator characters, counted as Unicode code points\",\"Any nonblank Unicode text, counted as Unicode code points\"],\"default_guess\":\"Printable ASCII with a maximum of 128 characters.\",\"witness\":{\"initial\":\"A caller has generated a request id containing 128 non-ASCII printable characters.\",\"events\":[\"The caller submits a create using that request id.\"],\"outcomes\":[\"Registry accepts it because it contains 128 Unicode code points.\",\"Registry refuses it because request ids are restricted to printable ASCII or exceed a byte-based limit.\"],\"observer\":\"The caller\"}},{\"subject\":\"A16 migration file digest\",\"kind\":\"undefined identity rule\",\"text\":\"The mapping names\\nthe file by its digest.\",\"question\":\"What digest algorithm, byte domain and textual representation define the file identity used by the mapping, confirmation, closure and audit entry, and what collision guarantee is required?\",\"options\":[\"SHA-256 of the exact uploaded file-part bytes, encoded as lowercase hexadecimal\",\"SHA-256 of a canonicalized parsed import representation\",\"Another release-fixed digest algorithm and encoding\"],\"default_guess\":\"SHA-256 of the exact uploaded file-part bytes, encoded as lowercase hexadecimal.\",\"witness\":{\"initial\":\"Two upload byte streams parse to the same import records but differ in whitespace or encoding.\",\"events\":[\"The owner uploads the first file and sees its mapping.\",\"The owner uploads the second file and attempts to confirm the first mapping.\"],\"outcomes\":[\"The files have different identities because the digest covers exact uploaded bytes.\",\"The files have the same identity because the digest covers canonical parsed content.\"],\"observer\":\"The owner and the stored migration closure\"}},{\"subject\":\"A16 import transaction timestamps\",\"kind\":\"time reading undecided\",\"text\":\"A Customer the import makes is\\n  created at the import's instant with revision 1.\",\"question\":\"Must the new Customers, migration closure and audit entry written by one accepted import share one clock reading, or may each receive a separately read instant?\",\"options\":[\"Read once and use the same instant for every fresh timestamp of the import transaction\",\"Read separately for each created record\",\"Read once per record category\"],\"default_guess\":\"Read once and use the same instant throughout the transaction.\",\"witness\":{\"initial\":\"An import begins immediately before a clock tick or UTC date boundary.\",\"events\":[\"The owner confirms the import.\",\"Registry creates Customers, the closure and the audit entry in one transaction.\"],\"outcomes\":[\"Every newly written fact carries one identical import instant.\",\"Customers, closure and audit entry carry different instants from separate clock readings.\"],\"observer\":\"The owner reading the imported Customers and audit log\"}},{\"subject\":\"State 2 time authority and representation\",\"kind\":\"missing time decision\",\"text\":\"Every \\\"today\\\" in Registry is the current date in UTC, as every\\ninstant is (L16).\",\"question\":\"What authoritative source supplies current time, what precise aware-datetime representation and precision are used, and how many readings does each operation take?\",\"options\":[\"An injected UTC clock, one reading per operation, stored as timezone-aware UTC datetimes at fixed precision\",\"A declared authority module, with each timestamp request reading it independently\",\"A datetime supplied explicitly to every operation, normalized to a fixed UTC precision\"],\"default_guess\":\"Use an injected UTC clock, read once per operation, and normalize to timezone-aware UTC datetimes at microsecond precision.\",\"witness\":{\"initial\":\"An operation starts just before midnight UTC and writes or compares more than one time-dependent fact.\",\"events\":[\"The operation validates a value against today.\",\"The operation writes its result and audit facts after midnight.\"],\"outcomes\":[\"One clock reading makes validation and every written timestamp belong to the same operation instant/date.\",\"Separate readings make validation use one date while stored facts use another.\"],\"observer\":\"The owner and any test around the UTC boundary\"}},{\"subject\":\"State 6 clock contract\",\"kind\":\"later_layer_choice\",\"text\":\"Every time Registry records is an instant in UTC with time zone (L16).\",\"question\":\"Once State 2 fixes the authority and reading semantics, how does each timestamp-writing operation receive that authority in its exact contract?\",\"options\":[\"A datetime parameter on each mutating operation\",\"A clock port supplied through __init__\",\"A declared authority module used by timestamp-writing modules\"],\"default_guess\":\"A clock port supplied through __init__.\",\"decision_owner\":\"state6\",\"consequences\":[\"A datetime parameter makes readings explicit per call but expands every mutation contract.\",\"A clock port centralizes time and supports deterministic tests while preserving operation-level control.\",\"An authority module reduces parameters but introduces a process-wide dependency.\"],\"requirement\":\"every mutating operation that writes a fresh timestamp receives the time source State 2 decided, in its contract (a datetime parameter, a clock port in __init__, or a declared authority module)\"},{\"subject\":\"A09 disclosure-class invariant\",\"kind\":\"missing invariant test\",\"text\":\"class(answer(op)) <= highest_class(s)\\nhighest_class(Cabinet Kernel) = business_confidential\",\"question\":\"Which Required tests item must show both the general answer-class ceiling and that Cabinet Kernel's ceiling is exactly business_confidential? Test 2 can refuse Kernel's context call solely because `context` is absent from Kernel's operation row.\",\"options\":[\"Add a table-wide test that every allowed operation's possible answers are at or below its service ceiling\",\"Add focused tests for every operation capable of returning personal_data, including an operation Kernel otherwise may call\",\"Bind the invariant to a generated policy check that explicitly asserts both statements\"],\"default_guess\":\"Add a table-wide policy test and a focused Kernel boundary test.\"},{\"subject\":\"A22 first-release vocabulary invariant\",\"kind\":\"missing invariant test\",\"text\":\"declared_types(first release) = {estimate -> PresuPro}\",\"question\":\"Which Required tests item must show that the first release declares exactly `estimate` and maps it to PresuPro, rather than merely showing that `wall_plan` is unknown?\",\"options\":[\"Assert the complete first-release mapping\",\"Assert the derived manifest and runtime mapping both equal the complete mapping\",\"Test only publication of estimate and rejection of one undeclared example\"],\"default_guess\":\"Assert that both the runtime vocabulary and derived manifest equal the complete mapping.\"},{\"subject\":\"A22 vocabulary-change preservation invariant\",\"kind\":\"underspecified invariant test\",\"text\":\"pointers are never removed or rewritten by a vocabulary change\",\"question\":\"Must the required test compare every fact of every affected pointer before and after the release change, or only show that pointers remain listed with their statuses?\",\"options\":[\"Compare every pointer fact before and after the vocabulary change\",\"Compare identity and status only\",\"Require only that the pointers remain listable\"],\"default_guess\":\"Compare every pointer fact before and after the vocabulary change.\"},{\"subject\":\"A19 rendering invariant\",\"kind\":\"missing invariant test\",\"text\":\"render(v) = escape(v) for every stored value v\",\"question\":\"Which Required tests item must establish escaping for every rendering context that can display a stored value, rather than only room names and access-request text?\",\"options\":[\"A context-complete test matrix for HTML text, attributes and every other rendering context used\",\"A property test over every owner-interface presenter\",\"Keep the two examples as sufficient witnesses\"],\"default_guess\":\"Use a context-complete test matrix over every owner-interface presenter.\"},{\"subject\":\"A19 interpreted-input invariant\",\"kind\":\"missing invariant test\",\"text\":\"no stored value is ever evaluated or executed\",\"question\":\"Which Required tests item must show that caller and import values cannot alter query, command or template structure or otherwise be evaluated?\",\"options\":[\"Tests for each interpreted boundary and fixed-alternative selector\",\"A structural factory check plus representative runtime injection tests\",\"Treat the quote-and-semicolon round trip as sufficient\"],\"default_guess\":\"Require a structural check and representative runtime tests for every interpreted boundary.\"},{\"subject\":\"A19 browser script prohibition\",\"kind\":\"missing safety test\",\"text\":\"The owner interface sends no script of its own (R0-29) and forbids the\\n   browser to run any, by its content security policy.\",\"question\":\"What Required tests item must show both that responses contain no application script and that the effective content security policy prohibits script execution?\",\"options\":[\"Assert response bodies and the exact effective CSP on every owner-interface response\",\"Use a browser test proving inline and external scripts do not execute\",\"Use both header assertions and a browser execution test\"],\"default_guess\":\"Use both header assertions and a browser execution test.\"},{\"subject\":\"A19 multipart-head bound\",\"kind\":\"missing policy value\",\"text\":\"at most the imported\\n   `UPLOAD_FORM_HEAD_MAX_BYTES` constant\",\"question\":\"What release-fixed value does `UPLOAD_FORM_HEAD_MAX_BYTES` have, and exactly which bytes before the file part count toward it?\",\"options\":[\"64 KiB covering all multipart bytes received before the first file byte\",\"1 MiB covering all multipart bytes received before the first file byte\",\"Another explicit release-fixed byte limit\"],\"default_guess\":\"64 KiB covering every received multipart byte before the file part's content.\",\"witness\":{\"initial\":\"A valid upload has an unusually large CSRF field or multipart headers before a small file.\",\"events\":[\"The owner submits the multipart upload.\"],\"outcomes\":[\"Registry admits the request because its pre-file head is within the chosen bound.\",\"Registry refuses it because another implementation chose a smaller bound or counted different framing bytes.\"],\"observer\":\"The owner uploading the import\"}},{\"subject\":\"A02 required-value invariant\",\"kind\":\"missing invariant test\",\"text\":\"for every stored required value v: not missing(v)\",\"question\":\"Which Required tests must show the invariant for every required-value source, including object address, Customer name and kind, and session access-request text?\",\"options\":[\"A test matrix covering every required field and every operation that supplies it\",\"A property test parameterized by the required-field catalogue\",\"Keep the project-name and room-name examples as sufficient\"],\"default_guess\":\"Add a parameterized test covering every required field and supplying operation.\"},{\"subject\":\"A02 numeric domain\",\"kind\":\"later_layer_choice\",\"text\":\"a floor area not\\n   greater than zero, a number of rooms that is not a whole number of at\\n   least 1, or a floor that is not a whole number\",\"question\":\"Which numeric domain and wire forms do the fields accept, including whether non-finite values, exponent notation and numerically integral decimals are admissible?\",\"options\":[\"Finite JSON numbers, with rooms and floor requiring mathematically integral values\",\"Decimal strings in a canonical format\",\"Integer wire types for rooms and floor and a finite decimal wire type for area\"],\"default_guess\":\"Use integer wire types for rooms and floor and a finite decimal type for area.\",\"decision_owner\":\"state6\",\"consequences\":[\"Generic JSON numbers require explicit rejection of NaN and infinity and a rule for values such as 2.0.\",\"Canonical decimal strings preserve exact written values but change the public field representation.\",\"Separate integer and finite-decimal types make the form constraints structural.\"],\"requirement\":\"No accepted requirement states the admissible numeric wire representation or whether non-finite values are allowed.\"},{\"subject\":\"A16 imported-instant syntax\",\"kind\":\"later_layer_choice\",\"text\":\"an instant cannot be read\",\"question\":\"What exact import syntax, precision and offset rules make an instant readable?\",\"options\":[\"RFC 3339 timestamps with an explicit offset, normalized to UTC\",\"Only canonical timestamps ending in Z at fixed precision\",\"The exact legacy v1 timestamp syntax, with an explicit normalization rule\"],\"default_guess\":\"Accept the documented legacy v1 syntax with an explicit offset and normalize it to canonical UTC.\",\"decision_owner\":\"state5_and_state6\",\"consequences\":[\"Broad RFC 3339 acceptance eases migration but permits multiple textual forms for one instant.\",\"Canonical Z-only input simplifies validation but may reject legacy exports.\",\"Legacy-specific parsing preserves migration compatibility but must be fully declared and tested.\"],\"requirement\":\"Every time Registry records is an instant in UTC with time zone (L16).\"},{\"subject\":\"A01 owner-interface request-id generation\",\"kind\":\"later_layer_choice\",\"text\":\"The owner interface makes\\n   one when it renders a create form\",\"question\":\"Which generator and encoding does the owner interface use to produce a printable request id from at least 16 random bytes, and is the same id preserved across a form resubmission?\",\"options\":[\"UUIDv4 generated once per rendered form and carried unchanged on resubmission\",\"Base64url encoding of 16 or more cryptographically random bytes\",\"A longer cryptographically random token encoded as lowercase hexadecimal\"],\"default_guess\":\"Generate one UUIDv4 per rendered form and preserve it across resubmissions of that form.\",\"decision_owner\":\"generation\",\"consequences\":[\"UUIDv4 is interoperable and compact but its fixed version and variant bits affect the literal entropy interpretation.\",\"Base64url preserves compact random bytes but requires an explicit accepted alphabet.\",\"Hexadecimal is simplest to validate but produces longer identifiers.\"],\"requirement\":\"an opaque value the caller makes, unique for every create it means as new — printable text of at most 128 characters, made from at least 16 random bytes, as a random UUID is\"},{\"subject\":\"R0-96 agent instruction installation\",\"kind\":\"later_layer_choice\",\"text\":\"adding the rule there is the\\nplatform's change, made before the first release goes into production.\",\"question\":\"What later-layer check proves that the required room-name and alias rule is present in the agent-home instructions actually deployed before production admission?\",\"options\":[\"A factory check parses the generated AGENTS.md and requires the rule\",\"A deployment check verifies the installed file and its approved digest\",\"Factory generation and deployment verification both enforce it\"],\"default_guess\":\"Use both a factory content check and deployment verification of the installed file.\",\"decision_owner\":\"factory_checks\",\"consequences\":[\"A factory-only check proves the produced artifact but not that the admitted artifact was installed.\",\"A deployment-only check can verify installation but may discover omissions late.\",\"Both checks cover artifact creation and the production installation boundary.\"],\"requirement\":\"In the first\\nrelease the agent learns it from its instructions, which the platform\\ninstalls in the agent's home on the home server (Factory\\n`platform/home_server/workspace/AGENTS.md`); adding the rule there is the\\nplatform's change, made before the first release goes into production.\"},{\"subject\":\"A09 service-rights policy\",\"kind\":\"standard_violation\",\"text\":\"Registry knows from its own release\\n   which operations that service may call and the highest disclosure class it\\n   may receive (R0-26, R0-27).\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The passage must name the service-rights and class table through its permitted generated-code path, such as an imported data-provider policy constant, rather than saying only that it comes from the release.\"},{\"subject\":\"A22 artifact vocabulary policy\",\"kind\":\"standard_violation\",\"text\":\"The declared types are part of the specification and of the release; a\\n   running instance reads them from its release, never from its configuration\\n   or its store (R0-33).\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The passage must place the closed type-to-owner-service mapping on one permitted path to generated code—model enumeration for the closed type names and an imported policy constant for the mapping—instead of introducing “the release” as an unnamed path.\"}]}",
+ "set_aside": []
+}
