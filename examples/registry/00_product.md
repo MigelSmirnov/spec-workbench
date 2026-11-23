@@ -897,7 +897,8 @@ sends no reminders.
 
 Narrowed by R0-61 and R0-62 (what erasing a project does to sessions and
 reads), R0-66 (the owner erases old audit entries) and R0-71 (anonymisation is
-final).
+final). Narrowed by R0-91: the restriction is GDPR Art. 18 only; "the Spanish
+*bloqueo*" is withdrawn.
 
 ### R0-61 — Erasing a project removes it from every session (proposed to the owner 2026-10-27 after round 18 T3, accepted; narrows R0-46, R0-60)
 
@@ -1220,6 +1221,29 @@ database backups, Cabinet's package of projects, the legacy instances once
 retired (R0-79). Until each has, the governance's records of processing list
 the copies that remain, with their service and the change that removes them.
 
+### R0-91 — Restriction is not the Spanish blocking (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q2; narrows R0-51, R0-60, R0-65)
+
+R0-60 called the restriction of processing "the Spanish *bloqueo*". The two
+differ. A restriction (GDPR Art. 18, R0-51) pauses use while something is
+settled: the owner keeps reading, correcting and erasing the data and lifts
+the restriction (R0-65). Blocking (LOPDGDD Art. 32) applies to data that
+would otherwise be erased and is kept only to answer the courts, the public
+prosecutor and the competent authorities for liabilities arising from the
+processing, until those liabilities lapse; it prevents every other
+processing, viewing included, and ends in destruction. Registry's restriction
+is the first and is not the second: the words "the Spanish *bloqueo*" in
+R0-60 are withdrawn, and nothing else of R0-51, R0-55, R0-60 or R0-65
+changes.
+
+Registry offers no blocking. Whether any value it holds — a customer's
+contact or fiscal data, an object's address — must be blocked after erasure
+rather than erased is a question for the legal review of the governance
+(Explicit exclusions). Until it is answered, erasure in Registry erases
+(R0-06, R0-60) and the governance records where blocked data lives — today the
+documents a service issued, which an erasure in Registry does not rewrite
+(R0-80). A legal answer that some Registry value must be blocked is a new
+owner decision here.
+
 ## Explicit exclusions
 
 - The operator script `onboard_object`: retired (R0-63); its role is taken by
@@ -1239,7 +1263,7 @@ the copies that remain, with their service and the change that removes them.
 - Deploying Registry, its release process and the host's administration (vNext
   §15). Registry does not manage deployment.
 - The records of processing, the DPIA screening and, when needed, the DPIA
-  itself, incident response and the other organisational measures. They are
+  itself, blocking under LOPDGDD Art. 32 (R0-91), incident response and the other organisational measures. They are
   kept as platform-wide governance — Registry, Cabinet Kernel, Cabinet,
   PresuPro, Client Portal and the external AI providers — outside this case,
   citing the accepted Workbench decisions. The Code Factory checks the technical
@@ -1259,7 +1283,8 @@ round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
 State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
 (2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
 rounds 5–9; R0-90 (2026-11-11) records the owner's answer during the
-pre-contract data closure.
+pre-contract data closure. R0-91 (2026-11-23) answers Q2 of the data-protection
+requirements matrix.
 
 ## Carried to later states
 
