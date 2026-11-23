@@ -863,6 +863,9 @@ value, no whole request and no secret, and is kept for a limited period the
 governance documents (R0-60) and the owner applies (R0-66). The platform manifest describes Registry's capabilities and
 contracts; the log records changes of state only.
 
+Narrowed by R0-92: the trace of the agent's actions is Cabinet Kernel's; this
+log stays as it is.
+
 ### R0-59 — The simplest answers to round 6 T3, T5 (drafted 2026-10-27 under the owner's instruction "do not complicate, add no responsibilities"; confirmed by the owner 2026-10-27)
 
 - A restriction (R0-51, R0-55) covers the customer's contact data; the object's
@@ -1244,6 +1247,30 @@ documents a service issued, which an erasure in Registry does not rewrite
 (R0-80). A legal answer that some Registry value must be blocked is a new
 owner decision here.
 
+### R0-92 — The agent's actions are traced by Cabinet Kernel; Registry keeps the link (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q1; narrows R0-58, R0-88)
+
+The agent never calls Registry itself. It reads the manifest, writes
+functions, composes flows, tries them in Kernel's sandbox and has Kernel run
+them; every call Registry receives for it is Kernel's, made by a node of a
+run (R0-31). Who did what, when and in which run is therefore recorded where
+it happens: Kernel writes an immutable trace record of every node execution,
+refusals and failures included, and tells the owner's, each agent's and its
+own actions apart in every record (case `cabinet-kernel`, K-09, K-15). That
+trace answers the traceability the AEPD's guidance on agentic AI asks of the
+platform's agents; Registry sees only Kernel's call and could keep only a
+poorer copy of it. Registry's audit log stays as R0-58 and M09 state it:
+no entry is added for adding a room, publishing or withdrawing a pointer,
+an access request or registering a session.
+
+What Registry keeps is the link from its records to that trace: the request
+id a room's create carries (State 1 M03) and the publisher, with its session,
+and the request id of a pointer's publish (M05, R0-88). Both are facts
+Registry already holds; this decision adds none. Whether Kernel writes the
+key it gives as that request id into its trace record, so that a room or
+pointer leads to exactly one node execution, is Kernel's to state in its
+case; until it does, the link is one-directional. Neither Registry nor the
+platform gains a separate control module.
+
 ## Explicit exclusions
 
 - The operator script `onboard_object`: retired (R0-63); its role is taken by
@@ -1283,8 +1310,8 @@ round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
 State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
 (2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
 rounds 5–9; R0-90 (2026-11-11) records the owner's answer during the
-pre-contract data closure. R0-91 (2026-11-23) answers Q2 of the data-protection
-requirements matrix.
+pre-contract data closure. R0-91 and R0-92 (2026-11-23) answer Q2 and Q1 of the
+data-protection requirements matrix.
 
 ## Carried to later states
 
