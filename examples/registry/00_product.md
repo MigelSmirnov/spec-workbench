@@ -1049,6 +1049,9 @@ lacks — disclosure classes, input and output schemas, contract version, known
 limits — are the platform's to add in the Code Factory; until they exist the
 record is incomplete.
 
+Narrowed by R0-99: adding a room, publishing and withdrawing a pointer are
+`state-transition`.
+
 ### R0-79 — The migration: two projects from the VPS (owner, 2026-10-27; replaces the sources of R0-54 and R0-59; narrows R0-50)
 
 The only source is the Registry on the VPS, imported once. At the import the
@@ -1466,6 +1469,30 @@ reach, with erasure and restriction; it lowers the risk. So Registry's
 production start and its one import (R0-79) do not wait for the screening,
 which is made now, in parallel.
 
+### R0-99 — The agent's writes to Registry stop for the owner's approval (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q9; narrows R0-78, R0-88)
+
+Kernel stops a run for the owner's approval only at a node of class
+`state-transition`, `external-effect` or `destructive` (case
+`cabinet-kernel`, K-08); a `draft-write` node runs on every run of a flow the
+owner activated once, and a map over a collection may repeat it any number
+of times. The v1 manifest declares adding a room and publishing a pointer as
+`draft-write`. Neither is a draft: a room cannot be removed (R0-10), and a
+publish changes the pointer every service reads as a project's current
+document of that type (R0-17), as a withdrawal does.
+
+In Registry's derived manifest record (R0-78), adding a room, publishing a
+pointer and withdrawing one are `state-transition`. Each such write of the
+agent waits for the owner's approval of its exact request, unless the owner
+gave that flow version a standing approval for the node (K-08). A request for
+access stays `draft-write`: it changes no access, replaces the session's
+earlier request (R0-47) and is itself a question to the owner.
+
+The owner's approvals are the bound on how much the agent writes; Registry
+sets no count of rooms, pointers or requests. The governance's rule is that
+no standing approval is given to a node that writes to Registry inside a map
+over a collection. A count enforced by Registry is reconsidered, by a new
+owner decision here, if standing approvals for such writes become needed.
+
 ## Explicit exclusions
 
 - The operator script `onboard_object`: retired (R0-63); its role is taken by
@@ -1506,7 +1533,7 @@ round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
 State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
 (2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
 rounds 5–9; R0-90 (2026-11-11) records the owner's answer during the
-pre-contract data closure. R0-91 to R0-98 (2026-11-23) answer Q1 to Q8 of the
+pre-contract data closure. R0-91 to R0-99 (2026-11-23) answer Q1 to Q9 of the
 data-protection requirements matrix.
 
 ## Carried to later states
