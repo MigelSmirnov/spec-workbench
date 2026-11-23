@@ -254,6 +254,23 @@ incorrect signature → repair contracts;
 missing implementation guidance → repair notes.
 Update global_spec.json only after all affected earlier states agree.
 Working rules
+When Factory returns a failure, establish the defect's owner before applying
+the earliest-state repair rule. Retrieve the current author instructions with
+`python tools/design_questions.py guide --factory-return --json` (add `--state`
+only after establishing the owning state). Keep the exact diagnostic, Workbench and Factory
+revisions, exported artifact revision/hash, and a minimal reproducer. Compare the
+requirement, structured data/contract, notes and generated code: identify the first
+place that fails to express or preserve the accepted obligation. A generation or
+linker failure alone is not evidence that a product rule is missing.
+Repair an incomplete contract in State 6 and propagate it through State 7; repair
+an analyser that misreads a valid contract in Factory. For example, resolving an
+accepted stop-signal name can need a State 6 helper contract and State 7 guidance,
+without changing the accepted signal set in State 2. A linker treating .items
+on a value typed dict[UUID, ConnectionEntry] as a ConnectionEntry field needs a
+Factory type analysis fix, not a new model field or a State 2 rule. Confirm the diagnosis with
+the failing check after the repair, and use only the continuation mechanism
+documented by the current Factory checkout. If the evidence is insufficient,
+record what is missing before choosing a repair layer.
 Do not generate a complete specification directly from a short product idea.
 Work through the design states in order.
 Return to an earlier state when later work exposes a missing decision.

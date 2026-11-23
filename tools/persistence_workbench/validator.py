@@ -28,6 +28,8 @@ CONVENTIONS = {
 TABLE_FIELDS = frozenset({
     "table", "table_name_ref", "model", "read_by", "columns", "primary_key", "unique",
 })
+PARTIAL_UNIQUE_FIELDS = frozenset({"columns", "where"})
+PARTIAL_UNIQUE_TERM_FIELDS = frozenset({"bind", "column", "enum", "member"})
 COLUMN_FIELDS = frozenset({
     "column", "field", "storage", "nullable", "check", "element_model",
 })
@@ -186,8 +188,41 @@ def _validate_table(row: Any, index: int, version: int = 2) -> tuple[list[Findin
     if not isinstance(unique, list):
         findings.append(Finding("error", "invalid_unique", "unique must be a list of non-empty column-name lists", location=location + ".unique"))
     else:
+        storages = {
+            column.get("column"): column for column in (columns if isinstance(columns, list) else [])
+            if isinstance(column, dict)
+        }
         for unique_index, item in enumerate(unique):
             group_location = f"{location}.unique[{unique_index}]"
+            if version >= 3 and isinstance(item, dict):
+                # v3 tenth addition (SPEC_STANDARD §6.3): uniqueness among the
+                # rows a constant enum predicate selects; lowered to a partial
+                # unique index. The Factory validator checks the enum member.
+                findings.extend(_shape(item, PARTIAL_UNIQUE_FIELDS, location=group_location, code_prefix="unique_partial"))
+                names, errors = _string_list(item.get("columns"), location=group_location + ".columns")
+                findings.extend(errors)
+                for name in names:
+                    if name not in declared:
+                        findings.append(Finding("error", "unknown_unique_column", f"unknown column {name!r}", location=group_location + ".columns"))
+                where = item.get("where")
+                if not isinstance(where, list) or not where:
+                    findings.append(Finding("error", "invalid_unique_where", "where must be a non-empty list of constant enum terms", location=group_location + ".where"))
+                    continue
+                for term_index, term in enumerate(where):
+                    term_location = f"{group_location}.where[{term_index}]"
+                    findings.extend(_shape(term, PARTIAL_UNIQUE_TERM_FIELDS, location=term_location, code_prefix="unique_where"))
+                    if not isinstance(term, dict):
+                        continue
+                    if term.get("bind") != "constant":
+                        findings.append(Finding("error", "invalid_unique_where_bind", "a partial unique predicate takes constant terms only", location=term_location + ".bind"))
+                    column = storages.get(term.get("column"))
+                    if column is None:
+                        findings.append(Finding("error", "unknown_unique_column", f"unknown column {term.get('column')!r}", location=term_location + ".column"))
+                    elif column.get("storage") != "enum" or column.get("element_model") != term.get("enum"):
+                        findings.append(Finding("error", "invalid_unique_where_column", "the predicate column must store the term's enum", location=term_location + ".column"))
+                    if not _text(term.get("member")):
+                        findings.append(Finding("error", "invalid_unique_where_member", "member must name an enum member", location=term_location + ".member"))
+                continue
             if version >= 3 and isinstance(item, list) and any(isinstance(member, dict) for member in item):
                 # v3: {column, path} addresses a key inside a json_model column
                 for member_index, member in enumerate(item):

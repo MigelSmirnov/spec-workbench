@@ -252,6 +252,11 @@ def test_factory_evidence_states(tmp_path, monkeypatch):
     (root / "projects" / "widgets" / "specs" / "base").mkdir(parents=True)
     (root / "projects" / "widgets" / "specs" / "base" / "global_spec.json").write_text("{}", encoding="utf-8")
     main = root / "tools" / "slicer" / "__main__.py"
+    main.write_text("raise SystemExit('no report is asked before the first export')\n", encoding="utf-8")
+    (root / "projects" / "widgets" / "specs" / "base" / "global_spec.json").unlink()
+    first = factory.evidence(case_dir, "widgets", root)  # a target before its first export
+    assert first["status"] == NOT_APPLICABLE and "first export" in first["reason"]
+    (root / "projects" / "widgets" / "specs" / "base" / "global_spec.json").write_text("{}", encoding="utf-8")
 
     main.write_text("print('{\"modules\": {\"consumer\": {}}}')\n", encoding="utf-8")
     old = factory.evidence(case_dir, "widgets", root)

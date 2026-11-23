@@ -56,6 +56,42 @@ class QuestionRoundError(ValueError):
     pass
 
 
+def author_guidance(state: int | None = None, *, factory_return: bool = False) -> list[str]:
+    """Instructions for the author, shared by round results and phase routing.
+
+    These explain the existing dispositions; they do not judge the meaning of
+    a fix or change which topics take a disposition (units.topic_need).
+    """
+    lines = [
+        "Before editing, identify the decision's owning state from the phase purpose, question_scope and "
+        "layer obligations, then choose a disposition for each topic that awaits one.",
+        "fixed: repair a decision the owning state must make; do not add later-layer implementation choices "
+        "merely to close a topic. Record the fix commit and review the changed text once.",
+        "carried: name the receiving layer and use --what to preserve the choice, its options and consequences, "
+        "and the required guarantee every option must keep. Decide any guarantee owned here before carrying "
+        "its execution onward.",
+        "accepted: explain why the remaining choice is permitted. Bring an unresolved product choice to the "
+        "owner with its options and consequences; absence of a quoted requirement does not decide it.",
+        "contradiction and standard_violation take no disposition: repair the offending text in its owning "
+        "state and review the change. Deterministic transition findings must also close through their checks.",
+    ]
+    if state == 2:
+        lines.append("State 2: decide required results and constraints, including necessary refusal precedence; "
+                     "carry test mechanisms, exact contracts and deployment procedures to their owners.")
+    if state == 5:
+        lines.append("State 5: decide obligations between modules for inputs, results, failures and effects; "
+                     "leave exact contract forms and hidden implementation to later layers.")
+    if factory_return:
+        lines.insert(0, "Factory return: preserve the exact diagnostic, tool revisions, artifact hash and a minimal "
+                     "reproducer. Compare the requirement, structured data/contracts, notes, generated code and "
+                     "Factory analysis; establish the defect's owner before choosing a repair state.")
+        lines.append("A signal-name resolution helper may require State 6 contracts and State 7 notes. "
+                     "A linker treating dict.items as an element-model field requires a Factory analysis fix. "
+                     "Neither alone proves a State 2 defect. Repeat the failing check and use the current "
+                     "Factory checkout's documented continuation procedure.")
+    return lines
+
+
 def _json_object(text: str) -> dict[str, Any]:
     try:
         return json.loads(text[text.index("{"): text.rindex("}") + 1])
@@ -130,6 +166,12 @@ def _review_or_failed(provider: Provider, instruction: str, text: str,
         return _failed_review(exc)
 
 
+def _choice_note(point: dict[str, Any]) -> str:
+    fields = ("decision_owner", "requirement", "options", "consequences", "owner_question")
+    details = {key: point[key] for key in fields if point.get(key)}
+    return " | layer choice: " + json.dumps(details, ensure_ascii=False) if details else ""
+
+
 def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool = False) -> list[dict[str, Any]]:
     points = {
         f"r{run}.{index:02d}": point
@@ -163,6 +205,7 @@ def _group(provider: Provider, reviews: list[dict[str, Any]], keep_points: bool 
             topic["witnessed_by"] = witnessed
         if keep_points:
             topic["points"] = [f"{points[m].get('text', '')} -> {points[m].get('question', '')}"
+                               + _choice_note(points[m])
                                + (f" | breaks SPEC_STANDARD §{points[m].get('section', '')}: {points[m]['rule']}"
                                   if points[m].get("rule") else "")
                                + (f" | reviewer's witness: {json.dumps(points[m]['witness'], ensure_ascii=False)}"
@@ -221,6 +264,8 @@ def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
     judged = units.asked([json.loads(p.read_text(encoding="utf-8")) for p in rounds])
     evidence_of = {s["round"]: s.get("unit_evidence") or {} for s in judged if "round" in s}
     for summary in [s for s in judged if "judge" in s][-PRECEDENT_ROUNDS:][::-1]:
+        if documents.gap_needs_requirement(state) and summary.get("judge_rules") != _current_rules(state):
+            continue  # old observer-only verdicts cannot establish freedom under the boundary rule
         for topic in summary.get("topics", []):
             judgement = topic.get("judgement") or {}
             if (not judgement.get("verified") or judgement.get("blocking") or topic["topic"] in seen
@@ -235,6 +280,7 @@ def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
                           "units": list(topic.get("units") or []),
                           # the evidence the original judgement stood on, per unit
                           "unit_evidence": dict(evidence_of.get(origin, summary.get("unit_evidence") or {})),
+                          **{k: source[k] for k in ("requirement", "options", "consequences", "later_state", "decision_owner", "needs_disposition") if source.get(k)},
                           **({"deferred_to": source["deferred_to"]} if source.get("deferred_to") else {})})
     return found
 
@@ -297,6 +343,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
     except documents.QuestionScopeError:
         question_scope = None
     files: dict[str, str] = {}
+    requirement = documents.gap_needs_requirement(state)
     if searched:
         selected = judge_context.select(texts, state, repeated, scope or [], old, later)
         files = selected.files
@@ -305,7 +352,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
                         if old is not None else None)
         instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents),
                                                 question_scope, witness, state_files, closed_files,
-                                                standard=standard is not None)
+                                                standard=standard is not None, requirement=requirement)
         judge_text = prompts.judge_input(judge_context.render(selected, state), items, None, precedents, layer,
                                          standard)
     else:
@@ -316,7 +363,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
                 for _, name, body in texts
             )
         instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents),
-                                                question_scope, witness, standard=standard is not None)
+                                                question_scope, witness, standard=standard is not None, requirement=requirement)
         judge_text = prompts.judge_input(text, items, change, precedents, layer, standard)
         files = {f"{LATER_DIR}/{name}": body for name, body in later.items()} if later else {}
     if files:
@@ -333,7 +380,7 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
                                          {p["id"]: p for p in precedents or []},
                                          "\n\n".join(b for s, _, b in texts if s == state),
                                          witness_required=witness, earlier_texts=earlier, standard=standard,
-                                         violation_texts=violation_texts)
+                                         violation_texts=violation_texts, requirement_required=requirement)
     if case is not None and state > 0:
         provenance = QuoteProvenance(case, [(s, n, b) for s, n, b in texts if s < state])
         for topic in repeated:
@@ -762,7 +809,7 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
         diff = changed[module][0] if module in changed else None
         review = _review_or_failed(provider,
                                    prompts.module_ask_instruction(state, scope_text, diff, obligations[module],
-                                                                  sections),
+                                                                  sections, (layer or {}).get("carried_in")),
                                    prompts.module_input(module, read.units[module]["text"]))
         review["unit"] = module
         for point in review["open_points"]:
@@ -793,7 +840,8 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
             judged["modules"][module] = _judge(provider, state, text, [(state, module, read.units[module]["text"])],
                                                again, module_old, None, precedents,
                                                layer=prompts.module_layer_judge(obligations[module],
-                                                                                notes.get(module)),
+                                                                                notes.get(module),
+                                                                                (layer or {}).get("carried_in")),
                                                sections=sections,
                                                violation_texts=("\n".join(notes[module])
                                                                 if module in notes else None))
@@ -887,7 +935,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         **({"reviews_read": reviews_read} if reviews_read else {}),
         "judge": judged,
         # the rules its verdicts were checked under (judge.RULES_VERSION, the sections' digest)
-        "judge_rules": judge.rules_record(prompts.standard_text(documents.standard_sections(state)) or None),
+        "judge_rules": _current_rules(state),
         "repeated_topics": len(repeated),
         "witness_singletons": sum(1 for t in repeated if len(t["runs"]) < REPEATED),
         "hypothesis_topics": sum(1 for t in repeated if t["judgement"].get("kind") == judge.HYPOTHESIS),
@@ -918,6 +966,8 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     summary["awaiting_disposition"] = sorted({t for key in asked_keys for t in after[key]["awaiting"]})
     summary["contradiction_units"] = [key for key in asked_keys
                                       if after[key]["contradictions"] or after[key]["unverified"]]
+    summary["author_guidance"] = author_guidance(state) if summary["awaiting_disposition"] or summary["contradiction_units"] else []
+    summary["owner_questions"] = _owner_questions([summary])
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary
 
@@ -940,7 +990,8 @@ REJUDGE_PROVIDER = "rejudge: judge.check under the current rules, no model asked
 
 
 def _current_rules(state: int) -> dict[str, Any]:
-    return judge.rules_record(prompts.standard_text(documents.standard_sections(state)) or None)
+    return judge.rules_record(prompts.standard_text(documents.standard_sections(state)) or None,
+                              documents.gap_needs_requirement(state))
 
 
 def _rejudgeable(state: int, summaries: list[dict[str, Any]], per_unit: dict[str, dict[str, Any]]) -> list[str]:
@@ -1072,6 +1123,8 @@ def rejudge(case: Path, state: int, unit: str, factory_root: Path | None = None)
     summary["open_units"] = [key for key, value in after.items() if not value["closed"]]
     summary["awaiting_disposition"] = sorted(after[unit]["awaiting"])
     summary["contradiction_units"] = [unit] if after[unit]["contradictions"] or after[unit]["unverified"] else []
+    summary["author_guidance"] = author_guidance(state) if summary["awaiting_disposition"] or summary["contradiction_units"] else []
+    summary["owner_questions"] = _owner_questions([summary])
     directory.mkdir(parents=True)
     (directory / PROMPTS_DIR).mkdir()
     (directory / PROMPTS_DIR / f"{unit}.txt").write_text(text, encoding="utf-8")
@@ -1134,10 +1187,16 @@ def layer_record(layer: dict[str, Any]) -> dict[str, Any]:
 
 
 def _closed_at(case: Path, state: int, summaries: list[dict[str, Any]]) -> str | None:
-    """The git ref the state was last closed at, for `ask --since`: the latest
-    commit of the round that closed every unit of its text (with the author's
-    dispositions, kept in the same directory), or that held a carried
-    closure's texts."""
+    """The git ref the state was last closed at, for `ask --since`: the commit
+    that holds the texts the closing round was asked on — the latest commit of
+    the round's directory when it still does — or that held a carried
+    closure's texts.
+
+    A round closed by a `fixed` disposition keeps that disposition in its
+    directory, committed after the fix: the directory's latest commit already
+    holds the changed text, and `--since` from it shows the judge no change,
+    so no topic about an untouched passage can be `preexisting` (portal-deliverer
+    State 2, rounds 27-31, 2026-11-19)."""
     for index in range(len(summaries) - 1, -1, -1):
         summary = summaries[index]
         if str(summary.get("round", "")).startswith(CARRIED):
@@ -1150,6 +1209,9 @@ def _closed_at(case: Path, state: int, summaries: list[dict[str, Any]]) -> str |
             directory = rounds_dir(case, state) / summary["round"]
             found = _git_out(case, "log", "-1", "--format=%H", "--", str(directory.resolve()))
             ref = (found or "").strip() or _added_at(case, directory / "summary.json")
+            held = _texts_with_digests(case, summary["documents"], ref) if summary.get("documents") else None
+            if held is not None and held[1]:
+                return held[1]
             if ref:
                 return ref
     return None
@@ -1162,6 +1224,11 @@ def status(case: Path, state: int, factory_root: Path | None = None, with_transi
     rounds' verdict, `ready` adds what closes at the state (TRANSITION_PROTOCOL.md),
     so a round that closed never hides a blocking deterministic result."""
     result = _status(case, state, factory_root)
+    result["author_guidance"] = author_guidance(state) if result.get("awaiting_disposition") or result.get("contradictions") else []
+    waiting = {(row.get("round"), topic) for row in (result.get("unit_status") or {}).values()
+               for topic in row.get("awaiting") or []}
+    result["owner_questions"] = [q for q in _owner_questions(unit_summaries(case, state))
+                                 if (q["round"], q["topic"]) in waiting]
     if with_transition:
         layer = layer_context(case, state)
         result["transition"] = {**layer_record(layer), "findings": [
@@ -1172,6 +1239,13 @@ def status(case: Path, state: int, factory_root: Path | None = None, with_transi
         if result["closed"] and not layer["ready"]:
             result["reason"] += "; the rounds closed, but the transition does not hold (see transition)"
     return result
+
+
+def _owner_questions(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{"round": s["round"], "topic": t["id"], "question": j["owner_question"],
+             "options": j.get("options") or [], "consequences": j.get("consequences") or []}
+            for s in summaries for t in s.get("topics") or []
+            if (j := t.get("judgement") or {}).get("owner_question")]
 
 
 def _status(case: Path, state: int, factory_root: Path | None = None) -> dict[str, Any]:
@@ -1263,7 +1337,8 @@ def _nothing_to_ask(state: int, per_unit: dict[str, dict[str, Any]]) -> str:
     """Why a round would ask nothing although the state is open: one round per change."""
     return (f"no unit of State {state} needs a round: its text has not changed since its latest review. "
             + _units_reason(per_unit) + ". Dispose of the topics, or change the text a contradiction quotes; "
-            "a second round on the same text is not asked (owner decision 2026-11-08, #147)")
+            "a second round on the same text is not asked (owner decision 2026-11-08, #147). "
+            + " ".join(author_guidance(state)))
 
 
 def _open_reason(summary: dict[str, Any]) -> str:
@@ -1318,7 +1393,7 @@ def _fix_ref(case: Path, directory: Path, ref: str) -> str:
 
 def dispose(case: Path, state: int, topic_id: str, disposition: str, *, round_name: str | None = None,
             unit: str | None = None, ref: str | None = None, to: str | None = None, what: str | None = None,
-            reason: str | None = None) -> dict[str, Any]:
+            reason: str | None = None, keeps: list[str] | None = None) -> dict[str, Any]:
     """Record the author's disposition of one topic of a round (owner decision
     2026-11-08, #147): `fixed` with the commit of the change, `carried` to a
     later state or to generation, factory_checks or deploy with what it must
@@ -1365,12 +1440,23 @@ def dispose(case: Path, state: int, topic_id: str, disposition: str, *, round_na
         if to is None or not (what or "").strip():
             raise QuestionRoundError("carried needs --to (the receiving layer) and --what (what it must decide)")
         entry["to"], entry["what"] = _carry_target(state, to), what.strip()
+        judgement = topic.get("judgement") or {}
+        bounds = list(keeps or [])
+        if judgement.get("verified") and judgement.get("requirement"):
+            bounds.append(judgement["requirement"])
+        if bounds:
+            entry["keeps"] = _kept_bounds(case, state, bounds)
+        for field in ("options", "consequences"):
+            if judgement.get(field):
+                entry[field] = judgement[field]
     elif disposition == "accepted":
         if not (reason or "").strip():
             raise QuestionRoundError("accepted needs --reason: the author's reason")
         entry["reason"] = reason.strip()
     else:
         raise QuestionRoundError(f"unknown disposition {disposition!r}; one of {', '.join(DISPOSITION_KINDS)}")
+    if keeps and disposition != "carried":
+        raise QuestionRoundError("--keeps goes with --carried: the guarantee the receiving layer must preserve")
     kept = [d for d in _dispositions(directory) if (d.get("topic"), d.get("unit")) != (topic_id, unit)]
     kept.append(entry)
     payload = {"schema_version": DISPOSITIONS_SCHEMA, "state": state, "round": summary["round"],
@@ -1378,6 +1464,17 @@ def dispose(case: Path, state: int, topic_id: str, disposition: str, *, round_na
     (directory / DISPOSITIONS_FILE).write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n",
                                                encoding="utf-8")
     return entry
+
+
+def _kept_bounds(case: Path, state: int, keeps: list[str]) -> list[str]:
+    """Accepted obligations, found in design text up to the sending state."""
+    corpus = judge._norm("\n\n".join(path.read_text(encoding="utf-8")
+                                    for _, path in documents.design_documents(case, state)))
+    bounds = list(dict.fromkeys(b.strip() for b in keeps if b.strip()))
+    if not all(judge._found(b, corpus) for b in bounds):
+        raise QuestionRoundError("--keeps must quote an accepted obligation verbatim from the texts up to "
+                                 f"State {state} (at least a full clause)")
+    return bounds
 
 
 def carried_items(case: Path, to: int | str | None = None) -> list[dict[str, Any]]:
@@ -1399,7 +1496,8 @@ def carried_items(case: Path, to: int | str | None = None) -> list[dict[str, Any
             if entry.get("rejudged_from"):  # listed once, in the round it was given in
                 continue
             found.append({"state": int(state_name), "round": directory.name,
-                          **{k: entry.get(k) for k in ("topic", "topic_text", "unit", "to", "what")}})
+                          **{k: entry.get(k) for k in ("topic", "topic_text", "unit", "to", "what")},
+                          **{k: entry[k] for k in ("keeps", "options", "consequences") if entry.get(k)}})
     return found
 
 
@@ -1500,6 +1598,7 @@ def probe_round(case: Path, state: int, provider: Provider, out: Path, runs: int
         "scope": scope,
         "units": {key: read.units[key]["digest"] for key in scope},
         "standard_sections": [s["section"] for s in documents.standard_sections(state)],
+        "judge_rules": _current_rules(state),
         "judge": judged,
         "modules": per_module,
         "blocking_topics": len(blocking),
@@ -1572,6 +1671,7 @@ def _probe_documents(case: Path, state: int, provider: Provider, out: Path, runs
         "documents": read.digests,
         "standard_sections": [s["section"] for s in documents.standard_sections(state)],
         "reviews_read": reviews_read,
+        "judge_rules": _current_rules(state),
         "points": [len(r["open_points"]) for r in reviews],
         "set_aside": [len(r["set_aside"]) for r in reviews],
         "judge": judged,

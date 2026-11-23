@@ -9,7 +9,8 @@ texts the judge searched), a later state must come after this one, a
 precedent must be a prior non-blocking judgement whose quotes still stand. A
 judgement whose evidence fails counts as blocking.
 
-A consequential gap that quotes no passage is about something the texts up to
+Without `gap_needs_requirement`, a consequential gap that quotes no passage is
+about something the texts up to
 this state do not speak to at all — sandbox streams, a listener binding, a
 size limit. Such a gap is an implementation detail: it does not hold a design
 state open, it is recorded as deferred and must be answered in the contracts
@@ -78,13 +79,16 @@ WITNESS_FIELDS = ("initial", "events", "outcomes", "observer", "basis")
 #   1  before versioning (rounds that keep no `judge_rules`)
 #   2  #175: a State 7 violation quoting no note of the module is generator_text
 RULES_VERSION = 2
+# The scoped owner/requirement policy is versioned separately as
+# judge_rules.decision_boundary; it does not change State 7's mechanical rules.
 
 
-def rules_record(standard: str | None) -> dict[str, Any]:
+def rules_record(standard: str | None, requirement: bool = False) -> dict[str, Any]:
     """The judge rules a verdict is checked under: the version of `check` and
-    the digest of the standard sections it looked a violation's rule up in."""
+    the standard sections' digest, plus the scoped decision-boundary policy."""
     return {"version": RULES_VERSION,
-            "standard": hashlib.sha256(standard.encode("utf-8")).hexdigest() if standard else None}
+            "standard": hashlib.sha256(standard.encode("utf-8")).hexdigest() if standard else None,
+            **({"decision_boundary": 1} if requirement else {})}
 
 
 def _norm(text: str) -> str:
@@ -109,7 +113,8 @@ def precedent_holds(precedent: dict[str, Any], texts: str, later_texts: str | No
         where = _norm(later_texts)
     else:
         where = _norm(texts)
-    return all(_found(q, where) for q in precedent.get("quotes") or [])
+    return (all(_found(q, where) for q in precedent.get("quotes") or [])
+            and (not precedent.get("requirement") or _found(precedent["requirement"], _norm(texts))))
 
 
 def witness_problem(witness: Any, corpus: str, later_corpus: str = "") -> str | None:
@@ -167,7 +172,7 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
           later_texts: str | None = None, precedents: dict[str, dict[str, Any]] | None = None,
           own_texts: str | None = None, witness_required: bool = False,
           earlier_texts: str | None = None, standard: str | None = None,
-          violation_texts: str | None = None) -> dict[str, Any]:
+          violation_texts: str | None = None, requirement_required: bool = False) -> dict[str, Any]:
     """The judgement as kept in the round, with `verified` and `blocking`.
     `own_texts` are the asked state's own documents; without them every text
     counts as the state's own. With `witness_required`, a contradiction or a
@@ -177,7 +182,10 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     SPEC_STANDARD sections the round gave, where a violation's rule is looked up.
     `violation_texts`, when given, are the only passages a violation may hold
     (State 7: the module's notes); a verified violation of any other passage
-    of the texts is kept as `generator_text`, not blocking."""
+    of the texts is kept as `generator_text`, not blocking. `requirement_required`
+    asks a current-stage gap for its owner and accepted obligation. Without
+    the obligation it remains unresolved, never automatically free or deferred.
+    Later-layer choices preserve their guarantee and disposition obligation."""
     if not isinstance(judgement, dict):
         return {"kind": None, "verified": False, "blocking": True, "failure": "the judge gave no judgement"}
     kind = judgement.get("kind")
@@ -191,6 +199,11 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     }
     corpus = _norm(texts)
     failure = None
+    requirement = str(judgement.get("requirement") or "").strip() if requirement_required else ""
+    if requirement_required:
+        for field in ("decision_owner", "owner_question", "options", "consequences"):
+            if judgement.get(field):
+                kept[field] = judgement[field]
     if kind not in KINDS:
         failure = f"unknown kind {kind!r}"
     elif kind == "contradiction":
@@ -218,6 +231,14 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
                 own = _norm(own_texts) if own_texts is not None else corpus
                 if not any(_found(q, own) for q in quotes):
                     kept["quoted_elsewhere"] = True
+        if failure is None and requirement_required:
+            owner = str(kept.get("decision_owner", "")).lower().removeprefix("state").strip()
+            if requirement and owner != str(state):
+                failure = "a consequential gap must belong to the current state; classify its actual owner first"
+            elif requirement and not _found(requirement, corpus):
+                failure = "the requirement of a consequential gap is not found verbatim in the texts"
+            elif requirement:
+                kept["requirement"] = requirement
     elif kind == "answered":
         if not quotes or not all(_found(q, corpus) for q in quotes):
             failure = "the answering quote is not found verbatim in the texts"
@@ -234,15 +255,31 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
             kept["precedent"] = precedent
             if precedent.get("deferred_to"):
                 kept["deferred_to"] = precedent["deferred_to"]
+            if requirement_required:
+                for field in ("requirement", "decision_owner", "options", "consequences", "later_state", "needs_disposition"):
+                    if precedent.get(field):
+                        kept[field] = precedent[field]
             where = _norm(later_texts) if precedent["kind"] == "answered_later" and later_texts else corpus
             if precedent["kind"] == "answered_later" and later_texts is None:
                 failure = "the precedent quotes later states the judge was not given"
             elif not all(_found(q, where) for q in precedent["quotes"]):
                 failure = "a passage the precedent quotes is no longer found verbatim"
+            elif precedent.get("requirement") and not _found(precedent["requirement"], corpus):
+                failure = "the guarantee of the precedent is no longer found verbatim"
     elif kind == "later_state":
         later = kept["later_state"]
-        if not isinstance(later, int) or isinstance(later, bool) or later <= state:
+        if not ((isinstance(later, int) and not isinstance(later, bool) and later > state
+                 and (not requirement_required or later <= 8))
+                or (requirement_required and isinstance(later, str)
+                    and later in {"generation", "factory_checks", "deploy"})):
             failure = f"later_state must be a state after {state}"
+        elif requirement:
+            if not _found(requirement, corpus):
+                failure = "the guarantee of a later-state choice is not found verbatim in the texts"
+            else:
+                kept["requirement"] = requirement
+        if failure is None and requirement_required:
+            kept["needs_disposition"] = True
     elif kind == "indifferent":
         if not kept["why"].strip():
             failure = "an indifferent topic needs the reason no one acts on the difference"
@@ -272,11 +309,20 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
         kept.pop("deferred_to", None)  # an unverified judgement defers nothing, even after a deferred precedent
     kept["verified"] = failure is None
     deferred = (failure is None and kind == "consequential_gap"
+                and not requirement_required
                 and (not quotes or kept.get("quoted_elsewhere"))
                 and state <= LAST_DEFERRING_STATE)
     witness = _kept_witness(judgement.get("witness"))
     if witness:
         kept["witness"] = witness
+    if (failure is None and requirement_required
+            and ((kind == "consequential_gap" and not requirement) or
+                 (kept.get("owner_question") and kind not in {"contradiction", STANDARD_VIOLATION}))):
+        kept["claimed_kind"] = kind
+        kept["kind"] = kind = HYPOTHESIS
+        kept["requirement_missing"] = ("no accepted requirement distinguishes the outcomes, or the product "
+                                       "choice itself is missing; the author must establish the owner, "
+                                       "not infer permitted freedom from silence")
     if failure is None and witness_required and kind in BLOCKING and not deferred:
         problem = witness_problem(judgement.get("witness"), corpus,
                                   _norm(later_texts) if later_texts is not None else "")
