@@ -901,7 +901,8 @@ sends no reminders.
 Narrowed by R0-61 and R0-62 (what erasing a project does to sessions and
 reads), R0-66 (the owner erases old audit entries) and R0-71 (anonymisation is
 final). Narrowed by R0-91: the restriction is GDPR Art. 18 only; "the Spanish
-*bloqueo*" is withdrawn.
+*bloqueo*" is withdrawn. Narrowed by R0-94: a review page shows what is due,
+after the first assembly; Registry still erases nothing on its own.
 
 ### R0-61 — Erasing a project removes it from every session (proposed to the owner 2026-10-27 after round 18 T3, accepted; narrows R0-46, R0-60)
 
@@ -1297,6 +1298,37 @@ A read-only owner operation that gathers a customer with every project
 naming it, as one page and a JSON download, is a candidate change once the
 first release is assembled; adopting it is a new owner decision here.
 
+### R0-94 — The retention schedule has three stages; Registry will show what is due (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q4; narrows R0-60, R0-91)
+
+The owner's four years are the tax period for invoices (Ley General
+Tributaria, art. 66): they bind the documents PresuPro issues and keeps
+(R0-80), not the values Registry holds. The governance's retention schedule
+(R0-60) gives each kind of data three stages: in use while the relationship
+or the work goes on; kept only against claims and inspections once it has
+ended; erased or anonymised when that period lapses. Its draft, for the legal
+review, starts from the owner's provisional periods of R0-40 — a customer's
+contact data until the relationship ends plus one year, an object's address
+and an archived project five years after archiving, the audit log two years —
+checked against the tax period (four years), the commercial-records period
+(Código de Comercio, art. 30: six years), personal civil actions (Código
+Civil, art. 1964: five years) and, where it applies to the owner's works,
+the building warranty (Ley 38/1999, art. 17–18).
+
+The middle stage is, in Spanish law, blocking (LOPDGDD art. 32), which
+Registry does not offer (R0-91); the restriction it offers is not blocking.
+The legal review is therefore asked concretely which values Registry holds
+must be kept blocked after a relationship ends or a project is archived, and
+for how long.
+
+Registry keeps erasing nothing on its own (R0-60). After the first release is
+assembled, it gains a read-only review page in the owner interface: the
+customers whose relationship ended, and the archived projects archived, longer
+ago than periods the owner sets in the configuration from the schedule. The
+owner acts on each with the existing actions. If the legal review answers that
+some value must be blocked, blocking enters the same change, as one mechanism
+with the review page. The design of both is decided then, by a new owner
+decision here.
+
 ## Explicit exclusions
 
 - The operator script `onboard_object`: retired (R0-63); its role is taken by
@@ -1337,7 +1369,7 @@ round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
 State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
 (2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
 rounds 5–9; R0-90 (2026-11-11) records the owner's answer during the
-pre-contract data closure. R0-91 to R0-93 (2026-11-23) answer Q2, Q1 and Q3 of the
+pre-contract data closure. R0-91 to R0-94 (2026-11-23) answer Q2, Q1, Q3 and Q4 of the
 data-protection requirements matrix.
 
 ## Carried to later states
