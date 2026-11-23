@@ -982,9 +982,10 @@ and the stale check before every send.
 `models`, `data_provider`, `canonical_values`, `clock`, `store`,
 `installation`, `service_invoker` (request shape).
 
-These are the modules `bindings` depends on, not the symbols it imports: which
-models, enums and interfaces of `models` its code names is fixed by its
-`imports.module_internal` (SPEC_STANDARD §7), not by this list.
+This list says which modules' knowledge `bindings` may rely on; it declares no
+dependency edge and no imported symbol. Its edges and the exact symbols on
+each are its `imports.module_internal` (SPEC_STANDARD §7), the one
+authoritative source.
 
 ### Must not own
 
@@ -1026,9 +1027,10 @@ The proof-time reach of disclosure classes (A07 rule 2).
 `functions` (contract versions), `bindings` (binding status and declared
 classes).
 
-These are the modules `flows` depends on, not the symbols it imports: which
-models, enums and interfaces of `models` its code names is fixed by its
-`imports.module_internal` (SPEC_STANDARD §7), not by this list.
+This list says which modules' knowledge `flows` may rely on; it declares no
+dependency edge and no imported symbol. Its edges and the exact symbols on
+each are its `imports.module_internal` (SPEC_STANDARD §7), the one
+authoritative source.
 
 ### Must not own
 
