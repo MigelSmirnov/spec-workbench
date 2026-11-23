@@ -1271,6 +1271,32 @@ pointer leads to exactly one node execution, is Kernel's to state in its
 case; until it does, the link is one-directional. Neither Registry nor the
 platform gains a separate control module.
 
+### R0-93 — A data subject's request is answered by the owner from existing actions (owner, 2026-11-23, after the data-protection requirements matrix `sources/privacy_requirements_20261123.md`, Q3; narrows R0-37)
+
+A customer may ask what Registry holds about them, for a copy, for the data
+they provided in a machine-readable form, or for its erasure (GDPR Art. 15,
+17, 20). The owner answers, within the period Art. 12(3) sets, by a
+procedure the governance records, from the actions Registry already has:
+'read a customer'; 'list projects' with the archived ones, whose items carry
+`customer_ref`, to find the projects that name the customer; 'read a
+project' for each, with its object and rooms; and 'list artifacts'. The
+purposes, recipients, retention periods and rights the answer also states
+are the governance's text. The machine-readable copy is the owner's,
+assembled from those reads. Registry gains no operation for it now.
+
+Erasure stays the separate, confirmed actions it is: archiving each project
+of the customer (R0-12), anonymising or deleting each archived one (R0-60),
+erasing the customer's contact and fiscal data (R0-06, R0-80). No single
+action erases a customer with its projects, because archiving is final and
+a project under a running contract, or a document a service issued and must
+keep (R0-80), may be a lawful ground to decline part of a request; that
+judgement is the owner's, under the governance, not Registry's (R0-65).
+What other services hold about the customer is answered from those services.
+
+A read-only owner operation that gathers a customer with every project
+naming it, as one page and a JSON download, is a candidate change once the
+first release is assembled; adopting it is a new owner decision here.
+
 ## Explicit exclusions
 
 - The operator script `onboard_object`: retired (R0-63); its role is taken by
@@ -1290,7 +1316,8 @@ platform gains a separate control module.
 - Deploying Registry, its release process and the host's administration (vNext
   §15). Registry does not manage deployment.
 - The records of processing, the DPIA screening and, when needed, the DPIA
-  itself, blocking under LOPDGDD Art. 32 (R0-91), incident response and the other organisational measures. They are
+  itself, blocking under LOPDGDD Art. 32 (R0-91), the procedure that answers
+  a data subject's request (R0-93), incident response and the other organisational measures. They are
   kept as platform-wide governance — Registry, Cabinet Kernel, Cabinet,
   PresuPro, Client Portal and the external AI providers — outside this case,
   citing the accepted Workbench decisions. The Code Factory checks the technical
@@ -1310,7 +1337,7 @@ round 25 and R0-85 round 26. R0-86 (2026-10-31) corrects a slip found by the
 State 1 draft; R0-87 (2026-10-31) answers State 1 round 2 T5; R0-88
 (2026-10-31) follows the State 2 draft; R0-89 (2026-10-31) follows State 2
 rounds 5–9; R0-90 (2026-11-11) records the owner's answer during the
-pre-contract data closure. R0-91 and R0-92 (2026-11-23) answer Q2 and Q1 of the
+pre-contract data closure. R0-91 to R0-93 (2026-11-23) answer Q2, Q1 and Q3 of the
 data-protection requirements matrix.
 
 ## Carried to later states
