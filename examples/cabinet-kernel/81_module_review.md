@@ -1119,3 +1119,13 @@ their notes; `runs`, `surface`, `service_invoker` and `functions` by their `modu
 `data_provider`, `installation`, `effects` and `run_graph` only by the A08 text and the line numbers
 after it in their accepted evidence. Structural review of each: 0 blocks, 0 reviews. All 19 modules
 remain PASS.
+
+### serve_kernel's stop mark (2026-11-23)
+
+Route B on the exported spec `91af3d75` generated a `surface` whose request handler set the stop
+mark on its own instance; `HTTPServer` builds a handler per request, the serving loop never saw the
+mark, and `kernel_a03_unconfirmed_cleanup_stops_kernel` failed (A03 rule 7). The `serve_kernel`
+[BEHAVIOR] note now requires the mark to outlive the handler that set it and to be the one the
+serving loop reads before accepting another request (State 7 round-159 clear). Only the `surface`
+packet moved, by that note; its imports scope was re-decided with no new symbol. Structural review:
+0 blocks, 0 reviews. All 19 modules remain PASS.
