@@ -1,0 +1,122 @@
+{
+ "open_points": [
+  {
+   "subject": "A18 rule 1 backup look interval",
+   "kind": "time_source_undecided",
+   "text": "The process looks at the clock at least once in each interval of the imported `BACKUP_LOOK_SECONDS` constant (60 seconds)",
+   "question": "Is the maximum gap between backup-eligibility looks measured by the monotonic clock or by UTC wall-clock time, especially when the wall clock moves?",
+   "options": [
+    "Measure elapsed gaps with the monotonic clock and read UTC wall time at each eligibility look",
+    "Measure both the gap and the daily time with UTC wall-clock time",
+    "Use fixed UTC wall-clock intervals rather than a rolling maximum gap"
+   ],
+   "default_guess": "Use the monotonic clock to keep consecutive eligibility looks at most `BACKUP_LOOK_SECONDS` apart, and read UTC wall time once at each look to decide the date and daily-time crossing.",
+   "witness": {
+    "initial": "Registry is running with service tokens; a look reads 02:59:30 UTC, and no backup for that UTC date exists.",
+    "events": [
+     "The host administrator sets the UTC wall clock back ten minutes immediately after the look.",
+     "Registry continues running until the wall clock passes 03:00 again."
+    ],
+    "outcomes": [
+     "A monotonic-gap scheduler continues looking at least every 60 elapsed seconds and starts the backup at its first qualifying look after the repeated 03:00.",
+     "A wall-clock-gap scheduler may wait until the wall clock reaches the prior reading plus 60 seconds, producing a materially later qualifying look and backup."
+    ],
+    "observer": "The owner sees the different recorded backup instant and availability time."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A18 rule 1 overlapping daily runs",
+   "kind": "missing_outcome",
+   "text": "Runs never overlap: a 03:00 that finds a run still going makes no run of its own.",
+   "question": "After the earlier run finishes, is the date whose 03:00 was blocked permanently skipped, or may its run start late at a subsequent qualifying look?",
+   "options": [
+    "Skip that date permanently, as with a stopped or owner-only Registry at 03:00",
+    "Start that date's run at the first later look after the earlier run finishes",
+    "Mark the date missed only when an eligibility look actually occurs while the earlier run is active"
+   ],
+   "default_guess": "Skip the blocked date permanently and remember it as missed, because the text says its 03:00 makes no run of its own.",
+   "witness": {
+    "initial": "A backup run begun on 2026-11-23 is still running at 03:00 UTC on 2026-11-24; Registry remains otherwise eligible and has no kept backup dated 2026-11-24.",
+    "events": [
+     "The scheduler looks immediately before and at 03:00 on 2026-11-24 and observes the earlier run.",
+     "The earlier run finishes at 03:10.",
+     "The scheduler looks again at 03:11."
+    ],
+    "outcomes": [
+     "2026-11-24 is permanently skipped because its 03:00 found another run active.",
+     "A 2026-11-24 run starts at 03:11 because the crossing condition, no-kept-backup condition and no-overlap condition are then all satisfied."
+    ],
+    "observer": "The owner sees either one or two kept backups after the earlier run finishes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 review of the A18 scheduling change",
+   "kind": "change_claim_conflict",
+   "text": "A18 rule 1 still asks a look at the clock at least once in each interval —\nthe constant is the longest gap, as \"at least once a minute\" was — so no\nrule's behaviour moved.",
+   "question": "Must backup eligibility checks retain the former fixed `every BACKUP_LOOK_SECONDS` cadence, or may they now occur at any frequency whose longest gap is the constant?",
+   "options": [
+    "Retain one fixed periodic cadence",
+    "Permit any cadence with a maximum gap of `BACKUP_LOOK_SECONDS`",
+    "State explicitly that the broader cadence is intentional and that observable backup start times may change"
+   ],
+   "default_guess": "Treat the new A18 wording as a deliberate maximum-gap guarantee and correct A21's claim that only naming changed and no behavior moved.",
+   "witness": {
+    "initial": "Registry starts before 03:00, looks at 02:59:30, and has no kept backup for the date.",
+    "events": [
+     "Under a fixed 60-second cadence, its next look is 03:00:30.",
+     "Under the new maximum-gap wording, it may additionally look at 02:59:59 and 03:00:00."
+    ],
+    "outcomes": [
+     "The retained fixed cadence starts the backup at 03:00:30.",
+     "The newly permitted cadence starts it at 03:00:00."
+    ],
+    "observer": "The owner sees different recorded backup instants; A18 permits the second result while A21 says behavior did not move."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A17 formal secret invariant",
+   "kind": "vague_invariant",
+   "text": "for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYTES",
+   "question": "What objects does `s1 != s2` distinguish, and whose length must `len` measure?",
+   "options": [
+    "For every pair of distinct configured secret fields, their values differ, and every configured secret value has length at least `SECRET_MIN_BYTES` UTF-8 bytes",
+    "Apply the length clause to both `s1` and `s2` inside every pair",
+    "Apply the length clause only to one unspecified secret in each pair"
+   ],
+   "default_guess": "Rewrite it as two explicit invariants: every configured secret value has at least `SECRET_MIN_BYTES` UTF-8 bytes, and every two distinct configured secret fields have unequal values.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 Required tests for the secret invariant",
+   "kind": "invariant_test_scope_undecided",
+   "text": "Two services with one token stop the start, and so does each other pair\nof equal secrets: a token and the owner credential, a token and the\nbackup key, the owner credential and the backup key.",
+   "question": "Does the test have to exercise every unordered pair of the four service-token fields and every token-to-owner/token-to-backup pair, or only one representative service token for each stated category?",
+   "options": [
+    "Test one representative token for each category",
+    "Test every unordered pair of configured secret fields",
+    "Use a parameterized test whose cases explicitly enumerate every configured secret-field pair"
+   ],
+   "default_guess": "Require every unordered pair of configured secret fields, preferably through an explicitly enumerated parameterized test.",
+   "unit": "?"
+  },
+  {
+   "subject": "A17 Required tests for minimum secret length",
+   "kind": "invariant_test_scope_undecided",
+   "text": "For each kind of secret — a service\ntoken, the owner credential and the backup key — a value one byte shorter\nthan `SECRET_MIN_BYTES` stops the start and one of exactly\n`SECRET_MIN_BYTES` bytes is accepted.",
+   "question": "Does “a service token” require the boundary result to be shown for each of the four service-token fields, or for one representative token only?",
+   "options": [
+    "One representative service-token field",
+    "Each of the four service-token fields",
+    "One shared validation-path test plus an explicit check that every service-token field uses that path"
+   ],
+   "default_guess": "Require the boundary result for every service-token field, owner credential and backup key, because the invariant applies to every configured secret.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A18 rule 1 backup look interval\",\"kind\":\"time_source_undecided\",\"text\":\"The process looks at the clock at least once in each interval of the imported `BACKUP_LOOK_SECONDS` constant (60 seconds)\",\"question\":\"Is the maximum gap between backup-eligibility looks measured by the monotonic clock or by UTC wall-clock time, especially when the wall clock moves?\",\"options\":[\"Measure elapsed gaps with the monotonic clock and read UTC wall time at each eligibility look\",\"Measure both the gap and the daily time with UTC wall-clock time\",\"Use fixed UTC wall-clock intervals rather than a rolling maximum gap\"],\"default_guess\":\"Use the monotonic clock to keep consecutive eligibility looks at most `BACKUP_LOOK_SECONDS` apart, and read UTC wall time once at each look to decide the date and daily-time crossing.\",\"witness\":{\"initial\":\"Registry is running with service tokens; a look reads 02:59:30 UTC, and no backup for that UTC date exists.\",\"events\":[\"The host administrator sets the UTC wall clock back ten minutes immediately after the look.\",\"Registry continues running until the wall clock passes 03:00 again.\"],\"outcomes\":[\"A monotonic-gap scheduler continues looking at least every 60 elapsed seconds and starts the backup at its first qualifying look after the repeated 03:00.\",\"A wall-clock-gap scheduler may wait until the wall clock reaches the prior reading plus 60 seconds, producing a materially later qualifying look and backup.\"],\"observer\":\"The owner sees the different recorded backup instant and availability time.\"}},{\"subject\":\"A18 rule 1 overlapping daily runs\",\"kind\":\"missing_outcome\",\"text\":\"Runs never overlap: a 03:00 that finds a run still going makes no run of its own.\",\"question\":\"After the earlier run finishes, is the date whose 03:00 was blocked permanently skipped, or may its run start late at a subsequent qualifying look?\",\"options\":[\"Skip that date permanently, as with a stopped or owner-only Registry at 03:00\",\"Start that date's run at the first later look after the earlier run finishes\",\"Mark the date missed only when an eligibility look actually occurs while the earlier run is active\"],\"default_guess\":\"Skip the blocked date permanently and remember it as missed, because the text says its 03:00 makes no run of its own.\",\"witness\":{\"initial\":\"A backup run begun on 2026-11-23 is still running at 03:00 UTC on 2026-11-24; Registry remains otherwise eligible and has no kept backup dated 2026-11-24.\",\"events\":[\"The scheduler looks immediately before and at 03:00 on 2026-11-24 and observes the earlier run.\",\"The earlier run finishes at 03:10.\",\"The scheduler looks again at 03:11.\"],\"outcomes\":[\"2026-11-24 is permanently skipped because its 03:00 found another run active.\",\"A 2026-11-24 run starts at 03:11 because the crossing condition, no-kept-backup condition and no-overlap condition are then all satisfied.\"],\"observer\":\"The owner sees either one or two kept backups after the earlier run finishes.\"}},{\"subject\":\"A21 review of the A18 scheduling change\",\"kind\":\"change_claim_conflict\",\"text\":\"A18 rule 1 still asks a look at the clock at least once in each interval —\\nthe constant is the longest gap, as \\\"at least once a minute\\\" was — so no\\nrule's behaviour moved.\",\"question\":\"Must backup eligibility checks retain the former fixed `every BACKUP_LOOK_SECONDS` cadence, or may they now occur at any frequency whose longest gap is the constant?\",\"options\":[\"Retain one fixed periodic cadence\",\"Permit any cadence with a maximum gap of `BACKUP_LOOK_SECONDS`\",\"State explicitly that the broader cadence is intentional and that observable backup start times may change\"],\"default_guess\":\"Treat the new A18 wording as a deliberate maximum-gap guarantee and correct A21's claim that only naming changed and no behavior moved.\",\"witness\":{\"initial\":\"Registry starts before 03:00, looks at 02:59:30, and has no kept backup for the date.\",\"events\":[\"Under a fixed 60-second cadence, its next look is 03:00:30.\",\"Under the new maximum-gap wording, it may additionally look at 02:59:59 and 03:00:00.\"],\"outcomes\":[\"The retained fixed cadence starts the backup at 03:00:30.\",\"The newly permitted cadence starts it at 03:00:00.\"],\"observer\":\"The owner sees different recorded backup instants; A18 permits the second result while A21 says behavior did not move.\"}},{\"subject\":\"A17 formal secret invariant\",\"kind\":\"vague_invariant\",\"text\":\"for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYTES\",\"question\":\"What objects does `s1 != s2` distinguish, and whose length must `len` measure?\",\"options\":[\"For every pair of distinct configured secret fields, their values differ, and every configured secret value has length at least `SECRET_MIN_BYTES` UTF-8 bytes\",\"Apply the length clause to both `s1` and `s2` inside every pair\",\"Apply the length clause only to one unspecified secret in each pair\"],\"default_guess\":\"Rewrite it as two explicit invariants: every configured secret value has at least `SECRET_MIN_BYTES` UTF-8 bytes, and every two distinct configured secret fields have unequal values.\"},{\"subject\":\"A17 Required tests for the secret invariant\",\"kind\":\"invariant_test_scope_undecided\",\"text\":\"Two services with one token stop the start, and so does each other pair\\nof equal secrets: a token and the owner credential, a token and the\\nbackup key, the owner credential and the backup key.\",\"question\":\"Does the test have to exercise every unordered pair of the four service-token fields and every token-to-owner/token-to-backup pair, or only one representative service token for each stated category?\",\"options\":[\"Test one representative token for each category\",\"Test every unordered pair of configured secret fields\",\"Use a parameterized test whose cases explicitly enumerate every configured secret-field pair\"],\"default_guess\":\"Require every unordered pair of configured secret fields, preferably through an explicitly enumerated parameterized test.\"},{\"subject\":\"A17 Required tests for minimum secret length\",\"kind\":\"invariant_test_scope_undecided\",\"text\":\"For each kind of secret — a service\\ntoken, the owner credential and the backup key — a value one byte shorter\\nthan `SECRET_MIN_BYTES` stops the start and one of exactly\\n`SECRET_MIN_BYTES` bytes is accepted.\",\"question\":\"Does “a service token” require the boundary result to be shown for each of the four service-token fields, or for one representative token only?\",\"options\":[\"One representative service-token field\",\"Each of the four service-token fields\",\"One shared validation-path test plus an explicit check that every service-token field uses that path\"],\"default_guess\":\"Require the boundary result for every service-token field, owner credential and backup key, because the invariant applies to every configured secret.\"}]}",
+ "set_aside": []
+}
