@@ -132,8 +132,8 @@ the confirmation id from `random_values.mint_identity` only then (A14 rule
 ### Errors
 
 Every code of the closed set, from the module that decided it. A request
-that names no owner action — its method and path are no row of the imported
-`OWNER_ACTIONS` constant — is checked at stage (1) as a read and then
+that names no owner action — `owner_interface` handed it on with no action,
+having matched no route — is checked at stage (1) as a read and then
 refused `invalid_request` (`outside_closed_list`) at stage (4), as the
 service API refuses an operation it does not know (owner, 2026-11-24).
 
