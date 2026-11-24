@@ -566,7 +566,7 @@ no stored value is ever evaluated or executed   -- A19-2
    value, a value of a link's query — shown as that text when the value
    holds `<`, `>`, `&`, `"` and `'`, the page holding no element and no
    attribute made from it, and a value in a link's query, holding also `?`,
-   `#`, `/` and `=`, read back from the link as that one whole value, the
+   `#`, `/`, `=`, `+`, `%` and a space, read back from the link as that one whole value, the
    link's origin, path and other parameters unchanged; every page forbids every script by its content
    security policy. Every page is made by one renderer, so this shows it for
    every stored value, whoever wrote it and whichever way it came in, the
