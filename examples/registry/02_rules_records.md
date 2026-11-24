@@ -234,8 +234,9 @@ store.
    kind, contact data, fiscal data (R0-80).
 2. An optional fact the correction does not give is cleared; there is no
    partial correction.
-3. The facts a correction does not edit — identity, status, marks, instants,
-   request id — are not part of it and do not change by it.
+3. The facts a correction does not edit — identity, status, marks, the
+   created instant, request id — are not part of it and do not change by it;
+   its revision and last-changed instant follow A04 (owner, 2026-11-24).
 4. A correction that gives exactly the stored facts is accepted and changes
    nothing: revision and last-changed instant stay, and no audit entry is
    written (A05).
@@ -379,9 +380,9 @@ for action a on record r in {Project, Customer} that may move r.revision:
 11. A correction that changes a project moves its revision by exactly one and
    sets its last-changed instant to the current instant; a correction that
    changes a Customer, and a mark that restricts it, each move the Customer's
-   revision by exactly one; a correction of either that changes nothing
-   leaves the revision, and the project's last-changed instant, where they
-   were. Shows A04-3, A04-6.
+   revision by exactly one and set its last-changed instant to the current
+   instant; a correction of either that changes nothing leaves its revision
+   and its last-changed instant where they were. Shows A04-3, A04-6.
    [witness: verification:registry_a04_change_moves_revision_and_last_changed]
 
 ### Consequence

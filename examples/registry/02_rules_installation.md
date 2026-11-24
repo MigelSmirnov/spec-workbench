@@ -819,8 +819,11 @@ and A22 and restated in A11 and A22 so that each invariant is shown whole:
 a required address and kind, a project correction's untouched facts, a
 Customer's revision, the rights table for every pair, the publishing
 callers, the token and the registration of an agent call, a re-registered
-identity's empty session, each session change moving the version once. No
-normative rule changed. Reviewed under every category naming them:
+identity's empty session, each session change moving the version once. One
+normative rule was restated, by the owner: A03 rule 3 names the created
+instant among the facts a correction leaves, its revision and last-changed
+instant following A04, as A03 rule 4 and A04 already read; A03 is named by no
+category. Reviewed under every category naming the others:
 authentication_credential_abuse (A09, A13, A17), secrets (A14, A17, A18),
 authorization (A04, A08, A09, A10, A11, A12), injection_interpreted_input
 (A02, A16, A19), browser_boundary (A13, A19), files_artifacts (A07, A08,
