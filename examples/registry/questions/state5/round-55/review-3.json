@@ -1,0 +1,210 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:migration_import.confirm_import conflict lifetime",
+   "kind": "ambiguous_conflict_scope",
+   "text": "the mapping the step showed but for the ids production minted since",
+   "question": "At confirmation, does an imported id conflict only with an id a production record currently holds, or with every equal id production minted after the step even if its record was deleted before confirmation?",
+   "options": [
+    "Compare only with ids held by production when the confirming transaction builds the mapping.",
+    "Keep a historical set of every id minted since the step and refuse any match."
+   ],
+   "default_guess": "Compare only with ids currently held, as A16 defines the mapping against ids production holds.",
+   "witness": {
+    "initial": "A clean confirmation step is shown for an imported project id that production does not hold.",
+    "events": [
+     "Production randomly mints that same project id for a new project.",
+     "The owner archives and deletes the production project whole.",
+     "The owner submits the earlier import confirmation."
+    ],
+    "outcomes": [
+     "The confirmation is accepted because no production record currently holds the id.",
+     "The confirmation is refused because production minted the id after the step."
+    ],
+    "observer": "The owner and module:operations"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.confirm_import conflict namespaces",
+   "kind": "vague_id_domain",
+   "text": "a conflict a minted id makes",
+   "question": "Which minted identity kinds can make the confirming mapping unclean: only project, room and pointer ids compared within their own kinds, or also customer_ref, confirmation ids and other opaque identities?",
+   "options": [
+    "Only project_id, room_id and pointer id, each compared with its own kind.",
+    "Every production-minted opaque identifier regardless of kind.",
+    "Project, room, pointer and customer identities, each compared within its own kind."
+   ],
+   "default_guess": "Only project_id, room_id and pointer id, each within its own kind, because those are the source identities the import keeps.",
+   "witness": {
+    "initial": "A clean step binds a picked room whose room_id is X.",
+    "events": [
+     "After the step, production randomly mints X as a Customer's customer_ref.",
+     "The owner confirms the import."
+    ],
+    "outcomes": [
+     "The import is accepted because a customer_ref cannot conflict with a room_id.",
+     "The import is refused because the phrase treats any minted id as a conflict."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.confirm_import downstream failures",
+   "kind": "missing_failure_contract",
+   "text": "Through `projects.write_imported_project`, `customers.make_imported_customer` and `artifact_pointers.write_imported_pointer`",
+   "question": "What must confirm_import return or raise when one of these provider operations or its store write fails after the mapping was found clean, and what failure may module:operations rely on receiving?",
+   "options": [
+    "Propagate a non-domain transaction failure and require the caller to roll back the whole transaction.",
+    "Return `mapping_not_clean`, even though the mapping was clean.",
+    "Return an additional typed import-write failure.",
+    "Treat provider failure as impossible and leave its propagation unspecified."
+   ],
+   "default_guess": "Propagate a non-domain transaction failure; the supplied transaction rolls back and none of the import is reported as accepted.",
+   "witness": {
+    "initial": "The confirming mapping is clean and the transaction has written some imported records.",
+    "events": [
+     "The next provider write fails because the store reports an error.",
+     "module:operations handles the result from confirm_import."
+    ],
+    "outcomes": [
+     "confirm_import signals a transaction failure, so operations rolls back and reports no successful import.",
+     "confirm_import returns a normal or `mapping_not_clean` result, causing a different public failure or risking use of provisional outputs."
+    ],
+    "observer": "module:operations and ultimately the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.confirm_import result finality",
+   "kind": "ambiguous_success_boundary",
+   "text": "For each written project its `project_id`, the display name and alias it arrived under and its status; and, for each Customer made, its v1 value and its minted `customer_ref` (rule 10).",
+   "question": "Does a successful result mean only that the record-writing portion completed inside the still-open transaction, or may the caller rely on it as proof that the whole import, including closure, audit entry and commit, succeeded?",
+   "options": [
+    "The result is provisional inside the caller's transaction and must not be exposed until closure, audit entry and commit succeed.",
+    "confirm_import owns complete import success and returns only after closure, audit entry and commit.",
+    "The result may be returned even if a later closure, audit or commit failure rolls the transaction back."
+   ],
+   "default_guess": "Treat it as a provisional internal result; module:operations exposes it only after the complete transaction commits.",
+   "witness": {
+    "initial": "confirm_import has written every picked record and constructed its output.",
+    "events": [
+     "Writing the migration closure or audit entry subsequently fails.",
+     "The transaction is rolled back."
+    ],
+    "outcomes": [
+     "No success result is exposed because confirm_import's output was provisional.",
+     "The owner receives project and Customer results even though the import did not commit."
+    ],
+    "observer": "module:operations and the owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.confirm_import output ordering",
+   "kind": "missing_deterministic_order",
+   "text": "For each written project its `project_id`, the display name and alias it arrived under and its status; and, for each Customer made, its v1 value and its minted `customer_ref` (rule 10).",
+   "question": "In what deterministic order are the project results and Customer results returned?",
+   "decision_owner": "2",
+   "options": [
+    "Projects by project_id and Customers by v1 value, matching the import mapping's orders.",
+    "Preserve the submitted pick order and first occurrence order of v1 values.",
+    "Use provider write order.",
+    "Declare the collections unordered."
+   ],
+   "consequences": [
+    "Matching the mapping makes confirmation results stable and directly comparable with the step.",
+    "Submission order preserves owner intent but adds an ordering guarantee not stated for mappings.",
+    "Provider order exposes an implementation procedure through the boundary.",
+    "Unordered collections require State 6 to use a representation whose equality and serialization do not introduce observable order."
+   ],
+   "requirement": "For each written project its `project_id`, the display name and alias it arrived under and its status; and, for each Customer made, its v1 value and its minted `customer_ref` (rule 10).",
+   "default_guess": "Projects by project_id and Customers by v1 value.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.confirm_import output contract form",
+   "kind": "later_contract_shape",
+   "text": "For each written project its `project_id`, the display name and alias it arrived under and its status; and, for each Customer made, its v1 value and its minted `customer_ref` (rule 10).",
+   "question": "What exact result structure represents the two collections, including a project that arrived with no alias?",
+   "decision_owner": "6",
+   "options": [
+    "One result object with named project and Customer lists; represent no alias as an optional value.",
+    "Two keyed mappings, by project_id and v1 value; omit or null an absent alias as the State 6 convention chooses.",
+    "A discriminated list containing project-result and Customer-result variants."
+   ],
+   "consequences": [
+    "Named lists closely follow the two semantic result groups but require declared item models.",
+    "Keyed mappings make lookup direct but duplicate or replace identity fields and impose key serialization.",
+    "A discriminated list uses one collection but makes consumers branch on variants."
+   ],
+   "requirement": "For each written project its `project_id`, the display name and alias it arrived under and its status; and, for each Customer made, its v1 value and its minted `customer_ref` (rule 10).",
+   "default_guess": "Use one result object with separate named lists and an optional alias field.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.confirm_import failure contract form",
+   "kind": "later_failure_shape",
+   "text": "`refused` (`import_closed`, `file_not_kept`, `mapping_not_clean`, `no_picks`).",
+   "question": "How are these refusal kinds represented and how does `mapping_not_clean` carry the several same-stage failures that must be answered together?",
+   "decision_owner": "6",
+   "options": [
+    "A typed refusal with one top-level kind and a list of individual mapping failures.",
+    "A typed refusal whose `mapping_not_clean` variant embeds the rebuilt mapping and all its findings.",
+    "A common operation-failure list in which every individual conflict, malformed record or missing value is an item and `no_picks` remains its own item."
+   ],
+   "consequences": [
+    "A nested failure list keeps the coarse public kind while preserving all findings.",
+    "Embedding the mapping lets the caller render the new state directly but enlarges the failure contract.",
+    "Using only individual failures aligns with a general staged-failure format but weakens the distinct `mapping_not_clean` variant unless State 6 defines their relationship."
+   ],
+   "requirement": "`refused` (`import_closed`, `file_not_kept`, `mapping_not_clean`, `no_picks`).",
+   "default_guess": "Use a typed refusal with a `mapping_not_clean` variant containing every mapping finding.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.confirm_import transaction contract",
+   "kind": "later_signature_choice",
+   "text": "The transaction;",
+   "question": "What exact transaction capability does the caller supply, and how is the same transaction made available to all three provider modules?",
+   "decision_owner": "6",
+   "options": [
+    "Pass an explicit transaction handle to confirm_import and to every provider write.",
+    "Pass a unit-of-work object that exposes the provider repositories.",
+    "Bind the transaction in an operation context that provider writes receive structurally."
+   ],
+   "consequences": [
+    "An explicit handle makes transaction identity visible in signatures and easy to verify.",
+    "A unit of work centralizes repositories but couples the import to a broader abstraction.",
+    "A structural operation context reduces repeated parameters but makes transaction propagation less explicit."
+   ],
+   "requirement": "Writes Projects, Rooms, Customers and pointers, all in the one transaction.",
+   "default_guess": "Use one explicit transaction handle passed through to every provider write.",
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:migration_import.confirm_import provider write sequencing",
+   "kind": "later_hidden_procedure",
+   "text": "the projects link to the Customers it makes (R0-80).",
+   "question": "In what hidden order or staging are Customers and projects written so every imported project can link to the Customer minted for its v1 value without leaving a partial result?",
+   "decision_owner": "7",
+   "options": [
+    "Mint and write all Customers first, build the v1-value-to-customer_ref mapping, then write projects, rooms and pointers.",
+    "Mint Customer identities first, stage every record in memory, then write provider records in a backend-compatible order.",
+    "Write projects before Customers using deferred referential checks within the transaction."
+   ],
+   "consequences": [
+    "Customers-first is simple when the store permits that provider order but exposes an internal sequencing dependency.",
+    "Staging separates identity allocation from persistence and supports arbitrary backend ordering at the cost of more transient state.",
+    "Deferred checks permit project-first writes but require backend support and careful failure handling."
+   ],
+   "requirement": "the projects link to the Customers it makes (R0-80).",
+   "default_guess": "Mint and write Customers first, retain the v1-value-to-customer_ref mapping, then write projects and their dependent records.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:migration_import.confirm_import conflict lifetime\",\"kind\":\"ambiguous_conflict_scope\",\"text\":\"the mapping the step showed but for the ids production minted since\",\"question\":\"At confirmation, does an imported id conflict only with an id a production record currently holds, or with every equal id production minted after the step even if its record was deleted before confirmation?\",\"options\":[\"Compare only with ids held by production when the confirming transaction builds the mapping.\",\"Keep a historical set of every id minted since the step and refuse any match.\"],\"default_guess\":\"Compare only with ids currently held, as A16 defines the mapping against ids production holds.\",\"witness\":{\"initial\":\"A clean confirmation step is shown for an imported project id that production does not hold.\",\"events\":[\"Production randomly mints that same project id for a new project.\",\"The owner archives and deletes the production project whole.\",\"The owner submits the earlier import confirmation.\"],\"outcomes\":[\"The confirmation is accepted because no production record currently holds the id.\",\"The confirmation is refused because production minted the id after the step.\"],\"observer\":\"The owner and module:operations\"}},{\"subject\":\"public_op:migration_import.confirm_import conflict namespaces\",\"kind\":\"vague_id_domain\",\"text\":\"a conflict a minted id makes\",\"question\":\"Which minted identity kinds can make the confirming mapping unclean: only project, room and pointer ids compared within their own kinds, or also customer_ref, confirmation ids and other opaque identities?\",\"options\":[\"Only project_id, room_id and pointer id, each compared with its own kind.\",\"Every production-minted opaque identifier regardless of kind.\",\"Project, room, pointer and customer identities, each compared within its own kind.\"],\"default_guess\":\"Only project_id, room_id and pointer id, each within its own kind, because those are the source identities the import keeps.\",\"witness\":{\"initial\":\"A clean step binds a picked room whose room_id is X.\",\"events\":[\"After the step, production randomly mints X as a Customer's customer_ref.\",\"The owner confirms the import.\"],\"outcomes\":[\"The import is accepted because a customer_ref cannot conflict with a room_id.\",\"The import is refused because the phrase treats any minted id as a conflict.\"],\"observer\":\"The owner\"}},{\"subject\":\"public_op:migration_import.confirm_import downstream failures\",\"kind\":\"missing_failure_contract\",\"text\":\"Through `projects.write_imported_project`, `customers.make_imported_customer` and `artifact_pointers.write_imported_pointer`\",\"question\":\"What must confirm_import return or raise when one of these provider operations or its store write fails after the mapping was found clean, and what failure may module:operations rely on receiving?\",\"options\":[\"Propagate a non-domain transaction failure and require the caller to roll back the whole transaction.\",\"Return `mapping_not_clean`, even though the mapping was clean.\",\"Return an additional typed import-write failure.\",\"Treat provider failure as impossible and leave its propagation unspecified.\"],\"default_guess\":\"Propagate a non-domain transaction failure; the supplied transaction rolls back and none of the import is reported as accepted.\",\"witness\":{\"initial\":\"The confirming mapping is clean and the transaction has written some imported records.\",\"events\":[\"The next provider write fails because the store reports an error.\",\"module:operations handles the result from confirm_import.\"],\"outcomes\":[\"confirm_import signals a transaction failure, so operations rolls back and reports no successful import.\",\"confirm_import returns a normal or `mapping_not_clean` result, causing a different public failure or risking use of provisional outputs.\"],\"observer\":\"module:operations and ultimately the owner\"}},{\"subject\":\"public_op:migration_import.confirm_import result finality\",\"kind\":\"ambiguous_success_boundary\",\"text\":\"For each written project its `project_id`, the display name and alias it arrived under and its status; and, for each Customer made, its v1 value and its minted `customer_ref` (rule 10).\",\"question\":\"Does a successful result mean only that the record-writing portion completed inside the still-open transaction, or may the caller rely on it as proof that the whole import, including closure, audit entry and commit, succeeded?\",\"options\":[\"The result is provisional inside the caller's transaction and must not be exposed until closure, audit entry and commit succeed.\",\"confirm_import owns complete import success and returns only after closure, audit entry and commit.\",\"The result may be returned even if a later closure, audit or commit failure rolls the transaction back.\"],\"default_guess\":\"Treat it as a provisional internal result; module:operations exposes it only after the complete transaction commits.\",\"witness\":{\"initial\":\"confirm_import has written every picked record and constructed its output.\",\"events\":[\"Writing the migration closure or audit entry subsequently fails.\",\"The transaction is rolled back.\"],\"outcomes\":[\"No success result is exposed because confirm_import's output was provisional.\",\"The owner receives project and Customer results even though the import did not commit.\"],\"observer\":\"module:operations and the owner\"}},{\"subject\":\"public_op:migration_import.confirm_import output ordering\",\"kind\":\"missing_deterministic_order\",\"text\":\"For each written project its `project_id`, the display name and alias it arrived under and its status; and, for each Customer made, its v1 value and its minted `customer_ref` (rule 10).\",\"question\":\"In what deterministic order are the project results and Customer results returned?\",\"decision_owner\":\"2\",\"options\":[\"Projects by project_id and Customers by v1 value, matching the import mapping's orders.\",\"Preserve the submitted pick order and first occurrence order of v1 values.\",\"Use provider write order.\",\"Declare the collections unordered.\"],\"consequences\":[\"Matching the mapping makes confirmation results stable and directly comparable with the step.\",\"Submission order preserves owner intent but adds an ordering guarantee not stated for mappings.\",\"Provider order exposes an implementation procedure through the boundary.\",\"Unordered collections require State 6 to use a representation whose equality and serialization do not introduce observable order.\"],\"requirement\":\"For each written project its `project_id`, the display name and alias it arrived under and its status; and, for each Customer made, its v1 value and its minted `customer_ref` (rule 10).\",\"default_guess\":\"Projects by project_id and Customers by v1 value.\"},{\"subject\":\"public_op:migration_import.confirm_import output contract form\",\"kind\":\"later_contract_shape\",\"text\":\"For each written project its `project_id`, the display name and alias it arrived under and its status; and, for each Customer made, its v1 value and its minted `customer_ref` (rule 10).\",\"question\":\"What exact result structure represents the two collections, including a project that arrived with no alias?\",\"decision_owner\":\"6\",\"options\":[\"One result object with named project and Customer lists; represent no alias as an optional value.\",\"Two keyed mappings, by project_id and v1 value; omit or null an absent alias as the State 6 convention chooses.\",\"A discriminated list containing project-result and Customer-result variants.\"],\"consequences\":[\"Named lists closely follow the two semantic result groups but require declared item models.\",\"Keyed mappings make lookup direct but duplicate or replace identity fields and impose key serialization.\",\"A discriminated list uses one collection but makes consumers branch on variants.\"],\"requirement\":\"For each written project its `project_id`, the display name and alias it arrived under and its status; and, for each Customer made, its v1 value and its minted `customer_ref` (rule 10).\",\"default_guess\":\"Use one result object with separate named lists and an optional alias field.\"},{\"subject\":\"public_op:migration_import.confirm_import failure contract form\",\"kind\":\"later_failure_shape\",\"text\":\"`refused` (`import_closed`, `file_not_kept`, `mapping_not_clean`, `no_picks`).\",\"question\":\"How are these refusal kinds represented and how does `mapping_not_clean` carry the several same-stage failures that must be answered together?\",\"decision_owner\":\"6\",\"options\":[\"A typed refusal with one top-level kind and a list of individual mapping failures.\",\"A typed refusal whose `mapping_not_clean` variant embeds the rebuilt mapping and all its findings.\",\"A common operation-failure list in which every individual conflict, malformed record or missing value is an item and `no_picks` remains its own item.\"],\"consequences\":[\"A nested failure list keeps the coarse public kind while preserving all findings.\",\"Embedding the mapping lets the caller render the new state directly but enlarges the failure contract.\",\"Using only individual failures aligns with a general staged-failure format but weakens the distinct `mapping_not_clean` variant unless State 6 defines their relationship.\"],\"requirement\":\"`refused` (`import_closed`, `file_not_kept`, `mapping_not_clean`, `no_picks`).\",\"default_guess\":\"Use a typed refusal with a `mapping_not_clean` variant containing every mapping finding.\"},{\"subject\":\"public_op:migration_import.confirm_import transaction contract\",\"kind\":\"later_signature_choice\",\"text\":\"The transaction;\",\"question\":\"What exact transaction capability does the caller supply, and how is the same transaction made available to all three provider modules?\",\"decision_owner\":\"6\",\"options\":[\"Pass an explicit transaction handle to confirm_import and to every provider write.\",\"Pass a unit-of-work object that exposes the provider repositories.\",\"Bind the transaction in an operation context that provider writes receive structurally.\"],\"consequences\":[\"An explicit handle makes transaction identity visible in signatures and easy to verify.\",\"A unit of work centralizes repositories but couples the import to a broader abstraction.\",\"A structural operation context reduces repeated parameters but makes transaction propagation less explicit.\"],\"requirement\":\"Writes Projects, Rooms, Customers and pointers, all in the one transaction.\",\"default_guess\":\"Use one explicit transaction handle passed through to every provider write.\"},{\"subject\":\"public_op:migration_import.confirm_import provider write sequencing\",\"kind\":\"later_hidden_procedure\",\"text\":\"the projects link to the Customers it makes (R0-80).\",\"question\":\"In what hidden order or staging are Customers and projects written so every imported project can link to the Customer minted for its v1 value without leaving a partial result?\",\"decision_owner\":\"7\",\"options\":[\"Mint and write all Customers first, build the v1-value-to-customer_ref mapping, then write projects, rooms and pointers.\",\"Mint Customer identities first, stage every record in memory, then write provider records in a backend-compatible order.\",\"Write projects before Customers using deferred referential checks within the transaction.\"],\"consequences\":[\"Customers-first is simple when the store permits that provider order but exposes an internal sequencing dependency.\",\"Staging separates identity allocation from persistence and supports arbitrary backend ordering at the cost of more transient state.\",\"Deferred checks permit project-first writes but require backend support and careful failure handling.\"],\"requirement\":\"the projects link to the Customers it makes (R0-80).\",\"default_guess\":\"Mint and write Customers first, retain the v1-value-to-customer_ref mapping, then write projects and their dependent records.\"}]}",
+ "set_aside": []
+}
