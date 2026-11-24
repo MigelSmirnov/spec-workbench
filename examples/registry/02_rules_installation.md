@@ -624,9 +624,20 @@ digest), which no note or check of Registry's code can show.
 
 ### Required tests
 
-1. Installing the release with a dependency whose digest differs fails. This
-   is a test of the release process (rule 5), shown there and not by a check
-   of Registry.
+These are tests of the release process (rule 5), shown there and not by a
+check of Registry:
+
+1. Installing the release fails when the digest differs for any one
+   dependency of each kind rule 1 names — a direct Python package, a
+   transitive one, the Python version and the base image — and no instance
+   of that release starts.
+2. A release whose list misses a package the instance would import, or
+   names one without an exact version or a digest, is not made.
+3. After an installation that succeeded, the dependencies the running
+   instance has are exactly the release's list, by name, version and
+   digest, nothing more.
+4. A release's dependencies change only with a new release (rule 3): the
+   same release installed again gives the same list.
 
 ### Consequence
 
