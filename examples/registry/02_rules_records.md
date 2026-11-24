@@ -379,10 +379,11 @@ for action a on record r in {Project, Customer} that may move r.revision:
    Shows A04-4, A04-5. [witness: verification:registry_a04_anonymised_project_former_revision_stale]
 11. Each action that moves a record's last-changed instant — for a project a
    correction and archiving (M01); for a Customer a correction, restricting
-   and lifting, ending and resuming the relationship, and erasure (M04) —
+   and lifting, and ending and resuming the relationship (M04) —
    moves the record's revision by exactly one and sets its last-changed
    instant to the current instant; each such action that changes nothing
-   (A05) leaves both where they were. Shows A04-3, A04-6.
+   (A05) leaves both where they were. An erasure is not one of them: it keeps
+   no revision (rule 1). Shows A04-3, A04-6.
    [witness: verification:registry_a04_change_moves_revision_and_last_changed]
 
 ### Consequence

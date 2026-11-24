@@ -829,7 +829,11 @@ authorization (A04, A08, A09, A10, A11, A12), injection_interpreted_input
 (A02, A16, A19), browser_boundary (A13, A19), files_artifacts (A07, A08,
 A16, A18, A19, A22) and concurrency (A01, A04, A07, A12, A13, A14, A15, A16,
 A17, A18): the tests show refusals and guarantees the rules already gave,
-and no outcome changed.
+and no outcome changed. A04 Required test 11 was then widened the same day
+(State 2 rounds 115–117) to every action that moves a record's revision and
+last-changed instant, an erasure excepted as A04 rule 1 keeps no revision;
+reviewed again under authorization and concurrency (A04): it shows what A04
+rule 1 already decided, and no outcome changed.
 
 Performed again on 2026-11-24, after A20 rule 5 recorded that its rules
 are kept by the release process and its installation, outside Registry
