@@ -45,6 +45,11 @@ e.outcome = accepted   -- A14-2
    entry.
 4. Kernel reading the agent projection leaves the log unchanged.
 
+5. Every entry written, for every action that writes one, has the outcome
+   `accepted`; no other outcome is ever stored.
+6. Each action of M09.actions accepted and changing its record — a Customer's
+   restriction among them — writes exactly one entry, in its transaction.
+
 - Witness, A14-1: the test evidence of `OwnerActionStep.run` [witness: note:OwnerActionStep.run].
 - Witness, A14-2: the test evidence of `append_audit_entry` [witness: note:append_audit_entry].
 

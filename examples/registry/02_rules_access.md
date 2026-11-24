@@ -48,6 +48,10 @@ highest_class(Cabinet Kernel) = business_confidential   -- A09-3
 3. A token not in the configuration is refused like a wrong one (R0-23).
 4. PresuPro calling 'publish an artifact pointer' is refused (R0-88).
 
+5. Kernel's permitted read whose answer would carry a personal-data value is
+   refused whole as above its class: no field of the answer is disclosed, and
+   a change it made is undone.
+
 - Witness, A09-1: the test evidence of `perform_service_operation` [witness: note:perform_service_operation].
 - Witness, A09-1: for the rights table, the test evidence of `service_may_call` [witness: note:service_may_call].
 - Witness, A09-2: the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
@@ -85,8 +89,9 @@ manifest record derives from it (R0-78).
 ### Formal invariants
 
 ```text
-agent_call(session x, project p) accepted =>   -- A10-1
-  token = Kernel and registered(x) and p in granted(x)
+agent_call(session x) accepted, other than registering x =>   -- A10-1
+  token = Kernel and registered(x)
+  and, for an operation on project p, p in granted(x)
 answer(p not in granted(x)) = answer(p does not exist)   -- A10-2
 ```
 
@@ -144,6 +149,9 @@ register(x) after end(x) => granted(x) = {} and active(x) = none   -- A11-2
 2. Registering the ended identity again answers a session with no project.
 3. The owner ends a session; its next agent-authority call is refused.
 
+4. After a session ends the store holds no record of it: neither its set, its
+   active project, its pending request nor its access version.
+
 - Witness, A11-1: the test evidence of `end_session` [witness: note:end_session].
 - Witness, A11-2: the test evidence of `register_session` [witness: note:register_session].
 
@@ -176,7 +184,7 @@ Registry holds only living sessions; a stale session cannot keep a grant.
 
 ```text
 owner_action(x, stated v) with v != version(x) => refused, x unchanged   -- A12-1
-accepted change of x => version(x)' = version(x) + 1   -- A12-2
+accepted change of x other than its end => version(x)' = version(x) + 1   -- A12-2
 ```
 
 ### Required tests

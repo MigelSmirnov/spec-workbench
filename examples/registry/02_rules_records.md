@@ -78,7 +78,8 @@ for each model m in {Project, Customer}, and per project for m in   -- A01-1
   for records r1 != r2 of m with r1.request_id and r2.request_id present:
     r1.request_id != r2.request_id
 create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
-  rights fail or project archived => refused, store unchanged   -- A01-2
+  rights fail, or m in {Room, ArtifactPointer} with its project archived
+    => refused, store unchanged   -- A01-2
   f = current_facts(r)  => answer r, store unchanged   -- A01-3
   f != current_facts(r) => refused, store unchanged   -- A01-4
 ```
@@ -190,9 +191,16 @@ for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS   -
    of 0.01 is stored as given; one of 0 or -3 is refused; a project with no
    characteristic at all is stored without one.
 
+7. A Customer's name and an access request text with spaces around them are
+   stored as written; a room name, a Customer's name and an access request
+   text of spaces only are each refused and nothing changes.
+
 - Witness, A02-1: the test evidence of `read_required_text` [witness: note:read_required_text].
 - Witness, A02-4, A02-5: the test evidence of `check_value_forms` [witness: note:check_value_forms].
 - Witness, A02-2, A02-3, A02-4, A02-5: for projects, the test evidence of `create_project` [witness: note:create_project].
+- Witness, A02-2, A02-3: for Customers, the test evidence of `record_customer` [witness: note:record_customer].
+- Witness, A02-2, A02-3: for rooms, the test evidence of `add_room` [witness: note:add_room].
+- Witness, A02-2, A02-3: for access requests, the test evidence of `request_project_access` [witness: note:request_project_access].
 
 ### Consequence
 
@@ -234,7 +242,12 @@ after correct(p, facts f) accepted:
 3. A correction keeping a customer that has since been restricted is accepted;
    one newly naming a restricted customer is refused.
 
+4. A Customer correction replaces every editable fact, clearing an optional
+   one it does not give; its identity, created instant, request id and marks
+   stay; one giving exactly the stored facts leaves the revision.
+
 - Witness, A03-1, A03-2, A03-3: the test evidence of `correct_project` [witness: note:correct_project].
+- Witness, A03-1, A03-2, A03-3: for Customers, the test evidence of `correct_customer` [witness: note:correct_customer].
 
 ### Consequence
 
@@ -326,11 +339,19 @@ for action a on record r in {Project, Customer} that may move r.revision:
 8. Restricting a Customer that has a revision, stating none, is refused as
    stale, not as a missing value.
 
+9. An owner correction without the session's CSRF value and stating a stale
+   revision is refused for the CSRF value, not as stale.
+10. After anonymising a project it has no revision: correcting or erasing it
+    stating its former revision is refused as stale and changes nothing; a
+    project deleted whole is not found.
+
 - Witness, A04-1: for the stages of a service call, the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
 - Witness, A04-1, A04-2, A04-3, A04-6: for projects, the test evidence of `correct_project` [witness: note:correct_project].
 - Witness, A04-3, A04-6: for archiving, the test evidence of `archive_project` [witness: note:archive_project].
 - Witness, A04-2, A04-3, A04-5, A04-6: for Customers, the test evidence of `mark_customer` [witness: note:mark_customer].
 - Witness, A04-4, A04-5: for an erasure, the test evidence of `erase_customer_contact` [witness: note:erase_customer_contact].
+- Witness, A04-1: for the owner's stages, the test evidence of `admit_owner_request` [witness: note:admit_owner_request].
+- Witness, A04-4, A04-5: for a project's erasure, the test evidence of `erase_project` [witness: note:erase_project].
 
 ### Consequence
 
@@ -364,7 +385,8 @@ the revision of the card it rendered, and none for a card that shows none
 ### Formal invariants
 
 ```text
-transition t to state s on record r with state(r) = s:   -- A05-1
+transition t to state s on record r with state(r) = s, passing every check
+of A04 rule 6:   -- A05-1
   accepted, r unchanged, no AuditEntry, no confirmation id
 ```
 
@@ -378,9 +400,21 @@ transition t to state s on record r with state(r) = s:   -- A05-1
 5. Granting again a granted project that has since been archived is refused,
    and the project stays in the set (R0-46, R0-70).
 
+6. Archiving an archived project, anonymising an anonymised one, erasing an
+   erased Customer, lifting an unrestricted Customer, resuming a relationship
+   that is not ended, making the active project active again, clearing an
+   active project already clear and registering a registered session each
+   answer the record unchanged: its revision, last-changed instant and access
+   version stay, no audit entry is written and no confirmation id minted.
+
 - Witness, A05-1: for a Customer's marks, the test evidence of `mark_customer` [witness: note:mark_customer].
 - Witness, A05-1: for a session's grant, the test evidence of `grant_project` [witness: note:grant_project].
 - Witness, A05-1: for the audit entry and confirmation id, the test evidence of `OwnerActionStep.run` [witness: note:OwnerActionStep.run].
+- Witness, A05-1: for archiving, the test evidence of `archive_project` [witness: note:archive_project].
+- Witness, A05-1: for anonymising, the test evidence of `erase_project` [witness: note:erase_project].
+- Witness, A05-1: for a Customer's erasure, the test evidence of `erase_customer_contact` [witness: note:erase_customer_contact].
+- Witness, A05-1: for the active project, the test evidence of `set_active_project` [witness: note:set_active_project].
+- Witness, A05-1: for registering, the test evidence of `register_session` [witness: note:register_session].
 
 ### Consequence
 
@@ -423,11 +457,23 @@ because each key ends in an identity or a sequence number
 3. Artifacts of one type list version 3, 2, 1.
 4. A project card lists its rooms in the order of 'list rooms'.
 
+5. Two agent sessions registered at the same instant list by session identity;
+   the audit log lists by sequence number, ascending; the agent projection's
+   pointers follow 'list artifacts'; a session's granted ids list by
+   `project_id`; the import mapping lists its projects by `project_id`, each
+   one's rooms and pointers as their lists, and the Customers it makes by their
+   v1 value.
+
 - Witness, A06-1: for projects, the test evidence of `list_projects` [witness: note:list_projects].
 - Witness, A06-1: for rooms, the test evidence of `list_rooms` [witness: note:list_rooms].
 - Witness, A06-1: for a project card's rooms, the test evidence of `read_project_card` [witness: note:read_project_card].
 - Witness, A06-1: for Customers, the test evidence of `list_customers` [witness: note:list_customers].
 - Witness, A06-1: for artifacts, the test evidence of `list_pointers` [witness: note:list_pointers].
+- Witness, A06-1: for agent sessions, the test evidence of `list_sessions` [witness: note:list_sessions].
+- Witness, A06-1: for the audit log, the test evidence of `read_audit_entries` [witness: note:read_audit_entries].
+- Witness, A06-1: for the agent projection's pointers, the test evidence of `published_pointers` [witness: note:published_pointers].
+- Witness, A06-1: for a session's granted ids, the test evidence of `_session_access` [witness: note:_session_access].
+- Witness, A06-1: for the import mapping, the test evidence of `_build_mapping` [witness: note:_build_mapping].
 
 ### Consequence
 

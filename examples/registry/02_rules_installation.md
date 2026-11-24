@@ -316,6 +316,11 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
    store under the store's name, and the next start makes a new one with
    one sequence at 0.
 
+10. Each start check that fails — a configuration item, a backup location that
+    cannot be written, an existing store failing its integrity check or of
+    another version, a new store that cannot be made — stops the start with no
+    listener opened and no request served.
+
 - Witness, A17-1: the test evidence of `start_instance` [witness: note:start_instance].
 - Witness, A17-2: the test evidence of `load_configuration` [witness: note:load_configuration].
 
