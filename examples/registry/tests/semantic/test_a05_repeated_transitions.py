@@ -76,6 +76,30 @@ def _audit(rt):
     return _accepted(rt.owner("read_audit"), "audit_view")["entries"]
 
 
+def _keys(value):
+    """Every field name of a wire answer, nested models included."""
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            yield key
+            yield from _keys(inner)
+    elif isinstance(value, list):
+        for inner in value:
+            yield from _keys(inner)
+
+
+def _confirmation_ids(entries):
+    return [e["confirmation_id"] for e in entries if e["confirmation_id"] is not None]
+
+
+def _mints_no_confirmation(rt, answer, entries_before):
+    """A05-1 "no confirmation id": the repeat's answer carries none (State 6:
+    no answer model has a `confirmation_id` field, the AuditEntry is its one
+    home, A14 rule 5), and the log holds no confirmation id it did not hold
+    before the repeat."""
+    assert "confirmation_id" not in set(_keys(answer)), answer
+    assert _confirmation_ids(_audit(rt)) == _confirmation_ids(entries_before)
+
+
 def _create_project(rt, name="A05 project", address="Calle Mayor 1"):
     answer = rt.owner(
         "create_project",
@@ -196,6 +220,8 @@ def test_restrict_restricted_customer_unchanged(semantic_runtime):
     # A05 rule 2: no audit entry; nothing else in the store moved either.
     assert _audit(rt) == entries_after_first
     assert _store(rt) == store_before
+    # A05-1: no confirmation id minted, in the answer or the log.
+    _mints_no_confirmation(rt, again, entries_after_first)
 
 
 def test_end_ended_relationship_keeps_date(semantic_runtime):
@@ -224,6 +250,9 @@ def test_end_ended_relationship_keeps_date(semantic_runtime):
     assert _read_customer(rt, ref) == ended["customer"]
     assert _audit(rt) == entries
     assert _store(rt) == store_before
+    # A05-1: neither repeat minted a confirmation id, in its answer or the log.
+    _mints_no_confirmation(rt, other_date, entries)
+    _mints_no_confirmation(rt, no_date, entries)
 
     # Control (A05 rule 3, "the owner resumes and ends again to change it"):
     # after a resume the new date is taken, so the date is not simply frozen.
@@ -268,6 +297,8 @@ def test_regrant_keeps_access_version(semantic_runtime):
     assert kernel_view["access"]["access_version"] == 2
     assert _audit(rt) == entries
     assert _store(rt) == store_before
+    # A05-1: the repeat minted no confirmation id, in its answer or the log.
+    _mints_no_confirmation(rt, again, entries)
 
 
 def test_withdrawing_withdrawn_or_superseded_pointer_refused(semantic_runtime):
@@ -365,7 +396,9 @@ def test_every_repeated_transition_answers_unchanged(semantic_runtime):
         rt.clock.advance(minutes=7)
         answer = _accepted(call(), answer_kind)
         assert answer["changed"] is False, answer
-        # A05 rule 2; A14 rules 3, 5: no entry, so no confirmation id.
+        # A05-1: the repeat's answer carries no confirmation id and the log
+        # gains none (A05 rule 2; A14 rules 3, 5).
+        _mints_no_confirmation(rt, answer, entries)
         assert _audit(rt) == entries
         assert _store(rt) == store_before
         return answer

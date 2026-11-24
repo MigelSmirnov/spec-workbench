@@ -741,6 +741,35 @@ def test_concurrent_creates_make_one_record(semantic_runtime):
             assert answer["answer_kind"] != "refused", answers
         assert sorted(answer["changed"] for answer in answers) == [False, True], answers
 
+    def race(calls, table, records, entries):
+        """Two calls at once, and the store read before and after them.
+
+        A01-3, A01-4 under concurrency: the store afterwards is the store
+        before plus what the one accepted create writes — `records` new rows
+        of its own table and `entries` audit entries (M09, "the actions that
+        write an entry": creating a project and recording a customer write
+        one; adding a room and publishing a pointer none) — every row held
+        before unchanged and no other table touched. The repeat answered, or
+        the conflict refused, wrote nothing of its own.
+        """
+        before = _store(rt)
+        answers = _at_once(*calls)
+        after = _store(rt)
+        for name in TABLES:
+            old, new = before[name], after[name]
+            for row in old:
+                if name != "audit_sequence_rows":
+                    assert row in new, (name, row)
+            if name == "audit_sequence_rows":
+                # M12: the one sequence row moves only with a written entry.
+                assert len(new) == len(old) or not old, (name, new)
+                if not entries:
+                    assert new == old, (name, old, new)
+                continue
+            grown = {table: records, "audit_entry_rows": entries}.get(name, 0)
+            assert len(new) == len(old) + grown, (name, old, new)
+        return answers
+
     def one_made_one_conflict(answers):
         # A01 rule 5: the second is refused as a conflict, stage (6).
         accepted = [a for a in answers if a["answer_kind"] != "refused"]
@@ -752,16 +781,22 @@ def test_concurrent_creates_make_one_record(semantic_runtime):
 
     # Projects, equal facts.
     k = rt.new_request_id()
-    answers = _at_once(lambda: _create_project(rt, k), lambda: _create_project(rt, k))
+    answers = race(
+        (lambda: _create_project(rt, k), lambda: _create_project(rt, k)),
+        "project_rows", 1, 1,
+    )
     one_record(answers)
     assert _card(answers[0]) == _card(answers[1])
     made_project = _card(answers[0])["project_id"]
 
     # Projects, different facts.
     k = rt.new_request_id()
-    answers = _at_once(
-        lambda: _create_project(rt, k, display_name="Casa Oeste"),
-        lambda: _create_project(rt, k, display_name="Casa Sur"),
+    answers = race(
+        (
+            lambda: _create_project(rt, k, display_name="Casa Oeste"),
+            lambda: _create_project(rt, k, display_name="Casa Sur"),
+        ),
+        "project_rows", 1, 1,
     )
     other_project = _card(one_made_one_conflict(answers))["project_id"]
     assert sorted(_listed_ids(rt)) == sorted([project_id, second_project, made_project, other_project])
@@ -769,11 +804,14 @@ def test_concurrent_creates_make_one_record(semantic_runtime):
     # Customers, equal facts, then different facts.
     k = rt.new_request_id()
     record = lambda **facts: rt.owner("record_customer", request_id=k, customer=_customer_facts(**facts))  # noqa: E731
-    answers = _at_once(record, record)
+    answers = race((record, record), "customer_rows", 1, 1)
     one_record(answers)
     assert answers[0]["customer"] == answers[1]["customer"]
     k = rt.new_request_id()
-    answers = _at_once(lambda: record(name="Eva Martín"), lambda: record(name="Eva Martin"))
+    answers = race(
+        (lambda: record(name="Eva Martín"), lambda: record(name="Eva Martin")),
+        "customer_rows", 1, 1,
+    )
     one_made_one_conflict(answers)
     listed = rt.owner("list_customers")["items"]
     assert len(listed) == 2
@@ -783,18 +821,21 @@ def test_concurrent_creates_make_one_record(semantic_runtime):
     add = lambda name, project=project_id: _kernel(  # noqa: E731
         rt, session_id, "add_room", project_id=project, room_name=name, request_id=k
     )
-    answers = _at_once(lambda: add("Cocina"), lambda: add("Cocina"))
+    answers = race((lambda: add("Cocina"), lambda: add("Cocina")), "room_rows", 1, 0)
     one_record(answers)
     assert answers[0]["room"] == answers[1]["room"]
     k = rt.new_request_id()
-    answers = _at_once(lambda: add("Baño"), lambda: add("Aseo"))
+    answers = race((lambda: add("Baño"), lambda: add("Aseo")), "room_rows", 1, 0)
     one_made_one_conflict(answers)
     assert len(_owner_rooms(rt, project_id)) == 2
 
     # One request id for rooms of two different projects: two rooms — the
     # lookup is among the rooms of the call's project (A01 rule 4, A01-1).
     k = rt.new_request_id()
-    answers = _at_once(lambda: add("Terraza", project_id), lambda: add("Terraza", second_project))
+    answers = race(
+        (lambda: add("Terraza", project_id), lambda: add("Terraza", second_project)),
+        "room_rows", 2, 0,
+    )
     for answer in answers:
         assert answer["answer_kind"] == "room", answers
         assert answer["changed"] is True, answers
@@ -808,11 +849,32 @@ def test_concurrent_creates_make_one_record(semantic_runtime):
         rt, session_id, "publish_artifact_pointer",
         project_id=second_project, pointer=_pointer(), request_id=k,
     )
-    answers = _at_once(by_kernel, by_kernel)
+    answers = race((by_kernel, by_kernel), "pointer_rows", 1, 0)
     one_record(answers)
     assert answers[0]["pointer"] == answers[1]["pointer"]
     assert answers[0]["pointer"]["version"] == 1
     assert len(_owner_pointers(rt, second_project)) == 1
+
+    # Pointers of one project by one publisher, different facts (another
+    # uri): one made, the other refused as a conflict (A01 rule 5). On a
+    # project of its own, granted to the session, so that the pointer made is
+    # the type's first and supersedes none: the store changes by that row.
+    third_project = _new_project(rt, display_name="Casa Norte")
+    _grant(rt, session_id, third_project)
+    k = rt.new_request_id()
+    by_kernel_uri = lambda uri: _kernel(  # noqa: E731
+        rt, session_id, "publish_artifact_pointer",
+        project_id=third_project, pointer=_pointer(uri=uri), request_id=k,
+    )
+    made_pointer = one_made_one_conflict(race(
+        (
+            lambda: by_kernel_uri("https://presupro.example/estimates/2"),
+            lambda: by_kernel_uri("https://presupro.example/estimates/3"),
+        ),
+        "pointer_rows", 1, 0,
+    ))
+    assert made_pointer["pointer"]["version"] == 1
+    assert len(_owner_pointers(rt, third_project)) == 1
 
     # Another publisher with the same request id and pointer: the owner beside
     # Kernel — the publisher is one of the facts (A01 rule 6).
@@ -824,7 +886,7 @@ def test_concurrent_creates_make_one_record(semantic_runtime):
     by_owner = lambda: rt.owner(  # noqa: E731
         "publish_pointer", target=project_id, pointer=_pointer(), request_id=k
     )
-    one_made_one_conflict(_at_once(by_kernel, by_owner))
+    one_made_one_conflict(race((by_kernel, by_owner), "pointer_rows", 1, 0))
     assert len(_owner_pointers(rt, project_id)) == 1
 
     # Another Kernel session as publisher: refused too (A01 rule 6).

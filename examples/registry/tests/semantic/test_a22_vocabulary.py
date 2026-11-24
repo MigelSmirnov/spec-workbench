@@ -190,6 +190,9 @@ def test_undeclared_type_publish_refused(semantic_runtime):
         _kernel_publish(rt, project_id, "estimate", "https://presupro.example/e/1"), "pointer"
     )["pointer"]
     assert published["version"] == 1
+    # A22-1: the first release declares `estimate` with owner service
+    # PresuPro (ARTIFACT_TYPE_OWNERS, FIRST_RELEASE above).
+    assert published["owner_service"] == "presupro"
     assert _owner_list(rt, project_id) == [published]
 
 
@@ -213,6 +216,9 @@ def test_removed_type_pointers_still_listed(semantic_runtime):
     _assert_unknown_type(
         _kernel_publish(rt, project_a, "estimate", "https://presupro.example/a/3")
     )
+    # Its latest is unknown too (rule 3; State 5 `read_latest_artifact`), not
+    # "none published": the pointers stay listed, the type is no longer read.
+    _assert_unknown_type(_latest(rt, project_a, "estimate"))
     assert rt.store_rows("pointer_rows") == rows
 
     # A22-2, rule 4: every pointer of the removed type, as it was — status,

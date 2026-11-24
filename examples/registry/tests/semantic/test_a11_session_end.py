@@ -159,11 +159,15 @@ def test_ended_session_access_read_refused(semantic_runtime):
     session_id = _session_id("ended")
     _full_session(rt, session_id, project_id)
 
-    # Control: while registered, reading its access is answered.
+    # Control: while registered, reading its access is answered, and the
+    # session table holds its one row.
     _answered(_kernel(rt, session_id, "read_session_access"), "session_access")
+    assert len(_rows_naming(rt, session_id)) == 1
 
     # Kernel ends it, stating no version (A12 rule 3).
     _answered(_kernel(rt, session_id, "end_agent_session"), "session_ended")
+    # A11-1 "no record of x remains": no row of the session table names it.
+    assert _rows_naming(rt, session_id) == []
 
     # Now unregistered: the one answer of A10 rule 3, field for field the
     # answer for an identity never registered (A11 rule 4).
@@ -250,6 +254,10 @@ def test_owner_ended_session_call_refused(semantic_runtime):
         "agent_projection",
     )
 
+    # Control on the reading: each session has its row before the end.
+    assert len(_rows_naming(rt, session_id)) == 1
+    assert len(_rows_naming(rt, other_id)) == 1
+
     # The owner ends it, stating the access version seen (A12 rule 3).
     _answered(
         rt.owner(
@@ -257,6 +265,10 @@ def test_owner_ended_session_call_refused(semantic_runtime):
         ),
         "session_ended",
     )
+    # A11-1 "no record of x remains": no row of the session table names the
+    # ended session; the other keeps its row.
+    assert _rows_naming(rt, session_id) == []
+    assert len(_rows_naming(rt, other_id)) == 1
 
     # Every next agent-authority call naming it is refused with the one answer
     # of A10 rule 3: a project call, a write, a session operation.
@@ -329,6 +341,30 @@ def test_ended_session_leaves_no_record(semantic_runtime):
     assert living_access["granted_project_ids"] == [project_id]
     assert living_access["active_project_id"] == project_id
     assert living_access["request_pending"] is True
+    assert len(rt.store_rows(SESSION_TABLE)) == 1
+
+    # A11-1 "not registered(x)": a call naming either ended session gets the
+    # one answer of A10 rule 3, field for field the answer for an identity
+    # never registered (A11 rule 4); the owner finds neither and lists
+    # neither. Control: the living session's same call is answered.
+    never = _agent_call_refused(
+        _kernel(rt, _session_id("never"), "read_session_access")
+    )
+    for ended_id in (by_kernel, by_owner):
+        assert _agent_call_refused(
+            _kernel(rt, ended_id, "read_session_access")
+        ) == never
+        _refused(
+            rt.owner("read_session", target=ended_id),
+            "not_found",
+            STAGE_EXISTENCE,
+            ["unknown_session"],
+        )
+    _answered(_kernel(rt, living, "read_session_access"), "session_access")
+    listed = _listed_ids(rt)
+    assert by_kernel not in listed and by_owner not in listed
+    assert living in listed
+    # Reading changed nothing: still only the living session's row.
     assert len(rt.store_rows(SESSION_TABLE)) == 1
 
     # The audit entries that name an ended session stay (A11 rule 3, M09): the

@@ -77,6 +77,8 @@ HOSTILE_TAG = "zq"
 # recorded as Kernel gives it (R0-53, State 5 register_session) and is the
 # target of the session's links (OWNER_TARGET_PARAMETER).
 HOSTILE_QUERY = HOSTILE + "?#/=+% x"
+# A session identity with nothing to escape, the control of HOSTILE_QUERY.
+PLAIN_SESSION = "a19-plain-session"
 
 
 # --- pages ------------------------------------------------------------------
@@ -399,6 +401,10 @@ def test_every_shown_value_escaped_csp_forbids_script(semantic_runtime):
     project_id = card["project_id"]
     rt.owner("add_room", target=project_id, request_id=rt.new_request_id(), room_name=HOSTILE)
     _grant_session(rt, HOSTILE_QUERY, project_id, request_text=HOSTILE)
+    # A plain session beside it, granted the same project: its links are the
+    # control the hostile session's links are compared with (origin, path,
+    # parameters), so "unchanged" is measured, not assumed.
+    _grant_session(rt, PLAIN_SESSION, project_id)
 
     # Element content: every page showing a stored value shows it as text.
     pages = [
@@ -417,14 +423,25 @@ def test_every_shown_value_escaped_csp_forbids_script(semantic_runtime):
     # A value of a link's query: the session's identity, the target of the
     # session's links and forms (OWNER_TARGET_PARAMETER), reads back from
     # each as that one whole value, path and other parameters unchanged.
-    for path, query in (("/list_sessions", None),
-                        ("/read_session", {OWNER_TARGET_PARAMETER: HOSTILE_QUERY})):
-        _, page, _ = _get(rt, path, query)
+    def shape(links):
+        # A link's origin, path and parameter names: what the value must not
+        # change (A19 Required test 5).
+        return sorted(
+            (parts.scheme, parts.netloc, parts.path, parts.fragment, tuple(sorted(q)))
+            for parts, q in links
+        )
+
+    for path, hostile_query, plain_query in (
+        ("/list_sessions", None, None),
+        ("/read_session", {OWNER_TARGET_PARAMETER: HOSTILE_QUERY},
+         {OWNER_TARGET_PARAMETER: PLAIN_SESSION}),
+    ):
+        _, page, _ = _get(rt, path, hostile_query)
         assert HOSTILE_QUERY in page.text()
         targets = _targets(page)
         session_links = [
             (parts, q) for parts, q in targets
-            if q[OWNER_TARGET_PARAMETER] != [project_id]
+            if q[OWNER_TARGET_PARAMETER] not in ([project_id], [PLAIN_SESSION])
         ]
         assert session_links, f"{path}: no link or form names the session"
         for parts, q in session_links:
@@ -432,6 +449,18 @@ def test_every_shown_value_escaped_csp_forbids_script(semantic_runtime):
             assert parts.path in OWNER_PATHS
             assert parts.fragment == ""
             assert parts.scheme in ("", "http", "https")
+        # Control: the plain session's links, on the same page for the list
+        # and on its own page for the card, have the very same origins, paths
+        # and parameters — the hostile value changed none of them.
+        if plain_query is None:
+            plain_links = [(p_, q) for p_, q in targets
+                           if q[OWNER_TARGET_PARAMETER] == [PLAIN_SESSION]]
+        else:
+            _, plain_page, _ = _get(rt, path, plain_query)
+            plain_links = [(p_, q) for p_, q in _targets(plain_page)
+                           if q[OWNER_TARGET_PARAMETER] == [PLAIN_SESSION]]
+        assert plain_links, f"{path}: no link or form names the plain session"
+        assert shape(session_links) == shape(plain_links), path
 
     # An attribute's value: the import's confirmation step carries its picks
     # as form fields (owner_interface: "a confirmation step's form MUST carry

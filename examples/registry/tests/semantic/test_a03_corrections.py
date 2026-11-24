@@ -182,6 +182,10 @@ def test_correction_without_alias_clears_it(semantic_runtime):
     alias. Shows A03-1.
     """
     rt = semantic_runtime
+    # A03 rule 1: the customer link is an editable fact of the project; the
+    # correction below links this Customer, newly named, so editable(p) = f is
+    # shown on the link too, not only on the alias.
+    named = _record_customer(rt, name="Ana Lopez")
     created = _create_project(
         rt,
         display_name="Casa Lopez",
@@ -213,6 +217,7 @@ def test_correction_without_alias_clears_it(semantic_runtime):
     assert kept["changed"] is True
     assert kept["card"]["alias"] == "LOPEZ-1"
     assert kept["card"]["display_name"] == "Casa Lopez Garcia"
+    assert kept["card"]["customer_ref"] is None  # not given, so none
 
     rt.clock.advance(hours=1)
     rt.sign_in()  # past the 30 idle minutes: a new owner session (A13 rule 2)
@@ -224,6 +229,7 @@ def test_correction_without_alias_clears_it(semantic_runtime):
         REVISION_FIRST + 1,
         display_name="Casa Lopez Garcia",
         alias=None,
+        customer_ref=named["customer_ref"],
         object_kind=None,
         floor_area="85.5",
         rooms_count="3",
@@ -237,6 +243,7 @@ def test_correction_without_alias_clears_it(semantic_runtime):
         # A03-1: editable(p) = f — alias cleared, the facts given kept.
         assert shown["alias"] is None
         assert shown["display_name"] == "Casa Lopez Garcia"
+        assert shown["customer_ref"] == named["customer_ref"]
         obj = shown["object_facts"]
         assert obj["address"] == ADDRESS
         assert obj["object_kind"] is None

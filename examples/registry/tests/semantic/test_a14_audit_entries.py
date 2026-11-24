@@ -757,6 +757,7 @@ def test_accepted_change_writes_one_entry_in_transaction(semantic_runtime):
     rt = semantic_runtime
     _every_audited_action(rt)
 
+    before_record = _log(rt)
     customer = _ok(
         rt.owner(
             "record_customer",
@@ -766,6 +767,10 @@ def test_accepted_change_writes_one_entry_in_transaction(semantic_runtime):
         "customer",
     )["customer"]
     ref = customer["customer_ref"]
+    # The Customer this test restricts is itself an accepted change of
+    # M09.actions: its recording wrote exactly one entry, customer_recorded
+    # (OWNER_AUDIT_ACTIONS), outcome accepted.
+    _one_new_entry(rt, before_record, "customer_recorded", _customer_subject(ref))
     log = _log(rt)
     store_log = _store_log(rt)
     customers = rt.store_rows("customer_rows")

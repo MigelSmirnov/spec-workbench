@@ -308,6 +308,27 @@ def test_backup_during_write_is_one_snapshot(semantic_runtime):
     third_name = _kept(rt)[_at(third_day, 3)]
     _assert_one_snapshot(rt.read_backup(third_name), _record(rt, third_name))
 
+    # The backup taken during the write restores to the store before it
+    # (Required test 1: "restores either before or after it"): the owner puts
+    # it in place of the store (outside Registry, R0-89) and Registry starts
+    # over it (A18 rule 8). The restored store holds `first` with its entry
+    # and the counter at 1 — not `second`, not a part of its transaction.
+    assert rt.restore(name) is None
+    restored = _store(rt)
+    assert _project_ids(restored) == [first]
+    assert _last_sequence(restored) == 1
+    _assert_one_snapshot(restored, record)
+    # Read back through the surface (a restart ended the owner's session, so
+    # the next owner call signs in again): `first` is answered, `second` is
+    # unknown — `not_found` / `unknown_project`, stage (3) (State 5, "Closed
+    # set of refusal codes"; read_project_card Errors).
+    assert rt.owner("read_project", target=first)["card"]["project_id"] == first
+    missing = rt.owner("read_project", target=second)
+    assert missing["answer_kind"] == "refused", missing
+    assert missing["code"] == "not_found"
+    assert missing["stage"] == 3
+    assert [f["kind"] for f in missing["failures"]] == ["unknown_project"]
+
 
 def test_failed_backup_still_deletes_old_backups(semantic_runtime):
     """A run whose backup fails its check still runs its third step: backups

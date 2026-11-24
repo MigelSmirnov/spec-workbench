@@ -49,6 +49,7 @@ test's own temporary directories, set up before Registry starts, as a host's
 administration sets them up.
 """
 
+import itertools
 import re
 import socket
 import sqlite3
@@ -256,13 +257,10 @@ def test_equal_secrets_stop_start(semantic_runtime, tmp_path):
     rt = semantic_runtime
     full = _settings(tmp_path)
     shared = "a17-shared-secret-5d3b1f9e7c2a4086e1b3d5f7"
-    pairs = [
-        ("token_presupro", "token_client_portal"),
-        ("token_cabinet", "token_cabinet_kernel"),
-        ("token_presupro", "owner_credential"),
-        ("token_cabinet_kernel", "backup_key"),
-        ("owner_credential", "backup_key"),
-    ]
+    # A17-2 quantifies over every pair of the six secrets: all fifteen pairs
+    # of the four tokens, the owner credential and the backup key.
+    pairs = list(itertools.combinations(SECRET_ITEMS, 2))
+    assert len(pairs) == 15
     for first, second in pairs:
         settings = {**full, first: shared, second: shared}
         diagnostic = _start(rt, settings)
@@ -285,7 +283,8 @@ def test_secret_length_counted_in_utf8_bytes(semantic_runtime, tmp_path):
 
     _stops(rt, {**full, "token_presupro": "t" * 16}, "token_presupro")
 
-    for item in ("token_cabinet", "owner_credential", "backup_key"):
+    # Every secret of the configuration, each token among them (A17-2).
+    for item in SECRET_ITEMS:
         short = (item[:6] + "-" + "x" * SECRET_MIN_BYTES)[: SECRET_MIN_BYTES - 1]
         exact = (item[:6] + "-" + "y" * SECRET_MIN_BYTES)[:SECRET_MIN_BYTES]
         assert len(short.encode("utf-8")) == SECRET_MIN_BYTES - 1
