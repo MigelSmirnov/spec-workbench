@@ -101,12 +101,15 @@ session, compared in constant time (A13 rule 5). A request that passed
 completes even if a limit or a sign-out comes while it runs or waits (A13
 rule 2). The arrival is fixed in one hold of the session-table lock
 (Conventions, "Locks of an owner request"): this operation reads the clock,
-looks the session up, checks it and restarts its 30 minutes, then releases
-the table lock before it waits for the import lock or a place on the
-session's lock; nothing else is held for the request between its headers
-and that hold. After the check, a change that touches no uploaded file takes its
-place on the session's lock at once; a request that touches one first waits
-for the import lock and then takes its place, so the locks are always taken
+looks the session up, checks it, restarts its 30 minutes and, for a request
+that passed and needs a lock, draws its turn — a ticket of the import lock
+for a request that touches an uploaded file, a place on the session's lock
+for any other change, neither waiting — then releases the table lock and
+only then waits for that turn (owner, 2026-11-24); nothing else is held for
+the request between its headers and that hold. A change that touches no
+uploaded file thus has its place on the session's lock from its admission;
+a request that touches one waits for its ticket of the import lock and then
+takes its place, so the locks are always taken
 import first and no place on a session's lock waits for the import lock (A16
 rule 2). A request asks for the import lock when it is admitted. The import
 lock is granted in the order requests asked for it, and

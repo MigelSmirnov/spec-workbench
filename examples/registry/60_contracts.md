@@ -221,7 +221,15 @@ readings, so an action's today is `operations`' (`_today_of`).
   tuple's positions cannot be read. The CSRF value is the field
   `OWNER_CSRF_FIELD` (`csrf`) names, the upload's first part included, and
   `OwnerRequest.csrf_value` carries it from the form's reading to the
-  request's admission, since a body is read once. The session cookie is
+  request's admission, since a body is read once. The import's
+  confirmation step carries, besides the picks, the bound upload's number
+  and digest as the fields `upload_number` and `file_digest` of
+  `OwnerValues`, rendered from the step's `ImportInputs`, so its submission
+  binds what was shown (owner, 2026-11-24). An action's target is one
+  identity — the project, the customer, the agent session or the pointer it
+  acts on; granting a project to a session, making it the active one and
+  revoking it act on the session, and name the project as the field
+  `project_id` of `OwnerValues` (owner, 2026-11-24). The session cookie is
   named `OWNER_SESSION_COOKIE_NAME` (`__Host-registry_session`): set
   `Secure`, `HttpOnly`, `Path=/` and no `Domain`, which the `__Host-` prefix
   makes a browser require (A13 rule 1), and `SameSite=Strict`, so a browser
@@ -383,6 +391,21 @@ request answered before its body was read to its framed end — any request,
 not an upload alone — has the remainder discarded unread and its
 connection closed; a connection carries a next request only after one whose
 body was read to its end.
+
+That close is staged (RFC 9112 section 9.6; owner, 2026-11-24): after the
+answer is written the listener shuts the socket's writing side, then reads
+and drops what the client still sends until the client closes, the imported
+`LISTENER_CLOSE_DRAIN_SECONDS` (2) have passed since the shutdown, or the
+imported `LISTENER_CLOSE_DRAIN_MAX_BYTES` (64 MiB) have been dropped,
+whichever comes first, and only then closes the socket. A plain close with
+bytes still unread makes the operating system reset the connection and drop
+what it had not yet sent, so a client still sending its body lost the
+answer (prototype `listener_proto`, 2026-11-17: 0 of 4 answers above about
+100 KB arrived over loopback with a plain close, 4 of 4 with the staged
+one). The dropped bytes are read into nothing. An answer larger than the
+socket's buffers, to a client that reads only after it has sent everything,
+can still wait out the read timeout; the early answers are refusal pages
+and stay small.
 
 The timeout is a wait for progress, not a deadline for the request: it
 applies to each read of the socket and restarts with every byte that

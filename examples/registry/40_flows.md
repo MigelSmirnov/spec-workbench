@@ -966,10 +966,14 @@ minted `customer_ref`.
 3. **Show the step.** Only when the mapping shows no malformed record, no
    conflict and no missing value (rule 1),
    `capability:owner_sessions.show_confirmation_step` binds a confirmation
-   value to the import and the digest of the file's digest and the picks,
-   names, aliases and Customer values (A13 rule 6).
+   value to the import and the digest of the kept upload's number and the
+   file's digest and the picks, names, aliases and Customer values (A13
+   rule 6), which the step's form carries (owner, 2026-11-24). A mapping or
+   a step asked for while no file is kept is refused (`file_not_kept`) by
+   `capability:migration_import.read_import_mapping`, after the closure.
 4. **Confirm.** Under the import lock and the session's lock,
-   `capability:owner_sessions.take_confirmation` uses the value up;
+   `capability:owner_sessions.take_confirmation` uses the value up, the
+   binding the one the submitted form carries;
    `capability:store.run_in_transaction` opens the transaction with the
    action's instant from `capability:clock.recorded_now`; and
    `capability:migration_import.confirm_import` refuses when the closure

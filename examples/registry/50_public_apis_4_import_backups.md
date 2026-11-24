@@ -22,7 +22,8 @@ its projects, or, for the owner's picks, the mapping (A16 rules 1, 3–5).
 The read transaction; the mode, `upload` or `mapping`; at `upload`, the
 request's declared length, or that it declared none, and its unread byte
 stream, which this operation reads at most one byte past the imported
-`IMPORT_FILE_MAX_BYTES` constant; at `mapping`, the kept file's bytes;
+`IMPORT_FILE_MAX_BYTES` constant; at `mapping`, the kept file's bytes, or
+that none is kept (owner, 2026-11-24);
 for `mapping`, the picks as the owner gave them, a list that keeps a
 project given twice so it can be refused — possibly empty — each with the display name and
 alias it arrives under, and for each Customer the import will make its
@@ -71,7 +72,11 @@ None.
 ### Enforces
 
 The closure first and alone: when it exists, `import_closed` is the answer,
-before any other check (A16 rule 8; Conventions, "Stages"). Then stage (4):
+before any other check (A16 rule 8; Conventions, "Stages"). Then, at
+`mapping`, the kept file: when none is kept — a later upload's refusal kept
+nothing, the session ended, or an accepted import dropped every upload —
+`file_not_kept` is answered alone, there being no bytes to map, and the
+step is not shown (owner, 2026-11-24). Then stage (4):
 a pick that is not a project of the file is outside its closed list, a
 project given twice refused (`duplicate_pick`), whatever values each
 time carries; the file over the
@@ -95,7 +100,7 @@ missing inside a brought-in record is that record's malformation (rule 4); `conf
 
 ### Errors
 
-`refused` (`import_closed`); `invalid_request` (`file_too_large`,
+`refused` (`import_closed`, `file_not_kept`); `invalid_request` (`file_too_large`,
 `file_unreadable`, `file_malformed`, `outside_closed_list` for a pick that
 is not a project of the file, `duplicate_pick`).
 

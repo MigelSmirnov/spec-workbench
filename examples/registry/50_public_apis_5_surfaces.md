@@ -122,9 +122,20 @@ compositions: an erasure with `agent_sessions.drop_project_from_sessions`
 and, deleting whole, `artifact_pointers.delete_pointers_of_project`; a grant
 through a request with `projects.validate_project_reference`; the import
 through `migration_import`, closed by `record_migration_closure`, then
-`owner_sessions.drop_uploaded_files`. The entry through
+`owner_sessions.drop_uploaded_files`. The import's confirmation binds the
+upload's number and digest with the picks: when the step is shown, those of
+the upload `owner_sessions.read_uploaded_file` gives under the import lock,
+which the step's form then carries; when it is submitted, those the form
+carried, which `migration_import.confirm_import` checks against the kept
+upload — so a step whose file a later upload replaced passes the
+confirmation and is refused `file_not_kept`, and one whose import another
+session accepted is refused `import_closed` (A13 rule 6, A16 rules 2, 8;
+owner, 2026-11-24). The entry through
 `audit_log.append_audit_entry` only when the action changed state and M09
-lists it, and for an erasure of old entries after
+lists it — the row of the imported `OWNER_AUDIT_ACTIONS` constant for the
+action, with a customer mark's transition or a project erasure's kind, and
+for an answer to an access request only when it granted a project (M09;
+owner, 2026-11-24) — and for an erasure of old entries after
 `audit_log.erase_audit_entries_before` whatever it removed (A15 rules 4, 6);
 the confirmation id from `random_values.mint_identity` only then (A14 rule
 5). No owner answer is refused for its class.
@@ -270,10 +281,10 @@ Two sign-ins of one browser whose answers cross make two valid sessions;
 the browser keeps the cookie it received last, and the other session,
 carried by no cookie, ends by its limits (A13 rule 2).
 After an upload's answer, whatever it was — accepted, or refused before any
-or after some bytes were read — `owner_interface` discards the unread
-remainder of the body without reading it into anything and closes the
-connection its listener accepted; a connection that carried an upload is
-never reused. A proxy or TLS terminator in front of Registry is the host's
+or after some bytes were read — the unread remainder of the body is
+discarded without being read into anything and the connection its listener
+accepted is closed by the listener's staged close (State 6, "The
+listeners"); a connection that carried an upload is never reused. A proxy or TLS terminator in front of Registry is the host's
 (Explicit exclusions).
 
 ### Enforces

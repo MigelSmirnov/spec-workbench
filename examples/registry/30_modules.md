@@ -355,13 +355,17 @@ status, as v1 answered: `not_found` 404, `internal_error` 500, every other
 code 422 (owner, 2026-11-17); and the bound of the head an upload form sends
 before its file, its CSRF field among it (A13 rule 5, owner, 2026-11-17);
 the listeners' read timeout, how long a listener waits for a request's next
-bytes before it closes the connection (State 2 round-90 T8).
+bytes before it closes the connection (State 2 round-90 T8); the bounds of a
+listener's staged close, how long and how many bytes it reads and drops
+after answering a request whose body it did not read to its end; which
+audit action M09 has each accepted owner action write (R0-58) (owner,
+2026-11-24).
 The list names groups; the data closure names each constant,
 and every one is exported.
 
 ### Knows
 
-`models`, for exactly the row models and enumerations of its six tables:
+`models`, for exactly the row models and enumerations of its seven tables:
 `ArtifactTypeOwner` (a type with its owner service) and `ServiceName` for
 `ARTIFACT_TYPE_OWNERS`; `ServiceRight` (a service and an operation) with
 `ServiceName` and `ServiceOperation` for `SERVICE_RIGHTS`;
@@ -371,8 +375,11 @@ answer model's name and a field's) for `PERSONAL_DATA_FIELDS`;
 `RefusalHttpStatus` (a code and its status) with `RefusalCode` for
 `REFUSAL_HTTP_STATUSES`; `OwnerActionRoute` (an owner action, its method and
 path, whether it is a change and whether it touches an uploaded file) with
-`OwnerAction` for `OWNER_ACTIONS`. Its other constants are scalars and
-import nothing.
+`OwnerAction` for `OWNER_ACTIONS`; `OwnerAuditAction` (an owner action,
+a customer mark's transition or a project erasure's kind where the action
+has one, and the audit action it writes) with `OwnerAction`,
+`CustomerTransition`, `ProjectErasure` and `AuditAction` for
+`OWNER_AUDIT_ACTIONS`. Its other constants are scalars and import nothing.
 
 ### Must not own
 
@@ -438,6 +445,9 @@ OWNER_ACTIONS
 OWNER_TARGET_PARAMETER
 OWNER_CSRF_FIELD
 OWNER_SESSION_COOKIE_NAME
+OWNER_AUDIT_ACTIONS
+LISTENER_CLOSE_DRAIN_SECONDS
+LISTENER_CLOSE_DRAIN_MAX_BYTES
 ```
 
 ### Depth assessment
@@ -1210,7 +1220,8 @@ whole; an operation outside a service's rights is refused at stage (1) by
 `service_access`'s answer (A09 rule 3), never by a table of `operations`' own. A10 rule 3's
 placement: stage (2)'s refusal hides every later one. A14 rules 1 and 5:
 appending the audit entry in the action's transaction when the action changed
-state. A14 rule 5: `operations` mints a confirmed action's confirmation id
+state, its action the row of the data provider's `OWNER_AUDIT_ACTIONS` for
+an owner action (owner, 2026-11-24). A14 rule 5: `operations` mints a confirmed action's confirmation id
 inside the transaction only after the action's module has answered that it is
 accepted and changed state — or, for the erasure of old audit entries, that it
 is accepted, also when it removed nothing (A15 rule 6) — and hands it to the
@@ -1223,7 +1234,10 @@ confirmation id for a repeat. The compositions: erasing a project (with
 joining the agent projection with its published pointers. The store
 `store` opened, through `store.opened_store`, and the backup location,
 through `configuration.give_backup_location`, are asked by `operations`
-when an action needs them (owner, 2026-11-17).
+when an action needs them (owner, 2026-11-17). The import's confirmation
+binding: the kept upload's number and digest with the picks when the step
+is shown, the ones the submitted form carries when it is confirmed (owner,
+2026-11-24).
 
 ### Knows
 
@@ -1382,7 +1396,12 @@ header is malformed is refused by the listener from its headers alone, its
 connection closed, and reaches no surface; the body itself is never read
 ahead by the listener, so a body that ends before its framing says, or
 whose chunks are malformed, is a failure of the stream its reader sees
-while reading it; the 60-second pass
+while reading it; a request answered before its body was read to its end
+closes its connection by a staged close — its writing side shut, what the
+client still sends read and dropped up to the data provider's
+`LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES`, then
+closed — so the answer reaches a client still sending its body (RFC 9112
+section 9.6; owner, 2026-11-24); the 60-second pass
 of `owner_sessions` and the minute look of `backups` (A13 rule 2, A18 rule 1);
 that a restart ends every owner session (A13 rule 2).
 

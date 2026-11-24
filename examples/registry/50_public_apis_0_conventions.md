@@ -91,6 +91,14 @@ types and Python signatures are State 6's.
   takes its place on the session's lock — the latter after waiting for the
   import lock, granted in the order requests asked for it — and the session's
   lock is granted in the order places were taken (A13 rule 2, A16 rule 2).
+  The turn is drawn in the arrival's hold of the session-table lock: a
+  request touching an uploaded file draws its ticket of the import lock
+  there, any other change its place on the session's lock, each without
+  waiting; it waits for its turn only after it released the table lock. So
+  requests are served in the order they were admitted — a sign-out admitted
+  after a change completes after it, the pass after a change admitted before
+  it began, a second upload after the first — and drawing a turn waits for
+  nothing (owner, 2026-11-24; prototype `session_locks_proto`).
   `owner_sessions` also keeps one session-table lock, which guards every
   session's entry with its signed-out mark and its last-request reading:
   each read or write of them is made under it and only there — a sign-in
@@ -99,9 +107,9 @@ types and Python signatures are State 6's.
   readings by its one clock reading and removes those past a limit, and
   `give_session_csrf` reads one. It is taken last — after the import lock,
   the sign-in lock and a session's lock, where the path holds them — and
-  released before any other lock is taken, so the order of all four is
+  released before any other lock is waited for, so the order of all four is
   import, sign-in, session, table, and no holder of the table lock waits for
-  another (owner, 2026-11-17).
+  another (owner, 2026-11-17); drawing a turn in its hold is no wait.
 - **Diagnostics.** A diagnostic — a stopped start's, a failed backup run's —
   is one line on the process's standard error, which the host keeps; it
   names the failure and never a value (A17 rule 2, A18 rule 5).
@@ -147,11 +155,11 @@ second authority beside them. The values are the data closure's.
 | `agent_sessions` | `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE`, `ACCESS_VERSION_FIRST` |
 | `migration_import` | `ARTIFACT_TYPE_OWNERS`, `IMPORT_FILE_MAX_BYTES`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_LIFECYCLE` |
 | `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION` |
-| `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES`, `PERSONAL_DATA_FIELDS` |
+| `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES`, `PERSONAL_DATA_FIELDS`, `OWNER_AUDIT_ACTIONS` |
 | `service_api` | `SERVICE_AGENT_SESSION_HEADER`, `SERVICE_ANSWER_STATUS`, `REFUSAL_HTTP_STATUSES` |
 | `upload_framing` | `UPLOAD_FORM_HEAD_MAX_BYTES`, `OWNER_CSRF_FIELD` |
 | `owner_interface` | `OWNER_ACTIONS`, `OWNER_TARGET_PARAMETER`, `OWNER_CSRF_FIELD`, `OWNER_SESSION_COOKIE_NAME`, `SERVICE_ANSWER_STATUS`, `REFUSAL_HTTP_STATUSES` |
-| `instance_lifecycle` | `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS`, `LISTENER_READ_TIMEOUT_SECONDS` |
+| `instance_lifecycle` | `SESSION_PASS_SECONDS`, `BACKUP_LOOK_SECONDS`, `LISTENER_READ_TIMEOUT_SECONDS`, `LISTENER_CLOSE_DRAIN_SECONDS`, `LISTENER_CLOSE_DRAIN_MAX_BYTES` |
 
 Likewise `module_internal["configuration"]["runtime_settings"]` holds
 `load_runtime_settings`, which `configuration` calls itself, once per start;

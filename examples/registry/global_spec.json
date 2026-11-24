@@ -179,7 +179,7 @@
     "_answer_class": "(answer: OperationAnswer) -> DisclosureClass",
     "_class_exceeds": "(answer_class: DisclosureClass, highest: DisclosureClass) -> bool",
     "_audit_action_of": "(action: OwnerAction, transition: CustomerTransition | None, erasure: ProjectErasure | None) -> AuditAction | None",
-    "_confirmation_inputs": "(request: OwnerRequest) -> ConfirmationInputs",
+    "_confirmation_inputs": "(request: OwnerRequest, kept: UploadedFile | None) -> ConfirmationInputs",
     "_read_service_request": "(request: HttpRequest, body: bytes) -> ServiceRequest | None",
     "_write_service_answer": "(answer: OperationAnswer) -> HttpResponse",
     "_read_owner_request": "(request: HttpRequest, body: ByteStream) -> OwnerRequest",
@@ -276,9 +276,12 @@
     "load_configuration: [SCHEMA_CONSTRAINT] MUST accept an address only as host:port with no white space and no sign: the host either a dotted-decimal IPv4 address with no leading zero in any part but a lone zero, or a bracketed IPv6 address in its standard text form with no zone identifier and not IPv4-mapped; the port ASCII decimal digits without a leading zero, from the imported LISTEN_PORT_MIN constant to the imported LISTEN_PORT_MAX constant.",
     "load_configuration: [PATH_OR_ARTIFACT_POLICY] MUST compare the store and the backup location by their absolute paths with every symbolic link resolved, a store file that does not exist yet compared as its resolved directory with its name added, and MUST fail naming both items when the paths are equal or one lies inside the other, and naming the item when its path cannot be resolved, a missing directory, a broken link or a loop included; it MUST NOT create, open or remove any file.",
     "load_configuration: [RETURN_SHAPE] MUST answer, when every check passes, a LoadedConfiguration holding the store path and the backup location as given and each listener address as a ListenAddress of its host without brackets and its port as an integer, the service API's address None for an owner-only start; it MUST keep the checked secrets in the module's memory, from which the give functions answer them, and MUST put no secret into its answer.",
+    "load_configuration: [ORCHESTRATION] MUST judge an address item well formed exactly when _parse_listen_address answers a ListenAddress for its text, and MUST put that ListenAddress into its LoadedConfiguration, parsing no address in any other way.",
     "give_service_tokens: [RETURN_SHAPE] MUST answer one ServiceToken for each member of = models.ServiceName, in the enumeration's order, with the token the last passed load_configuration kept for it, or an empty tuple when that start is owner-only; it MUST NOT read the environment or call load_runtime_settings again.",
     "give_owner_credential: [RETURN_SHAPE] MUST answer the owner credential exactly as the last passed load_configuration kept it, and MUST NOT read the environment or call load_runtime_settings again.",
     "give_backup_key: [RETURN_SHAPE] MUST answer the backup key exactly as the last passed load_configuration kept it, and MUST NOT read the environment or call load_runtime_settings again.",
+    "give_backup_location: [RETURN_SHAPE] MUST answer the backup location exactly as the last passed load_configuration answered it in its LoadedConfiguration and kept it, and MUST NOT read the environment or call load_runtime_settings again.",
+    "_parse_listen_address: [RETURN_SHAPE] MUST answer, for a text in the one address form load_configuration accepts, a ListenAddress of its host without brackets and its port as an integer, and MUST answer None for any other text, raising nothing.",
     "StoreRepository.insert_project_row: [DEPENDENCY_BOUNDARY] MUST add the given row as one new row of project_rows, inside the transaction the store holds on its connection, never committing or rolling it back; a key already present is an integrity error raised to the caller and no row is replaced.",
     "StoreRepository.load_project_row: [DEPENDENCY_BOUNDARY] MUST answer the row of project_rows whose project_id equals the given value, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; it changes nothing.",
     "StoreRepository.find_project_row_by_request_id: [DEPENDENCY_BOUNDARY] MUST answer the row of project_rows whose create_request_id equals the given value, or None when there is none, inside the transaction the store holds on its connection, never committing or rolling it back; two such rows are an integrity error raised to the caller, and it changes nothing.",
@@ -317,11 +320,13 @@
     "TransactionStep.run: [BEHAVIOR] Every implementation MUST run one action's step on the StoreTransaction that run_in_transaction or read_in_transaction created and hands it as transaction, and answer the step's OperationAnswer, a refusal included, without committing, rolling back or keeping the transaction after it returns.",
     "OwnerStep.run: [BEHAVIOR] Every implementation MUST run one owner request that admit_owner_request admitted, for the owner session session_id names, while admit_owner_request holds the locks the request needs, and answer its OperationAnswer, a refusal included, without taking or releasing those locks itself.",
     "UploadBody.read: [BEHAVIOR] Every implementation MUST answer the next bytes of the upload's stream, at most size of them, and an empty bytes value only at the stream's end, size being passed positionally; a stream that fails raises to the caller.",
+    "ByteStream.read: [BEHAVIOR] Every implementation MUST answer the next bytes of the request's body, at most size of them, size being passed positionally, and empty bytes only at the body's end, which is where HTTP's framing ends it, after its Content-Length bytes or at a chunked body's last chunk, never waiting for a byte past that end; a connection that fails or ends before that end raises to the caller.",
     "RegistryStore.__init__: [BEHAVIOR] MUST keep store_path and one lock that serialises every transaction on the store's one connection, and MUST open no connection and touch no file: open_store opens the connection and discard_new_store closes it.",
     "open_store: [PATH_OR_ARTIFACT_POLICY] MUST first remove a file at the store's path with the imported STORE_TEMPORARY_SUFFIX constant added, and no other file; when that file cannot be removed and the store's file is absent it MUST answer a StartDiagnostic naming that failure.",
     "open_store: [BEHAVIOR] MUST, when the store's file does not exist and its directory does, make a new store under the temporary name: in one transaction on that file's own connection call create_store_schema, set the database's user version to the imported STORE_VERSION constant and write through upsert_audit_sequence_row the AUDIT member of = models.AuditSequenceName with no sequence number yet issued, commit, close that connection and rename the file to the store's name; a making that fails MUST remove the temporary file when it can, leave it otherwise, and answer a StartDiagnostic.",
     "open_store: [VALIDATION_ERROR] MUST open an existing store for reading and writing without creating it and answer a StartDiagnostic naming the failure, never a record's content, when it does not open, when its integrity check does not answer ok, when its foreign key check finds anything, or when its user version is not the imported STORE_VERSION constant; it MUST never give an existing store its schema again or change its version.",
     "open_store: [RETURN_SHAPE] MUST keep the actions' connection on registry_store, usable from every thread under its lock, set that connection to SQLite's write-ahead log, and answer an OpenedStore whose made_new is true only for a store this call made.",
+    "open_store: [BEHAVIOR] MUST, when it answers an OpenedStore, keep registry_store in the module's memory as the process's one open store, which opened_store answers, and MUST never replace a store kept before.",
     "discard_new_store: [PATH_OR_ARTIFACT_POLICY] MUST act only on a store open_store made new in this process, answering removed false and touching nothing otherwise; it MUST close the store's connection, then remove in this order the store's write-ahead log, shared-memory and rollback-journal companion files and last the store's file, reading each path's type without following a link, removing only a regular file, passing over a path that does not exist, and stopping at the first step that fails.",
     "discard_new_store: [RETURN_SHAPE] MUST answer a DiscardResult whose removed is true only when the store's path no longer names a file, and whose failure, for the first step that failed, names its member of = models.DiscardStep and its member of = models.DiscardFailureKind: CLOSE_FAILED for a close that fails, NOT_REGULAR_FILE for a link, directory or other non-regular object, TYPE_UNREADABLE for a type it cannot read, REMOVE_FAILED for a removal that fails; after a failed close it MUST try nothing else.",
     "run_in_transaction: [ORCHESTRATION] MUST take registry_store's lock, begin a write transaction that holds the database's write lock from its start, construct one StoreTransaction over a new SqliteStoreRepository of the actions' connection, hand that StoreTransaction to step and commit only when step answers anything but a RefusedAnswer, rolling back on a RefusedAnswer, and release the lock on every path.",
@@ -372,6 +377,8 @@
     "StoreTransaction.held_project_ids: [BEHAVIOR] MUST answer, in the order given and each once, the ids among project_ids for which load_project_row finds a row of this store.",
     "StoreTransaction.held_room_ids: [BEHAVIOR] MUST answer, in the order given and each once, the ids among room_ids for which load_room_row finds a row of this store.",
     "StoreTransaction.held_pointer_ids: [BEHAVIOR] MUST answer, in the order given and each once, the ids among pointer_ids for which load_pointer_row finds a row of this store.",
+    "opened_store: [RETURN_SHAPE] MUST answer the RegistryStore that open_store kept when it answered an OpenedStore in this process, the same object at every call, and MUST open, make or replace no store.",
+    "opened_store: [VALIDATION_ERROR] MUST raise RuntimeError when no open_store has answered an OpenedStore in this process, a wiring fault before which nothing is read or written.",
     "append_audit_entry: [BEHAVIOR] MUST read the counter with read_audit_sequence, take one more than its last_sequence_number as the entry's sequence number, write the raised counter with write_audit_sequence and the entry with insert_audit_entry, both on transaction, so that no number is reused after any erasure; it MUST NOT commit or roll back.",
     "append_audit_entry: [FIELD_ASSIGNMENT] MUST answer and write an AuditEntry whose recorded_at is instant, whose action, subject, principal, confirmation_id and erased_before are the given ones, whose outcome is the ACCEPTED member of = models.AuditOutcome, whose release_version is the imported RELEASE_VERSION constant and whose contract_version is the imported CONTRACT_VERSION constant.",
     "erase_audit_entries_before: [VALIDATION_ERROR] MUST answer a Refusal with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the DATE_AFTER_TODAY member of = models.RefusalKind when before is later than today, removing nothing.",
@@ -384,10 +391,13 @@
     "sign_in_owner: [BEHAVIOR] MUST, holding the module's one sign-in lock from its monotonic_reading to its decision, refuse without counting while a lockout holds, that is while the reading is less than the imported SIGN_IN_LOCKOUT_MINUTES constant, in nanoseconds of the monotonic reading, after the refusal that started it; otherwise compare the UTF-8 bytes of presented_credential with those of the credential give_owner_credential answers at this call through equal_in_constant_time, a missing credential counting as wrong.",
     "sign_in_owner: [BEHAVIOR] MUST record a wrong credential's refusal at its reading and start a lockout at that refusal when _refused_sign_ins_since then answers the imported SIGN_IN_REFUSAL_LIMIT constant or more, never extending a lockout that holds; a right credential MUST clear every recorded refusal and make a new OwnerSession whose session_id and csrf_value come from make_secret_value, whose signed-in and last-request readings are the reading, not signed out, with no pending confirmation, no uploaded file and no upload numbered yet, leaving every other session open.",
     "sign_in_owner: [RETURN_SHAPE] MUST answer SignedIn with the new session's session_id and csrf_value, or one Refusal with the UNAUTHENTICATED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the SIGN_IN_REFUSED member of = models.RefusalKind, the same whatever was wrong, never echoing the credential.",
+    "sign_in_owner: [ORCHESTRATION] MUST add the new session to the module's sessions under the session-table lock, taken while it holds the sign-in lock and released before that one, so that the session check, the pass and give_session_csrf see it whole or not at all.",
     "admit_owner_request: [SECURITY_BOUNDARY] MUST at arrival take one monotonic_reading, find the session whose session_id equals admission's through equal_in_constant_time, and refuse with the UNAUTHENTICATED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the NO_OWNER_SESSION member of = models.RefusalKind when there is none, it is signed out, or _session_reached_limit answers true at that reading; a session that passes MUST have its last-request reading raised to the arrival's reading unless a later one is already held, before any further check.",
     "admit_owner_request: [VALIDATION_ERROR] MUST, for a change, refuse with the NOT_PERMITTED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the CSRF_REFUSED member of = models.RefusalKind when admission's csrf_value is not equal, through equal_in_constant_time, to the session's; a sign-out that passes MUST mark the session signed out at once, so a later arrival is refused.",
-    "admit_owner_request: [ORCHESTRATION] MUST then, for a request that touches an upload, wait for the instance's one import lock and afterwards take its place on the session's lock, for any other change take its place on the session's lock at once, and for a read take no lock; each lock MUST grant its waiters in the order they asked; it MUST run step with the session's session_id, answer what step answers and release every lock it took on every path, a raised failure included.",
+    "admit_owner_request: [ORCHESTRATION] MUST then wait for the turn it drew at arrival: for a request that touches an upload, its ticket of the instance's one import lock, and afterwards its place on the session's lock; for any other change, its place on the session's lock; a read takes no lock; each lock MUST grant its waiters in the order their turns were drawn; it MUST run step with the session's session_id, answer what step answers and release every lock it took on every path, a raised failure included.",
+    "admit_owner_request: [ORCHESTRATION] MUST fix the arrival in one hold of the module's session-table lock, taking the monotonic_reading, looking the session up, checking it, raising its last-request reading and, for a request that passed and needs a lock, drawing its turn inside that hold without waiting, a ticket of the import lock for a request that touches an upload and a place on the session's lock for any other change, and MUST release that lock before it waits for any turn; the table lock MUST be taken after the import lock, the sign-in lock and a session's lock wherever a path holds them, and its holder MUST never wait for another lock.",
     "sign_out_owner: [BEHAVIOR] MUST end the session of session_id, which admit_owner_request admitted and marked signed out and whose locks it holds, removing it with its pending confirmation and its uploaded file from the module's sessions.",
+    "sign_out_owner: [ORCHESTRATION] MUST remove the session from the module's sessions under the session-table lock, taken after the locks admit_owner_request holds for it, so that a later lookup finds the session ended and never half removed.",
     "show_confirmation_step: [BEHAVIOR] MUST replace the session's pending confirmation with a new PendingConfirmation holding a new value from make_secret_value, the given action with its target and with shown_version as its stated version, the digest _confirmation_binding_digest gives for them and inputs, and the monotonic_reading it was shown at, and MUST answer that value; it MUST never keep inputs themselves.",
     "take_confirmation: [VALIDATION_ERROR] MUST refuse with the CONFIRMATION_REFUSED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names: with the CONFIRMATION_NOT_PENDING member of = models.RefusalKind when the session holds no pending confirmation; with the CONFIRMATION_EXPIRED member, clearing the pending one whatever value is given, when the imported CONFIRMATION_VALID_MINUTES constant, in nanoseconds of the monotonic reading, has passed since it was shown; with the CONFIRMATION_OTHER_VALUE member, leaving the pending one as it is, when presented_value is None or not equal to it through equal_in_constant_time.",
     "take_confirmation: [BEHAVIOR] MUST, once presented_value equals the pending value, clear the pending confirmation whatever follows, then answer ConfirmationTaken when action, target, stated_version and the digest _confirmation_binding_digest gives for them and inputs all equal the pending ones, and otherwise refuse with the CONFIRMATION_REFUSED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the CONFIRMATION_BOUND_ELSEWHERE member of = models.RefusalKind.",
@@ -395,9 +405,11 @@
     "read_uploaded_file: [RETURN_SHAPE] MUST answer the UploadedFile the session of session_id keeps, or None when it keeps none, and change nothing.",
     "drop_uploaded_files: [BEHAVIOR] MUST remove the uploaded file of every owner session, keeping each session's last upload number, and change nothing else.",
     "end_expired_sessions: [ORCHESTRATION] MUST take the instance's import lock, take one monotonic_reading, and for each session in the order of their sign-in take its place on that session's lock and end it, with its pending confirmation and uploaded file, when _session_reached_limit answers true at that one reading; it MUST release every lock on every path and answer how many sessions it ended.",
+    "end_expired_sessions: [ORCHESTRATION] MUST read each session's signed-out mark and readings and remove an ended session only under the session-table lock, taken after the import lock and that session's lock and released before the next session's lock is asked for.",
     "_session_reached_limit: [BEHAVIOR] MUST answer true when the session is signed out, when reading is at or past its signed-in reading plus the imported OWNER_SESSION_MAX_HOURS constant, or when reading is at or past its last-request reading plus the imported OWNER_SESSION_IDLE_MINUTES constant, each duration in nanoseconds of the monotonic reading, and false otherwise.",
     "_confirmation_binding_digest: [DETERMINISM_OR_ORDERING] MUST answer the hexadecimal text of a collision-resistant cryptographic digest of one unambiguous serialisation of the action, then the target, then the version, then every field of inputs in the order its model declares them, lists in the order given and an absent value told apart from an empty one, so that equal arguments always give equal digests and different ones different digests.",
     "_refused_sign_ins_since: [BEHAVIOR] MUST answer how many recorded refused sign-ins have a reading less than the imported SIGN_IN_WINDOW_MINUTES constant, in nanoseconds of the monotonic reading, before reading.",
+    "give_session_csrf: [SECURITY_BOUNDARY] MUST, holding the module's session-table lock, find the session whose session_id equals the given one through equal_in_constant_time and answer its csrf_value while it is held and not signed out, a session that reached a limit but is not yet ended included, and None when session_id is None or no such session is held; it MUST NOT change the session's last-request reading or any session.",
     "publish_pointer: [VALIDATION_ERROR] MUST check in stage order and answer only the first failing stage, as a Refusal carrying every failure of that stage: first a Refusal with the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_EXISTENCE constant names and one failure of the UNKNOWN_PROJECT member of = models.RefusalKind, its path naming the project_id input, when validate_project_reference answers that project_id does not exist; then a Refusal with the INVALID_REQUEST member at the stage the imported REFUSAL_STAGE_VALUES constant names.",
     "publish_pointer: [VALIDATION_ERROR] MUST collect the failures of the values stage as follows, ordered by kind as the RefusalKind members MISSING_VALUE then MALFORMED_REQUEST_ID then UNKNOWN_ARTIFACT_TYPE and within one kind by path, each path one element holding the field's name: the failure read_required_text answers for the given artifact type; the UNKNOWN_ARTIFACT_TYPE failure when that type is present but _owner_service_of_type answers None for it; one MISSING_VALUE failure for each of the two reference fields of GivenPointer when read_optional_text answers None for both; and the failure check_request_id_form answers for request_id.",
     "publish_pointer: [BEHAVIOR] MUST, once the values pass, look the request id up only with find_pointer_by_request_id for project_id, so that a pointer of another project is never reached, and treat a found pointer as a repeat when facts_equal_for_repeat answers true for PointerRepeatFacts built from project_id, publisher and the given type, references and digest against those of the found pointer, its publisher being the principal its PrincipalPublisher holds; a repeat MUST still be refused when the project is archived, and otherwise MUST answer the found pointer as it stands now, whatever its status, with changed false, writing nothing, superseding nothing and making no version.",
@@ -446,7 +458,8 @@
     "read_import_mapping: [VALIDATION_ERROR] In the MAPPING member of = models.ImportMode it MUST refuse, with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names, every pick whose project_id is not a project of the file and every Customer value whose v1_value no pick brings in, each as the OUTSIDE_CLOSED_LIST member of = models.RefusalKind, and every later entry repeating a project_id or a v1_value already given, each as the DUPLICATE_PICK member, whatever names, aliases or Customer values the entries carry; all such failures are answered together and _build_mapping is not called.",
     "read_import_mapping: [DETERMINISM_OR_ORDERING] Each refused pick or Customer value MUST carry the path of a PathElement naming its list by the field of = models.ImportChoices that holds it followed by a PathElement holding its position in that list counted from zero; the failures MUST be ordered by kind with every outside_closed_list failure before every duplicate_pick failure, and within one kind by path, names compared by Unicode code point and positions as numbers.",
     "read_import_mapping: [DEPENDENCY_BOUNDARY] MUST only read: it MUST NOT write, insert or replace any record, MUST NOT open, commit or roll back a transaction, MUST NOT keep the file's bytes beyond its answer nor write them to the store or a disk, and MUST NOT take a digest from any caller.",
-    "read_import_mapping: [VALIDATION_ERROR] MUST raise ValueError, before reading anything, when the inputs its mode needs are not given: body in the UPLOAD member of = models.ImportMode, or kept_content and choices in the MAPPING member; this is a wiring fault and never an answer to the owner.",
+    "read_import_mapping: [VALIDATION_ERROR] MUST raise ValueError, before reading anything, when the inputs its mode needs are not given: body in the UPLOAD member of = models.ImportMode, or choices in the MAPPING member; this is a wiring fault and never an answer to the owner.",
+    "read_import_mapping: [VALIDATION_ERROR] In the MAPPING member of = models.ImportMode it MUST, after the closure and before any other check, answer a Refusal whose code is the REFUSED member of = models.RefusalCode, whose stage is the imported REFUSAL_STAGE_LIFECYCLE constant and whose failures are one RefusalFailure of the FILE_NOT_KEPT member of = models.RefusalKind with an empty path when kept_content is None, parsing nothing.",
     "_read_bounded: [VALIDATION_ERROR] MUST answer a ReadRefused of the FILE_TOO_LARGE member of = models.RefusalKind, without calling body.read even once, when declared_length is given and greater than the imported IMPORT_FILE_MAX_BYTES constant.",
     "_read_bounded: [BEHAVIOR] MUST otherwise call body.read repeatedly with a positional size, asking each time for no more bytes than keep the total read at most one byte past the imported IMPORT_FILE_MAX_BYTES constant, until body.read answers empty bytes; it MUST answer a ReadRefused of the FILE_TOO_LARGE member of = models.RefusalKind as soon as the bytes read exceed that constant, whatever length was declared or whether one was, and stop reading then.",
     "_read_bounded: [VALIDATION_ERROR] MUST answer a ReadRefused of the FILE_UNREADABLE member of = models.RefusalKind when body.read raises, and when the stream ends having given fewer bytes than a given declared_length; the exception is not raised further and none of the bytes read is answered.",
@@ -554,7 +567,7 @@
     "start_instance: [BEHAVIOR] MUST open the owner interface's listener at the LoadedConfiguration's owner_listen first and then, only when its service_listen is not None, the service API's listener at service_listen, each a listening TCP socket of its host's address family, bound and listening but accepting no connection until every listener of this start is open; an owner-only start, whose service_listen is None, MUST open the owner interface's listener alone.",
     "start_instance: [VALIDATION_ERROR] When a listener cannot be opened it MUST close every listener already opened, a close that fails being neither retried nor named, then, only when open_store answered an OpenedStore whose made_new is true, call discard_new_store with the RegistryStore, and MUST end through _stop_start with one diagnostic that names the surface that could not be opened, never its address, and, when the DiscardResult's removed is false, says that the new store was left with the step of = models.DiscardStep and the kind of = models.DiscardFailureKind its failure names; a store this start did not make new MUST be left as it is.",
     "start_instance: [ORCHESTRATION] Once every listener is open it MUST accept connections on each and serve every connection on a thread of its own, so that a request waiting for a lock holds no other: a request on the service API's listener MUST be read into an HttpRequest, every field of = models.HttpRequest taken from its request line and header fields, and handed to serve_service_request with its body read whole as bytes, an empty body when it declares none; a request on the owner interface's listener MUST be read into an HttpRequest the same way and handed to serve_owner_request with the connection's body stream unread, a stream that ends at the request's declared length or, for a body framed in chunks, gives the decoded bytes as they are read; the HttpResponse either answers MUST be written back with its status, header fields and body unchanged.",
-    "start_instance: [BEHAVIOR] After writing the answer to an owner interface request that carried a body, it MUST close that connection without reading what remains of the body and MUST serve no further request on it.",
+    "start_instance: [BEHAVIOR] After writing the answer to an owner interface request that carried a body, and to any request whose body was not read to its framed end, it MUST serve no further request on that connection and close it in stages: shut the socket's writing side, then read and drop into nothing what the client still sends until the client closes, the imported LISTENER_CLOSE_DRAIN_SECONDS constant of seconds has passed since the shutdown, measured as the socket's own timeout, or the imported LISTENER_CLOSE_DRAIN_MAX_BYTES constant of bytes has been dropped, whichever comes first, and only then close the socket; it MUST NOT close a socket with unread bytes at once.",
     "start_instance: [ORCHESTRATION] Once serving began it MUST take one monotonic_reading as the passes' origin and run two passes, each on a thread of its own and neither waiting for the other: end_expired_sessions at the interval of the imported SESSION_PASS_SECONDS constant and, only when service_listen is not None, run_daily_backup_if_due with the backup_dir and the RegistryStore at the interval of the imported BACKUP_LOOK_SECONDS constant; an owner-only start MUST run the session pass alone and make no backup run.",
     "start_instance: [DETERMINISM_OR_ORDERING] A pass's deadlines MUST be its origin plus a whole positive number of its intervals, in nanoseconds of monotonic_reading, the first one interval after the origin; each time a call returns the pass MUST take one monotonic_reading and wait for the first deadline at or after it, and when that wait ends, on time or late after a suspension, MUST make exactly one call whatever deadlines the wait passed, never making up a passed deadline and never calling while its previous call runs.",
     "start_instance: [RETURN_SHAPE] MUST answer what _stop_start answers for a stopped start, and otherwise keep the process serving and its passes running until the host ends it.",
@@ -576,8 +589,84 @@
     "_read_owner_request: [SCHEMA_CONSTRAINT] MUST name a nested model's field by its parent's path, a full stop and its own name, a tuple's element by its parent's path, a full stop and its Python index in the tuple, and a union's variant by its discriminator field among its fields, and MUST read a field's text as itself for a text field, as the member whose value it is for an enumeration, true or false for a bool, and decimal digits for an int.",
     "_read_owner_request: [VALIDATION_ERROR] MUST, when the body or the query cannot be decoded as UTF-8 form fields, repeats a field's name, gives a text that is not of its field's type, leaves a gap in a tuple's positions, or when reading body raises, answer the OwnerRequest whose action is the matched row's and every other field None, its = models.OwnerValues with every field None, keeping nothing it partly decoded; it MUST NOT raise for any body.",
     "_render_owner_page: [SECURITY_BOUNDARY] MUST write every stored or given value into the page as text escaped for the place it stands in, never as markup, give the response a Content-Security-Policy header field that forbids every script, and, for a SignedInAnswer alone, one Set-Cookie header field of the cookie the imported OWNER_SESSION_COOKIE_NAME constant names with the answer's session_id, marked Secure, HttpOnly and SameSite=Strict with Path=/, no Domain, no Expires and no Max-Age; it MUST never expire or delete a cookie.",
-    "_render_owner_page: [BEHAVIOR] MUST address every link and form by the method and path of its action's row in the imported OWNER_ACTIONS constant and its target by the query parameter the imported OWNER_TARGET_PARAMETER constant names; a read MUST be a link or a GET form carrying no CSRF value, every other action a POST form carrying csrf_value in the field the imported OWNER_CSRF_FIELD constant names, the stated revision or access version of what it rendered, and for a create a request id from mint_identity made when it is rendered; the sign-in form carries no CSRF value, and an upload form sends that field as its first part and the file as its second.",
-    "_render_owner_page: [RETURN_SHAPE] MUST answer one HttpResponse of one UTF-8 HTML page: for a RefusedAnswer, the refusal rendered with the status of its code's row in the imported REFUSAL_HTTP_STATUSES constant, the sign-in form when its code is the UNAUTHENTICATED member of = models.RefusalCode; for any other answer, the answer rendered as itself, each outcome of a NewestBackupAnswer as its own and never as another, with the status the imported SERVICE_ANSWER_STATUS constant holds."
+    "_render_owner_page: [BEHAVIOR] MUST address every link and form by the method and path of its action's row in the imported OWNER_ACTIONS constant and its target by the query parameter the imported OWNER_TARGET_PARAMETER constant names; a read MUST be a link or a GET form carrying no CSRF value, every other action a POST form carrying csrf_value in the field the imported OWNER_CSRF_FIELD constant names, the stated revision or access version of what it rendered, and for a create a request id from mint_identity made when it is rendered; the sign-in form carries no CSRF value, and an upload form sends that field as its first part and the file as its second; a confirmation step's form MUST carry the step's inputs as the fields of = models.OwnerValues, an import's upload_number and file_digest among them, beside its confirmation value.",
+    "_render_owner_page: [RETURN_SHAPE] MUST answer one HttpResponse of one UTF-8 HTML page: for a RefusedAnswer, the refusal rendered with the status of its code's row in the imported REFUSAL_HTTP_STATUSES constant, the sign-in form when its code is the UNAUTHENTICATED member of = models.RefusalCode; for any other answer, the answer rendered as itself, each outcome of a NewestBackupAnswer as its own and never as another, with the status the imported SERVICE_ANSWER_STATUS constant holds.",
+    "read_upload_head: [BEHAVIOR] MUST read the head through stream.read alone, asking each time for no byte past the end of the second part's headers, so that the first byte of the file is never read, and at most the imported UPLOAD_FORM_HEAD_MAX_BYTES constant in all: the boundary is the boundary parameter of content_type's multipart form data media type; the first part MUST be the form field the imported OWNER_CSRF_FIELD constant names, with no file name, whose value read as UTF-8 text is the CSRF value; the second part's headers MUST name a file.",
+    "read_upload_head: [RETURN_SHAPE] MUST answer an UploadHead holding the CSRF value, as delimiter a carriage return, a line feed, two hyphens and the boundary, and as file_declared_length declared_length less the bytes of the head it read and less those of the delimiter followed by two hyphens, a carriage return and a line feed, or None as file_declared_length when declared_length is None.",
+    "read_upload_head: [VALIDATION_ERROR] MUST answer an UploadHead whose three fields are None, stopping its reading there and raising nothing, when content_type is None or names no multipart form data with a boundary, when the first part is not that CSRF field or its value is not UTF-8, when no second part naming a file follows, when the head does not end within the imported UPLOAD_FORM_HEAD_MAX_BYTES constant, when declared_length is less than the head and the closing delimiter, or when stream.read raises or answers empty bytes before the head ends.",
+    "MultipartFileBody.__init__: [BEHAVIOR] MUST keep stream and delimiter as the file part's source and its end, and MUST read nothing from stream: the file's bytes are read only when MultipartFileBody.read is asked.",
+    "MultipartFileBody.read: [BEHAVIOR] MUST answer the next bytes of the file part, at most size of them, size being passed positionally, reading stream only through stream.read and never answering a byte of delimiter or after it; it MUST hold, read and not yet answered, no more bytes than the delimiter's length, and MUST answer empty bytes only once the delimiter has been reached, and on every later call.",
+    "MultipartFileBody.read: [VALIDATION_ERROR] MUST raise ValueError to its caller, answering none of the bytes held, when stream.read raises or answers empty bytes before the delimiter is reached, so that a file part without its closing delimiter is never taken for a whole file.",
+    "perform_service_operation: [SECURITY_BOUNDARY] MUST first identify the caller through identify_service with presented_token and answer its Refusal through _refused; then, when request is None or its operation is not the value of a member of = models.ServiceOperation, MUST answer through _refused a Refusal with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the OUTSIDE_CLOSED_LIST member of = models.RefusalKind whose path is one PathElement naming operation; otherwise MUST ask service_may_call for the service and the operation and, when may_call is false, answer through _refused a Refusal with the NOT_PERMITTED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the OUTSIDE_SERVICE_RIGHTS member of = models.RefusalKind with an empty path, reading no record.",
+    "perform_service_operation: [FIELD_ASSIGNMENT] MUST build one PreparedServiceCall of the identified service, the request, the instant recorded_now gives once for the call, and as principal an ActingPrincipal of the AGENT_VIA_KERNEL member of = models.PrincipalKind with the service and kernel_session_id when service_may_call answered agent_authority true, and otherwise of the SERVICE member with the service and no session_id.",
+    "perform_service_operation: [ORCHESTRATION] MUST run one ServiceCallStep of that call on the store opened_store gives, through run_in_transaction when agent_authority is true or the operation's note on ServiceCallStep.run calls it a change, and through read_in_transaction otherwise, and MUST answer what that run answers, adding no check after the step's.",
+    "ServiceCallStep.__init__: [BEHAVIOR] MUST keep call as the step's prepared call and do nothing else: it MUST read no record, no clock and no setting.",
+    "ServiceCallStep.run: [VALIDATION_ERROR] MUST raise TypeError before reading or writing anything when transaction is not a StoreTransaction, so that the transaction commits nothing and the store answers its own failure.",
+    "ServiceCallStep.run: [SECURITY_BOUNDARY] For a call whose principal is the AGENT_VIA_KERNEL member of = models.PrincipalKind it MUST, before anything else and except where an operation's note says otherwise, check the agent session through check_agent_call in transaction with the principal's session_id, the on_project the operation's note gives and the project_id the inputs name, and answer its Refusal through _refused; a session_id that is None MUST be refused, without asking it, with the Refusal check_agent_call gives for an unregistered session: the NOT_FOUND member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AGENT_SESSION constant names and one failure of the AGENT_CALL_REFUSED member of = models.RefusalKind with an empty path; for an operation on a project, the project it acts on MUST be the one check_agent_call admitted, the active project when the inputs name none.",
+    "ServiceCallStep.run: [VALIDATION_ERROR] MUST answer an input that the module's contract requires and the inputs leave None, through _refused, as a Refusal with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the MISSING_VALUE member of = models.RefusalKind whose path is one PathElement naming that input, calling no module; a pointer not given MUST be handed on as a GivenPointer whose every field is None, so that its module refuses its missing values.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the VALIDATE_PROJECT_REFERENCE member of = models.ServiceOperation it MUST call validate_project_reference with the project and answer a ValidationAnswer of its ProjectValidation, Kernel's check made with on_project true.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the READ_PROJECT_CONTEXT member of = models.ServiceOperation it MUST call read_project_context with the project and answer its ProjectContextFound as a ContextAnswer of its context, Kernel's check made with on_project true.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the READ_CUSTOMER_BILLING member of = models.ServiceOperation it MUST call read_billing_data with the inputs' customer_ref and answer its BillingData as a BillingAnswer of its customer_kind, tax_id and legal_name.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the LIST_ARTIFACTS member of = models.ServiceOperation it MUST call list_pointers with the project and answer its PointersListed as a PointersAnswer of its pointers, Kernel's check made with on_project true.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the READ_LATEST_ARTIFACT member of = models.ServiceOperation it MUST call latest_pointer_of_type with the project and the inputs' artifact_type and answer its LatestPointer as a LatestPointerAnswer of its pointer, Kernel's check made with on_project true.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the READ_PROJECT member of = models.ServiceOperation it MUST call read_project_card with the project and answer its ProjectCardFound as a ProjectCardAnswer of its card with changed None, Kernel's check made with on_project true.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the LIST_ROOMS member of = models.ServiceOperation it MUST call list_rooms with the project and answer its RoomsListed as a RoomsAnswer of its rooms, Kernel's check made with on_project true.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the LIST_PROJECTS member of = models.ServiceOperation it MUST call list_projects with the inputs' list_choice and answer its ProjectsListed as a ProjectListAnswer of its items, Kernel's check made with on_project false.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the REGISTER_AGENT_SESSION member of = models.ServiceOperation, a change, it MUST make no session check, refuse a principal session_id of None as a missing value whose path names session, and call register_session with that session_id and the call's instant, answering a SessionAccessAnswer of its access and changed with project_joined None.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the END_AGENT_SESSION member of = models.ServiceOperation, a change, it MUST call end_session with the principal's session_id, by_owner false and no stated access version, and answer its SessionEnded as a SessionEndedAnswer, Kernel's check made with on_project false.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the READ_SESSION_ACCESS member of = models.ServiceOperation it MUST call read_session_access with the principal's session_id and answer its SessionAccessFound as a SessionAccessAnswer of its access with changed and project_joined None, Kernel's check made with on_project false.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the REQUEST_PROJECT_ACCESS member of = models.ServiceOperation, a change, it MUST call request_project_access with the principal's session_id, the inputs' request_text and the call's instant, and answer its AccessRequestPending as a RequestPendingAnswer, Kernel's check made with on_project false.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the READ_AGENT_PROJECTION member of = models.ServiceOperation it MUST call read_agent_view with the project and, for its AgentViewFound, published_pointers with the same project, and answer an AgentProjectionAnswer of the view and those pointers, Kernel's check made with on_project true.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the ADD_ROOM member of = models.ServiceOperation, a change, it MUST call add_room with the project, the inputs' room_name and request_id and the call's instant, and answer its RoomAdded as a RoomAnswer of its room and changed, Kernel's check made with on_project true.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the PUBLISH_ARTIFACT_POINTER member of = models.ServiceOperation, a change, it MUST call publish_pointer with the project, the given pointer, the inputs' request_id, the call's principal as publisher and its instant, and answer its PointerAccepted as a PointerAnswer of its pointer and changed, Kernel's check made with on_project true.",
+    "ServiceCallStep.run: [ORCHESTRATION] For the WITHDRAW_ARTIFACT_POINTER member of = models.ServiceOperation, a change, it MUST, for Kernel, resolve the pointer's project through project_of_pointer before the check, refuse a pointer it does not find with the same Refusal as a refused check, without the check, and check with on_project true and that project; then call withdraw_pointer with the inputs' pointer_id, the call's principal and instant, and answer its PointerWithdrawn as a PointerAnswer of its pointer with changed None.",
+    "ServiceCallStep.run: [RETURN_SHAPE] MUST answer each Refusal a module answered through _refused unchanged and each accepted outcome as its operation's note says; and it MUST answer, instead of an accepted answer, through _refused a Refusal with the NOT_PERMITTED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the ANSWER_ABOVE_CLASS member of = models.RefusalKind with an empty path when _class_exceeds answers true for the class _answer_class gives that answer and the class highest_class_of_service gives the call's service, so that a change refused for its class is rolled back.",
+    "perform_owner_operation: [ORCHESTRATION] MUST, for the SIGN_IN member of = models.OwnerAction, call sign_in_owner with the request's presented_credential alone and answer a SignedInAnswer of the SignedIn's session_id and csrf_value or its Refusal through _refused, admitting nothing; for every other request, an action of None included, it MUST answer what admit_owner_request answers for admission and one OwnerRequestStep of request and body, and nothing of its own.",
+    "_today_of: [BEHAVIOR] MUST answer the calendar date of instant in UTC.",
+    "_refused: [RETURN_SHAPE] MUST answer a RefusedAnswer holding refusal unchanged.",
+    "_class_exceeds: [BEHAVIOR] MUST answer true exactly when answer_class comes after highest in the order in which = models.DisclosureClass declares its members.",
+    "_answer_class: [BEHAVIOR] MUST answer the PERSONAL_DATA member of = models.DisclosureClass when, in answer or in any model nested in it at any depth, a field that the imported PERSONAL_DATA_FIELDS constant lists for that model's name holds a value other than None and other than an empty tuple, and the BUSINESS_CONFIDENTIAL member otherwise, never the OPEN member.",
+    "_audit_action_of: [BEHAVIOR] MUST answer the audit_action of the row of the imported OWNER_AUDIT_ACTIONS constant whose action is action, whose transition is transition when the row names one and None otherwise, and whose erasure is erasure when the row names one and None otherwise, and None when no row matches.",
+    "_confirmation_inputs: [BEHAVIOR] MUST answer for the action confirmed, the request's action or, for the SHOW_CONFIRMATION member of = models.OwnerAction, the confirm_action of its values: for ERASE_PROJECT ErasureInputs of the values' erasure; for ERASE_AUDIT_ENTRIES AuditErasureInputs of the date Python's date.fromisoformat reads from the values' erase_before; for CONFIRM_IMPORT ImportInputs of the values' import_choices and of kept's upload_number and file_digest when kept is given, as when the step is shown, or of the values' upload_number and file_digest when kept is None, as when it is submitted; for ARCHIVE_PROJECT NoConfirmationInputs.",
+    "_confirmation_inputs: [FALLBACK] MUST answer NoConfirmationInputs when a value the inputs of its action need is None or erase_before is not a date Python's date.fromisoformat reads, so that a submission missing one is never bound to a step that showed it.",
+    "OwnerRequestStep.__init__: [BEHAVIOR] MUST keep request and body as the step's own and do nothing else: it MUST read no record, no clock, no session and no byte of body.",
+    "OwnerRequestStep.run: [VALIDATION_ERROR] MUST answer a request whose action is None through _refused as a Refusal with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the OUTSIDE_CLOSED_LIST member of = models.RefusalKind whose path is one PathElement naming action, touching nothing.",
+    "OwnerRequestStep.run: [ORCHESTRATION] MUST answer the SIGN_OUT member of = models.OwnerAction by calling sign_out_owner with session_id and answering SignedOutAnswer, and the NEWEST_BACKUP member with a NewestBackupAnswer of what newest_backup_instant answers for the location give_backup_location gives, opening no transaction.",
+    "OwnerRequestStep.run: [ORCHESTRATION] MUST answer every other action by running one OwnerActionStep of a PreparedOwnerAction of the request, session_id, the instant recorded_now gives once, the date _today_of gives for it and whether a confirmation was taken, on the store opened_store gives, through run_in_transaction when the action's note on OwnerActionStep.run calls it a change and through read_in_transaction otherwise, and answer what that run answers.",
+    "OwnerRequestStep.run: [SECURITY_BOUNDARY] For an action that is the value of a member of = models.ConfirmedAction it MUST, before running the action, call take_confirmation with session_id, the request's confirmation_value, that member, its target, its stated_version and the inputs _confirmation_inputs gives for the request and no kept file, answer its Refusal through _refused and run the action only after ConfirmationTaken, with confirmed true.",
+    "OwnerRequestStep.run: [BEHAVIOR] MUST, after an accepted CONFIRM_IMPORT committed, call drop_uploaded_files while still inside the step, so every session's upload is dropped while the import lock is held, and drop nothing for a refused one.",
+    "OwnerActionStep.__init__: [BEHAVIOR] MUST keep action as the step's prepared action and do nothing else: it MUST read no record, no clock and no session.",
+    "OwnerActionStep.run: [VALIDATION_ERROR] MUST raise TypeError before reading or writing anything when transaction is not a StoreTransaction.",
+    "OwnerActionStep.run: [VALIDATION_ERROR] MUST answer through _refused, calling no module, a Refusal with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names when a value the action's module needs is None, with one failure of the MISSING_VALUE member of = models.RefusalKind whose path is one PathElement naming target or the field of = models.OwnerValues that lacks it, and when end_date or erase_before is not a date Python's date.fromisoformat reads, with one failure of the OUTSIDE_FORM member naming that field; given facts or a pointer not given MUST be handed on with every field None, so that their module refuses their missing values.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the LIST_PROJECTS member of = models.OwnerAction it MUST call list_projects with the values' list_choice and answer its ProjectsListed as a ProjectListAnswer of its items.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the READ_PROJECT member of = models.OwnerAction it MUST call read_project_card with the target and answer its ProjectCardFound as a ProjectCardAnswer of its card with changed None.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the CREATE_PROJECT member of = models.OwnerAction, a change, it MUST call create_project with the values' request_id and project facts and the instant, and answer its ProjectCardChanged as a ProjectCardAnswer of its card and changed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the CORRECT_PROJECT member of = models.OwnerAction, a change, it MUST call correct_project with the target, the stated_version, the values' project facts and the instant, and answer its ProjectCardChanged as a ProjectCardAnswer of its card and changed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the ARCHIVE_PROJECT member of = models.OwnerAction, a change, it MUST call archive_project with the target, the stated_version and the instant, and answer its ProjectCardChanged as a ProjectCardAnswer of its card and changed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the ERASE_PROJECT member of = models.OwnerAction, a change, it MUST call erase_project with the target, the stated_version and the values' erasure and, when it answers a ProjectErased with changed true, drop_project_from_sessions with the project and, for the DELETE_WHOLE member of = models.ProjectErasure, delete_pointers_of_project with it, and answer a ProjectErasedAnswer of its project_id, erasure and changed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the ADD_ROOM member of = models.OwnerAction, a change, it MUST call add_room with the target, the values' room_name and request_id and the instant, and answer its RoomAdded as a RoomAnswer of its room and changed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the LIST_POINTERS member of = models.OwnerAction it MUST call list_pointers with the target and answer its PointersListed as a PointersAnswer of its pointers.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the PUBLISH_POINTER member of = models.OwnerAction, a change, it MUST call publish_pointer with the target, the values' pointer and request_id, an ActingPrincipal of the OWNER member of = models.PrincipalKind with no service and no session_id as publisher and the instant, and answer its PointerAccepted as a PointerAnswer of its pointer and changed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the WITHDRAW_POINTER member of = models.OwnerAction, a change, it MUST call withdraw_pointer with the target, the owner's ActingPrincipal and the instant, and answer its PointerWithdrawn as a PointerAnswer of its pointer with changed None.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the LIST_CUSTOMERS member of = models.OwnerAction it MUST call list_customers and answer a CustomerListAnswer of its items; for the READ_CUSTOMER member it MUST call read_customer with the target and answer its CustomerFound as a CustomerAnswer of its customer with changed None.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the RECORD_CUSTOMER member of = models.OwnerAction, a change, it MUST call record_customer with the values' request_id and customer facts and the instant, and answer its CustomerChanged as a CustomerAnswer of its customer and changed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the CORRECT_CUSTOMER member of = models.OwnerAction, a change, it MUST call correct_customer with the target, the stated_version, the values' customer facts and the instant, and answer its CustomerChanged as a CustomerAnswer of its customer and changed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the MARK_CUSTOMER member of = models.OwnerAction, a change, it MUST call mark_customer with the target, the stated_version, the values' transition, the date its end_date gives or None, today and the instant, and answer its CustomerChanged as a CustomerAnswer of its customer and changed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the ERASE_CUSTOMER member of = models.OwnerAction, a change, it MUST call erase_customer_contact with the target, the stated_version and the instant, and answer its CustomerChanged as a CustomerAnswer of its customer and changed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the LIST_SESSIONS member of = models.OwnerAction it MUST call list_sessions and answer a SessionListAnswer of its items; for the READ_SESSION member it MUST call read_session_access with the target and answer its SessionAccessFound as a SessionAccessAnswer of its access with changed and project_joined None.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the ANSWER_ACCESS_REQUEST member of = models.OwnerAction, a change, it MUST call answer_access_request with the target, the stated_version, the values' access_answer and, for a GrantAnswer, the ProjectValidation validate_project_reference gives for its project_id, None for a DeclineAnswer, and answer its AccessChanged as a SessionAccessAnswer of its access, changed and project_joined.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the GRANT_PROJECT member of = models.OwnerAction, a change, it MUST call grant_project with the target, the stated_version, the values' project_id, their make_active or false, and the ProjectValidation validate_project_reference gives for that project, and answer its AccessChanged as a SessionAccessAnswer of its access, changed and project_joined.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the SET_ACTIVE_PROJECT member of = models.OwnerAction, a change, it MUST call set_active_project with the target, the stated_version, the values' project_id or None and whether validate_project_reference answers that project archived, false when none is named, and answer its AccessChanged as a SessionAccessAnswer of its access, changed and project_joined.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the REVOKE_PROJECT member of = models.OwnerAction, a change, it MUST call revoke_project with the target, the stated_version and the values' project_id, and answer its AccessChanged as a SessionAccessAnswer of its access, changed and project_joined.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the END_SESSION member of = models.OwnerAction, a change, it MUST call end_session with the target, by_owner true and the stated_version, and answer its SessionEnded as a SessionEndedAnswer.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the READ_AUDIT member of = models.OwnerAction it MUST call read_audit_entries and answer an AuditViewAnswer of its entries; for the ERASE_AUDIT_ENTRIES member, a change, it MUST call erase_audit_entries_before with the date its values' erase_before gives and today, and answer its ErasedEntries as an AuditErasedAnswer of its removed.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the UPLOAD_IMPORT member of = models.OwnerAction it MUST call read_import_mapping in the UPLOAD member of = models.ImportMode with the request's declared_length and the body its OwnerRequestStep holds and, for an ImportUploaded, keep its content and digest through keep_uploaded_file for the session and answer an ImportUploadAnswer of its digest, its projects and the number keep_uploaded_file gives; a refused upload keeps nothing.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the SHOW_IMPORT_MAPPING member of = models.OwnerAction it MUST call read_import_mapping in the MAPPING member of = models.ImportMode with the content of the file read_uploaded_file gives for the session, or None when it keeps none, and the values' import_choices, and answer its ImportMapped as an ImportMappingAnswer of its digest and mapping.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the SHOW_CONFIRMATION member of = models.OwnerAction it MUST refuse a confirm_action of None as a missing value; for the CONFIRM_IMPORT member of = models.ConfirmedAction it MUST first map the picks as SHOW_IMPORT_MAPPING does and, unless the mapping is clean, answer that ImportMappingAnswer or Refusal instead of a step; then it MUST call show_confirmation_step with the session, the confirm_action, the target, the stated_version and the inputs _confirmation_inputs gives with the kept file, and answer a ConfirmationStepAnswer of them and the value it gives.",
+    "OwnerActionStep.run: [ORCHESTRATION] For the CONFIRM_IMPORT member of = models.OwnerAction, a change, it MUST call confirm_import with the file read_uploaded_file gives for the session, the values' upload_number, file_digest and import_choices and the instant and, for an ImportConfirmed, mint one confirmation id with mint_identity, write the closure through record_migration_closure with the file digest, that id and the instant, and answer an ImportAcceptedAnswer of the ImportConfirmed's file_digest, projects and customers.",
+    "OwnerActionStep.run: [BEHAVIOR] After an accepted change MUST append, in transaction and through append_audit_entry, one entry of the audit action _audit_action_of gives for the action and its values' transition and erasure, when it gives one, the change answered changed true or the action being ERASE_AUDIT_ENTRIES, and, for ANSWER_ACCESS_REQUEST, the answer being a GrantAnswer: with the owner's ActingPrincipal, the instant, as subject the project for a project's action, the customer for a customer's, the session and the project for a grant or revocation, the file digest for the import and none for the erasure of old entries, the erased date for that erasure, and a confirmation id from mint_identity for a confirmed action, the import's being the one its closure holds; a refusal, a repeat answered changed false and a read MUST append none and mint none.",
+    "OwnerActionStep.run: [RETURN_SHAPE] MUST answer each Refusal a module answered through _refused unchanged and each accepted outcome as its action's note says; no owner answer is refused for its class.",
+    "OwnerActionStep.run: [DEPENDENCY_BOUNDARY] MUST leave every record's checks and writes to its module and the transaction's commit to the store: it MUST NOT write a record itself, open, commit or roll back a transaction, or check a stage other than the missing values its own calls need."
   ],
   "config": {
     "runtime_environment_variables": {
@@ -921,6 +1010,15 @@
         "path": "str",
         "is_change": "bool",
         "touches_upload": "bool"
+      }
+    },
+    "OwnerAuditAction": {
+      "identity": "value",
+      "fields": {
+        "action": "OwnerAction",
+        "transition": "CustomerTransition | None",
+        "erasure": "ProjectErasure | None",
+        "audit_action": "AuditAction"
       }
     },
     "Project": {
@@ -3041,6 +3139,7 @@
       "identity": "value",
       "fields": {
         "request_id": "str | None",
+        "project_id": "str | None",
         "project": "GivenProjectFacts | None",
         "customer": "GivenCustomerFacts | None",
         "transition": "CustomerTransition | None",
@@ -3052,6 +3151,8 @@
         "access_answer": "AccessAnswer | None",
         "make_active": "bool | None",
         "import_choices": "ImportChoices | None",
+        "upload_number": "int | None",
+        "file_digest": "str | None",
         "erase_before": "str | None",
         "confirm_action": "ConfirmedAction | None"
       }
@@ -4952,6 +5053,127 @@
         "OWNER_SESSION_COOKIE_NAME": {
           "value_type": "string",
           "value": "__Host-registry_session"
+        },
+        "OWNER_AUDIT_ACTIONS": {
+          "value_type": "record_tuple",
+          "row_model": "OwnerAuditAction",
+          "key": [
+            "action",
+            "transition",
+            "erasure"
+          ],
+          "value": [
+            {
+              "action": "create_project",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "project_created"
+            },
+            {
+              "action": "correct_project",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "project_corrected"
+            },
+            {
+              "action": "archive_project",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "project_archived"
+            },
+            {
+              "action": "erase_project",
+              "transition": null,
+              "erasure": "anonymise",
+              "audit_action": "project_anonymised"
+            },
+            {
+              "action": "erase_project",
+              "transition": null,
+              "erasure": "delete_whole",
+              "audit_action": "project_deleted"
+            },
+            {
+              "action": "record_customer",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "customer_recorded"
+            },
+            {
+              "action": "correct_customer",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "customer_corrected"
+            },
+            {
+              "action": "erase_customer",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "customer_erased"
+            },
+            {
+              "action": "mark_customer",
+              "transition": "restrict",
+              "erasure": null,
+              "audit_action": "customer_restricted"
+            },
+            {
+              "action": "mark_customer",
+              "transition": "lift",
+              "erasure": null,
+              "audit_action": "customer_restriction_lifted"
+            },
+            {
+              "action": "mark_customer",
+              "transition": "end",
+              "erasure": null,
+              "audit_action": "customer_relationship_ended"
+            },
+            {
+              "action": "mark_customer",
+              "transition": "resume",
+              "erasure": null,
+              "audit_action": "customer_relationship_resumed"
+            },
+            {
+              "action": "answer_access_request",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "session_project_granted"
+            },
+            {
+              "action": "grant_project",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "session_project_granted"
+            },
+            {
+              "action": "revoke_project",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "session_project_revoked"
+            },
+            {
+              "action": "confirm_import",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "import_accepted"
+            },
+            {
+              "action": "erase_audit_entries",
+              "transition": null,
+              "erasure": null,
+              "audit_action": "audit_entries_erased"
+            }
+          ]
+        },
+        "LISTENER_CLOSE_DRAIN_SECONDS": {
+          "value_type": "positive_integer",
+          "value": 2
+        },
+        "LISTENER_CLOSE_DRAIN_MAX_BYTES": {
+          "value_type": "positive_integer",
+          "value": 67108864
         }
       }
     }
@@ -5153,6 +5375,7 @@
         "PersonalDataField",
         "RefusalHttpStatus",
         "OwnerActionRoute",
+        "OwnerAuditAction",
         "Project",
         "Object",
         "Room",
@@ -5411,12 +5634,15 @@
         "CONFIRMATION_VALID_MINUTES",
         "CONTRACT_VERSION",
         "IMPORT_FILE_MAX_BYTES",
+        "LISTENER_CLOSE_DRAIN_MAX_BYTES",
+        "LISTENER_CLOSE_DRAIN_SECONDS",
         "LISTENER_READ_TIMEOUT_SECONDS",
         "LISTEN_PORT_MAX",
         "LISTEN_PORT_MIN",
         "OBJECT_FLOOR_AREA_MIN_EXCLUSIVE",
         "OBJECT_ROOMS_MIN",
         "OWNER_ACTIONS",
+        "OWNER_AUDIT_ACTIONS",
         "OWNER_CSRF_FIELD",
         "OWNER_SESSION_COOKIE_NAME",
         "OWNER_SESSION_IDLE_MINUTES",
@@ -5700,6 +5926,7 @@
       "PersonalDataField",
       "RefusalHttpStatus",
       "OwnerActionRoute",
+      "OwnerAuditAction",
       "Project",
       "Object",
       "Room",
@@ -5953,12 +6180,15 @@
       "CONFIRMATION_VALID_MINUTES",
       "CONTRACT_VERSION",
       "IMPORT_FILE_MAX_BYTES",
+      "LISTENER_CLOSE_DRAIN_MAX_BYTES",
+      "LISTENER_CLOSE_DRAIN_SECONDS",
       "LISTENER_READ_TIMEOUT_SECONDS",
       "LISTEN_PORT_MAX",
       "LISTEN_PORT_MIN",
       "OBJECT_FLOOR_AREA_MIN_EXCLUSIVE",
       "OBJECT_ROOMS_MIN",
       "OWNER_ACTIONS",
+      "OWNER_AUDIT_ACTIONS",
       "OWNER_CSRF_FIELD",
       "OWNER_SESSION_COOKIE_NAME",
       "OWNER_SESSION_IDLE_MINUTES",
