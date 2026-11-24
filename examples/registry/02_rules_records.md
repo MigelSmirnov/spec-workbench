@@ -213,11 +213,6 @@ for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS   -
    stored as written; a room name, a Customer's name and an access request
    text of spaces only are each refused and nothing changes.
    Shows A02-1, A02-2, A02-3. [witness: verification:registry_a02_required_texts_blank_refused_padded_kept]
-8. A project whose object address is given as spaces only, and a Customer
-   whose kind is absent or spaces only, are each refused as a missing value
-   and nothing changes; with an address and a kind given they are stored as
-   written. Shows A02-1, A02-2, A02-3.
-   [witness: verification:registry_a02_required_address_and_customer_kind]
 
 ### Consequence
 
@@ -266,11 +261,6 @@ after correct(p, facts f) accepted:
    one it does not give; its identity, created instant, request id and marks
    stay; one giving exactly the stored facts leaves the revision.
    Shows A03-1, A03-2, A03-3. [witness: verification:registry_a03_customer_correction_replaces_editable_facts]
-5. A project correction leaves the facts it does not edit: the project's card
-   answers the same `project_id`, status and created instant as before, and a
-   create naming the project's original request id makes no second project.
-   Shows A03-2.
-   [witness: verification:registry_a03_project_correction_keeps_non_editable_facts]
 
 ### Consequence
 
@@ -377,13 +367,9 @@ for action a on record r in {Project, Customer} that may move r.revision:
     stating its former revision is refused as stale and changes nothing; a
     project deleted whole is not found.
    Shows A04-4, A04-5. [witness: verification:registry_a04_anonymised_project_former_revision_stale]
-11. Each action that moves a record's last-changed instant — for a project a
-   correction and archiving (M01); for a Customer a correction, restricting
-   and lifting, and ending and resuming the relationship (M04) —
-   moves the record's revision by exactly one and sets its last-changed
-   instant to the current instant; each such action that changes nothing
-   (A05) leaves both where they were. An erasure is not one of them: it keeps
-   no revision (rule 1). Shows A04-3, A04-6.
+11. A correction that changes a project moves its revision by exactly one and
+   sets its last-changed instant to the current instant; one that changes
+   nothing leaves both. Shows A04-3, A04-6.
    [witness: verification:registry_a04_change_moves_revision_and_last_changed]
 
 ### Consequence

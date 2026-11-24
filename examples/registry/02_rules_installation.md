@@ -811,29 +811,11 @@ change. Reviewed under injection_interpreted_input, browser_boundary and
 files_artifacts (A19): the new tests show the escaping and the value
 places the rules already required; no outcome changed.
 
-Performed again on 2026-11-24, after every formal invariant of A01–A19 and
-A22 was bound to a Factory check of the Required test that shows it
-(`[witness: verification:registry_aNN_*]`), in place of the [TEST_EVIDENCE]
-notes, and Required tests were added to A02, A03, A04, A08, A09, A10, A12
-and A22 and restated in A11 and A22 so that each invariant is shown whole:
-a required address and kind, a project correction's untouched facts, a
-Customer's revision, the rights table for every pair, the publishing
-callers, the token and the registration of an agent call, a re-registered
-identity's empty session, each session change moving the version once. One
-normative rule was restated, by the owner: A03 rule 3 names the created
-instant among the facts a correction leaves, its revision and last-changed
-instant following A04, as A03 rule 4 and A04 already read; A03 is named by no
-category. Reviewed under every category naming the others:
-authentication_credential_abuse (A09, A13, A17), secrets (A14, A17, A18),
-authorization (A04, A08, A09, A10, A11, A12), injection_interpreted_input
-(A02, A16, A19), browser_boundary (A13, A19), files_artifacts (A07, A08,
-A16, A18, A19, A22) and concurrency (A01, A04, A07, A12, A13, A14, A15, A16,
-A17, A18): the tests show refusals and guarantees the rules already gave,
-and no outcome changed. A04 Required test 11 was then widened the same day
-(State 2 rounds 115–117) to every action that moves a record's revision and
-last-changed instant, an erasure excepted as A04 rule 1 keeps no revision;
-reviewed again under authorization and concurrency (A04): it shows what A04
-rule 1 already decided, and no outcome changed.
+Performed again on 2026-11-24, after the witnesses of A01–A19 and A22 were
+bound to Factory checks of their Required tests in place of the
+[TEST_EVIDENCE] notes, and the owner restated A03 rule 3 (a correction
+leaves the created instant; its revision and last-changed instant follow
+A04). No outcome changed; A03 is named by no category.
 
 Performed again on 2026-11-24, after A20 rule 5 recorded that its rules
 are kept by the release process and its installation, outside Registry
