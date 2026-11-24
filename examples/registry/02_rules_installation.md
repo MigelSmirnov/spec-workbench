@@ -320,7 +320,9 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
     configuration item, a backup location that cannot be written, an existing
     store failing its integrity check or of another version, a new store that
     cannot be made — stops the start before any listener is opened, and no
-    request is served.
+    request is served. When the service API's listener cannot be opened
+    after the owner interface's was, the owner interface's is closed and no
+    request is served on it.
 
 - Witness, A17-1: the test evidence of `start_instance` [witness: note:start_instance].
 - Witness, A17-2: the test evidence of `load_configuration` [witness: note:load_configuration].
