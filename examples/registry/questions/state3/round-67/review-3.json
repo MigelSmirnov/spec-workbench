@@ -1,0 +1,154 @@
+{
+ "open_points": [
+  {
+   "subject": "MultipartFileBody public surface and construction",
+   "kind": "missing export boundary",
+   "text": "`upload_framing`, for `read_upload_head` and\n`MultipartFileBody`;",
+   "question": "Is `MultipartFileBody` a public export that `owner_interface` constructs or names, or is it private to `upload_framing` and returned behind the `UploadBody` port by `read_upload_head`? The candidate public capabilities expose only `read_upload_head`.",
+   "options": [
+    "Export `MultipartFileBody` and specify its constructor and ownership of parser state.",
+    "Keep `MultipartFileBody` private; make `read_upload_head` return an `UploadHead` containing an `UploadBody`.",
+    "Add a separate public factory that constructs the file-part body."
+   ],
+   "default_guess": "Keep `MultipartFileBody` private and return it through the `UploadBody` interface from `read_upload_head`.",
+   "witness": {
+    "initial": "A valid multipart request has a parsed CSRF part and an unread file part.",
+    "events": [
+     "`owner_interface` calls `read_upload_head`.",
+     "It must hand an `UploadBody` with the correct boundary and look-ahead state to `operations`."
+    ],
+    "outcomes": [
+     "`read_upload_head` constructs the concrete stream and returns it behind `UploadBody`; `owner_interface` imports no concrete class.",
+     "`owner_interface` constructs `MultipartFileBody`, so it must receive and understand boundary, delimiter and look-ahead state hidden by `upload_framing`."
+    ],
+    "observer": "The strict import projector, generated module, and upload integration test see different dependency surfaces."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "OperationAnswer variants",
+   "kind": "unspecified dependency surface",
+   "text": "`OperationAnswer`\nwith every variant of it and `RefusalCode`, which it renders;",
+   "question": "Which exact `OperationAnswer` variant models does `owner_interface` directly name, inspect or construct, and therefore import?",
+   "options": [
+    "Enumerate every concrete variant because rendering is exhaustive.",
+    "Import only `OperationAnswer` and inspect a discriminator without naming concrete variant types.",
+    "Enumerate only the concrete variants actually referenced by rendering code."
+   ],
+   "default_guess": "Enumerate every concrete variant that the renderer pattern-matches, plus `OperationAnswer` and `RefusalCode` only where directly named.",
+   "witness": {
+    "initial": "`perform_owner_operation` returns one concrete answer variant.",
+    "events": [
+     "`owner_interface` dispatches rendering by the returned answer.",
+     "The strict importer builds the module from the declared dependency surface."
+    ],
+    "outcomes": [
+     "All concrete variants are imported and matched exhaustively.",
+     "Only the union/base model is imported and rendering dispatches through its discriminator."
+    ],
+    "observer": "The generator and type checker see different required imports and different permitted rendering code."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "OwnerRequest, OwnerValues, OwnerAdmission and OwnerAction use",
+   "kind": "ambiguous model roles",
+   "text": "`OwnerRequest`, `OwnerValues`, `OwnerAdmission`\nand `OwnerAction`, which it reads, builds and matches,",
+   "question": "For each named model, must `owner_interface` read it, construct it, or pattern-match it, and which module produces `OwnerAdmission`?",
+   "options": [
+    "`owner_interface` parses HTTP into `OwnerRequest`, `OwnerValues` and `OwnerAction`; `operations` or `owner_sessions` produces `OwnerAdmission`.",
+    "`owner_interface` constructs `OwnerAdmission` from the cookie and request before calling `operations`.",
+    "`perform_owner_operation` accepts raw request facts and returns both admission and operation outcome."
+   ],
+   "default_guess": "The interface constructs only parsed request/value/action models; authentication code owns and produces `OwnerAdmission`.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-interface checks",
+   "kind": "responsibility ambiguity",
+   "text": "Any check the server makes: the forms carry values, `operations` decides.",
+   "question": "Does “any check” include HTTP readability, multipart-head validity, form decoding and route matching, which `owner_interface` is also required to detect, or only authentication, authorization, value, revision and lifecycle decisions?",
+   "options": [
+    "It means only domain and admission checks; `owner_interface` owns syntactic parsing and decoding checks.",
+    "It literally includes parsing checks, so `operations` must receive raw parsing failures and decide them.",
+    "Split parsing checks into a named framing/HTTP module and leave all operation checks to `operations`."
+   ],
+   "default_guess": "Limit this prohibition to admission and domain checks; let `owner_interface` and `upload_framing` detect syntax and transport failures.",
+   "witness": {
+    "initial": "A valid owner session sends a known route whose form body cannot be decoded.",
+    "events": [
+     "`owner_interface` attempts to parse the body.",
+     "The request must still be handed to `operations` and answered."
+    ],
+    "outcomes": [
+     "`owner_interface` classifies the decoding failure and constructs an action with no values.",
+     "`owner_interface` performs no check and passes raw failure state for `operations` to classify."
+    ],
+    "observer": "Module tests and error handling code assign the decision to different modules."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "failure after a valid upload head",
+   "kind": "failure-boundary ambiguity",
+   "text": "A request it cannot read — a body or a head that fails, a form that cannot be\ndecoded — is handed on with no values, nothing partly read kept, and\nanswered by `operations` as any other;",
+   "question": "Does “a body ... that fails” include a file-part stream that fails after a valid head, or only failures encountered before the unread file stream is handed on?",
+   "options": [
+    "A post-head stream failure reaches `migration_import` as `file_unreadable`.",
+    "Every body failure becomes an owner request with no values and is answered generically by `operations`.",
+    "Define distinct pre-handoff parsing failure and post-handoff file-stream failure states."
+   ],
+   "default_guess": "Treat only pre-handoff parsing failures as no-values requests; a failure while consuming the returned file stream is `file_unreadable`.",
+   "witness": {
+    "initial": "The request has a valid boundary, CSRF part and file headers, but the connection ends before the closing delimiter.",
+    "events": [
+     "`read_upload_head` succeeds and returns the unread file body.",
+     "`migration_import` reads it and reaches premature end-of-stream."
+    ],
+    "outcomes": [
+     "The upload is refused as `file_unreadable`, as `upload_framing` states.",
+     "The failed body is converted to a no-values owner request and receives the generic operation refusal."
+    ],
+    "observer": "The owner sees a different refusal code and possibly a different HTTP status."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "file-part reading responsibility",
+   "kind": "unclear dependency direction",
+   "text": "the size limit of the file\nand its reading (`migration_import`, A19 rule 4),",
+   "question": "Who performs reads on the underlying request `ByteStream`: does `upload_framing` perform them while `migration_import` drives the `UploadBody` port, or must `migration_import` read framing bytes itself despite multipart syntax being hidden?",
+   "options": [
+    "`upload_framing` alone reads the underlying byte stream and exposes file bytes through `UploadBody`; `migration_import` drives it and enforces the size limit.",
+    "`migration_import` reads the request stream directly and asks `upload_framing` only for delimiter information.",
+    "`owner_interface` pumps bytes between the framing stream and `migration_import`."
+   ],
+   "default_guess": "`upload_framing` performs all underlying framed reads; `migration_import` consumes the `UploadBody` port and owns only file consumption and its size limit.",
+   "witness": {
+    "initial": "A file delimiter spans two chunks of the request byte stream.",
+    "events": [
+     "The import reader asks for the next file bytes.",
+     "Detecting the delimiter requires look-ahead across the chunk boundary."
+    ],
+    "outcomes": [
+     "`upload_framing` reads and buffers delimiter look-ahead while returning only file bytes.",
+     "`migration_import` reads the raw stream and must implement multipart delimiter recognition."
+    ],
+    "observer": "The module dependency graph and delimiter-boundary tests differ."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface model imports",
+   "kind": "standard_violation",
+   "text": "`OperationAnswer`\nwith every variant of it and `RefusalCode`, which it renders;",
+   "rule": "Для provider-а `models` перечисляй ровно модели, enum и interface, которые\n  consumer непосредственно называет, конструирует или проверяет в своём\n  runtime коде.",
+   "section": "7",
+   "question": "Replace “every variant of it” with the exact names of the models, enums and interfaces that `owner_interface` directly names, constructs or checks.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"MultipartFileBody public surface and construction\",\"kind\":\"missing export boundary\",\"text\":\"`upload_framing`, for `read_upload_head` and\\n`MultipartFileBody`;\",\"question\":\"Is `MultipartFileBody` a public export that `owner_interface` constructs or names, or is it private to `upload_framing` and returned behind the `UploadBody` port by `read_upload_head`? The candidate public capabilities expose only `read_upload_head`.\",\"options\":[\"Export `MultipartFileBody` and specify its constructor and ownership of parser state.\",\"Keep `MultipartFileBody` private; make `read_upload_head` return an `UploadHead` containing an `UploadBody`.\",\"Add a separate public factory that constructs the file-part body.\"],\"default_guess\":\"Keep `MultipartFileBody` private and return it through the `UploadBody` interface from `read_upload_head`.\",\"witness\":{\"initial\":\"A valid multipart request has a parsed CSRF part and an unread file part.\",\"events\":[\"`owner_interface` calls `read_upload_head`.\",\"It must hand an `UploadBody` with the correct boundary and look-ahead state to `operations`.\"],\"outcomes\":[\"`read_upload_head` constructs the concrete stream and returns it behind `UploadBody`; `owner_interface` imports no concrete class.\",\"`owner_interface` constructs `MultipartFileBody`, so it must receive and understand boundary, delimiter and look-ahead state hidden by `upload_framing`.\"],\"observer\":\"The strict import projector, generated module, and upload integration test see different dependency surfaces.\"}},{\"subject\":\"OperationAnswer variants\",\"kind\":\"unspecified dependency surface\",\"text\":\"`OperationAnswer`\\nwith every variant of it and `RefusalCode`, which it renders;\",\"question\":\"Which exact `OperationAnswer` variant models does `owner_interface` directly name, inspect or construct, and therefore import?\",\"options\":[\"Enumerate every concrete variant because rendering is exhaustive.\",\"Import only `OperationAnswer` and inspect a discriminator without naming concrete variant types.\",\"Enumerate only the concrete variants actually referenced by rendering code.\"],\"default_guess\":\"Enumerate every concrete variant that the renderer pattern-matches, plus `OperationAnswer` and `RefusalCode` only where directly named.\",\"witness\":{\"initial\":\"`perform_owner_operation` returns one concrete answer variant.\",\"events\":[\"`owner_interface` dispatches rendering by the returned answer.\",\"The strict importer builds the module from the declared dependency surface.\"],\"outcomes\":[\"All concrete variants are imported and matched exhaustively.\",\"Only the union/base model is imported and rendering dispatches through its discriminator.\"],\"observer\":\"The generator and type checker see different required imports and different permitted rendering code.\"}},{\"subject\":\"OwnerRequest, OwnerValues, OwnerAdmission and OwnerAction use\",\"kind\":\"ambiguous model roles\",\"text\":\"`OwnerRequest`, `OwnerValues`, `OwnerAdmission`\\nand `OwnerAction`, which it reads, builds and matches,\",\"question\":\"For each named model, must `owner_interface` read it, construct it, or pattern-match it, and which module produces `OwnerAdmission`?\",\"options\":[\"`owner_interface` parses HTTP into `OwnerRequest`, `OwnerValues` and `OwnerAction`; `operations` or `owner_sessions` produces `OwnerAdmission`.\",\"`owner_interface` constructs `OwnerAdmission` from the cookie and request before calling `operations`.\",\"`perform_owner_operation` accepts raw request facts and returns both admission and operation outcome.\"],\"default_guess\":\"The interface constructs only parsed request/value/action models; authentication code owns and produces `OwnerAdmission`.\"},{\"subject\":\"owner-interface checks\",\"kind\":\"responsibility ambiguity\",\"text\":\"Any check the server makes: the forms carry values, `operations` decides.\",\"question\":\"Does “any check” include HTTP readability, multipart-head validity, form decoding and route matching, which `owner_interface` is also required to detect, or only authentication, authorization, value, revision and lifecycle decisions?\",\"options\":[\"It means only domain and admission checks; `owner_interface` owns syntactic parsing and decoding checks.\",\"It literally includes parsing checks, so `operations` must receive raw parsing failures and decide them.\",\"Split parsing checks into a named framing/HTTP module and leave all operation checks to `operations`.\"],\"default_guess\":\"Limit this prohibition to admission and domain checks; let `owner_interface` and `upload_framing` detect syntax and transport failures.\",\"witness\":{\"initial\":\"A valid owner session sends a known route whose form body cannot be decoded.\",\"events\":[\"`owner_interface` attempts to parse the body.\",\"The request must still be handed to `operations` and answered.\"],\"outcomes\":[\"`owner_interface` classifies the decoding failure and constructs an action with no values.\",\"`owner_interface` performs no check and passes raw failure state for `operations` to classify.\"],\"observer\":\"Module tests and error handling code assign the decision to different modules.\"}},{\"subject\":\"failure after a valid upload head\",\"kind\":\"failure-boundary ambiguity\",\"text\":\"A request it cannot read — a body or a head that fails, a form that cannot be\\ndecoded — is handed on with no values, nothing partly read kept, and\\nanswered by `operations` as any other;\",\"question\":\"Does “a body ... that fails” include a file-part stream that fails after a valid head, or only failures encountered before the unread file stream is handed on?\",\"options\":[\"A post-head stream failure reaches `migration_import` as `file_unreadable`.\",\"Every body failure becomes an owner request with no values and is answered generically by `operations`.\",\"Define distinct pre-handoff parsing failure and post-handoff file-stream failure states.\"],\"default_guess\":\"Treat only pre-handoff parsing failures as no-values requests; a failure while consuming the returned file stream is `file_unreadable`.\",\"witness\":{\"initial\":\"The request has a valid boundary, CSRF part and file headers, but the connection ends before the closing delimiter.\",\"events\":[\"`read_upload_head` succeeds and returns the unread file body.\",\"`migration_import` reads it and reaches premature end-of-stream.\"],\"outcomes\":[\"The upload is refused as `file_unreadable`, as `upload_framing` states.\",\"The failed body is converted to a no-values owner request and receives the generic operation refusal.\"],\"observer\":\"The owner sees a different refusal code and possibly a different HTTP status.\"}},{\"subject\":\"file-part reading responsibility\",\"kind\":\"unclear dependency direction\",\"text\":\"the size limit of the file\\nand its reading (`migration_import`, A19 rule 4),\",\"question\":\"Who performs reads on the underlying request `ByteStream`: does `upload_framing` perform them while `migration_import` drives the `UploadBody` port, or must `migration_import` read framing bytes itself despite multipart syntax being hidden?\",\"options\":[\"`upload_framing` alone reads the underlying byte stream and exposes file bytes through `UploadBody`; `migration_import` drives it and enforces the size limit.\",\"`migration_import` reads the request stream directly and asks `upload_framing` only for delimiter information.\",\"`owner_interface` pumps bytes between the framing stream and `migration_import`.\"],\"default_guess\":\"`upload_framing` performs all underlying framed reads; `migration_import` consumes the `UploadBody` port and owns only file consumption and its size limit.\",\"witness\":{\"initial\":\"A file delimiter spans two chunks of the request byte stream.\",\"events\":[\"The import reader asks for the next file bytes.\",\"Detecting the delimiter requires look-ahead across the chunk boundary.\"],\"outcomes\":[\"`upload_framing` reads and buffers delimiter look-ahead while returning only file bytes.\",\"`migration_import` reads the raw stream and must implement multipart delimiter recognition.\"],\"observer\":\"The module dependency graph and delimiter-boundary tests differ.\"}},{\"subject\":\"owner_interface model imports\",\"kind\":\"standard_violation\",\"text\":\"`OperationAnswer`\\nwith every variant of it and `RefusalCode`, which it renders;\",\"rule\":\"Для provider-а `models` перечисляй ровно модели, enum и interface, которые\\n  consumer непосредственно называет, конструирует или проверяет в своём\\n  runtime коде.\",\"section\":\"7\",\"question\":\"Replace “every variant of it” with the exact names of the models, enums and interfaces that `owner_interface` directly names, constructs or checks.\"}]}",
+ "set_aside": []
+}
