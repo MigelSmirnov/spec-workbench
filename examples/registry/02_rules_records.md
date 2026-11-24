@@ -114,12 +114,18 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
     projects makes two rooms.
 13. A repeat with equal facts of 'add a room' or of a publish, after its
     project was archived, is refused and nothing changes.
+14. A repeat failing any check of stages (1) to (4) of A04 rule 6 is refused,
+    is never answered as a repeat, and nothing changes: one from a service
+    without the right (1); Kernel's after the project left its session's set
+    (2); a room's on a project deleted whole since (3); one whose required
+    value is now given blank, or a publish of a removed type (4).
 
-- Witness, A01-1, A01-3, A01-4: for projects, the test evidence of `create_project` [witness: note:create_project].
+- Witness, A01-1, A01-2, A01-3, A01-4: for projects, the test evidence of `create_project` [witness: note:create_project].
 - Witness, A01-1, A01-3, A01-4: for Customers, the test evidence of `record_customer` [witness: note:record_customer].
 - Witness, A01-1, A01-2, A01-3, A01-4: for rooms, the test evidence of `add_room` [witness: note:add_room].
 - Witness, A01-1, A01-2, A01-3, A01-4: for pointers, the test evidence of `publish_pointer` [witness: note:publish_pointer].
-- Witness, A01-2: for a repeat whose rights or session set fail, the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
+- Witness, A01-2: for a repeat whose session set fails, the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
+- Witness, A01-2: for a repeat outside the service's rights, the test evidence of `perform_service_operation` [witness: note:perform_service_operation].
 
 ### Consequence
 
