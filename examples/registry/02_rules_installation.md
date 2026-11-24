@@ -608,16 +608,25 @@ Proposed by the security review and accepted by the owner on 2026-10-31.
 3. A dependency changes only by a new release, verified as any release.
 4. Registry has no dependency that loads code at run time from outside its
    release.
+5. Rules 1–4 are kept by the release process and its installation, which
+   Registry does not manage (00_product.md, Explicit exclusions): they make
+   the release, name its dependencies and install them, and Registry's own
+   code reads none of it (owner, 2026-11-24). This decision therefore
+   declares no formal invariant of Registry: no note of a module and no
+   check of Registry's code can show what the installation does, and one
+   claimed here would be a false witness.
 
 ### Formal invariants
 
-```text
-running dependencies = release.dependencies (name, version, digest)
-```
+None: kept by the release process and its installation outside Registry
+(rule 5) — the running dependencies are the release's (name, version,
+digest), which no note or check of Registry's code can show.
 
 ### Required tests
 
-1. Installing the release with a dependency whose digest differs fails.
+1. Installing the release with a dependency whose digest differs fails. This
+   is a test of the release process (rule 5), shown there and not by a check
+   of Registry.
 
 ### Consequence
 
@@ -776,6 +785,14 @@ the checks that show them. No normative rule changed, and A13 did not
 change. Reviewed under injection_interpreted_input, browser_boundary and
 files_artifacts (A19): the new tests show the escaping and the value
 places the rules already required; no outcome changed.
+
+Performed again on 2026-11-24, after A20 rule 5 recorded that its rules
+are kept by the release process and its installation, outside Registry
+(owner), and A20 declared no formal invariant of Registry's code. No rule
+of what a release contains or how it is installed moved. Reviewed under
+dependencies (A20): which dependencies run and how they are fixed and
+verified are unchanged, and the place that verifies them is named. No
+outcome changed.
 
 ### Consequence
 
