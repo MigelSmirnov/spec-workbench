@@ -195,6 +195,41 @@ readings, so an action's today is `operations`' (`_today_of`).
   refusal, its code's row of `REFUSAL_HTTP_STATUSES`: `not_found` 404,
   `internal_error` 500, every other code 422, as v1 answered (`SOURCE.md`
   L14).
+- **The owner interface's requests and pages** (`owner_interface`; owner,
+  2026-11-24, the State 7 structure requests of `owner_interface`). An owner
+  action is addressed by its row of the data provider's `OWNER_ACTIONS`
+  (row model `OwnerActionRoute`, one row per `OwnerAction` member): a read
+  by `GET`, every other action by `POST`, at the path `/` and the action's
+  value, the project list at `/`; the row also says whether the action is a
+  change, whose form carries the CSRF value (A13 rule 2), and whether it
+  touches an uploaded file (A16 rule 2) — `show_confirmation` touching one
+  only when its `confirm_action` is `confirm_import`. A method and path of
+  no row name no action: `OwnerRequest.action` is then none, and
+  `operations` refuses the request after stage (1) as `invalid_request`
+  (`outside_closed_list`) at stage (4). The target is the query parameter
+  `OWNER_TARGET_PARAMETER` (`target`) names, an identity and never a
+  personal value (R0-29). A `GET` request's other fields are its query's, a
+  `POST` request's the fields of its `application/x-www-form-urlencoded`
+  body, or of the upload's multipart head. Each field is named by its path:
+  an `OwnerRequest` or `OwnerValues` field by its name, a nested model's
+  field by its parent's path, a full stop and its name, a tuple's element by
+  its parent's path, a full stop and its position from 0, and a union's
+  variant by its discriminator among its fields; a field's text is the
+  field's value for text, an enumeration member's value, `true` or `false`,
+  or an integer's decimal digits, and an absent field is none. A form that
+  repeats a name, gives a text not of its field's type or leaves a gap in a
+  tuple's positions cannot be read. The CSRF value is the field
+  `OWNER_CSRF_FIELD` (`csrf`) names, the upload's first part included, and
+  `OwnerRequest.csrf_value` carries it from the form's reading to the
+  request's admission, since a body is read once. The session cookie is
+  named `OWNER_SESSION_COOKIE_NAME` (`__Host-registry_session`): set
+  `Secure`, `HttpOnly`, `Path=/` and no `Domain`, which the `__Host-` prefix
+  makes a browser require (A13 rule 1). A page's HTTP status is the service
+  API's: `SERVICE_ANSWER_STATUS` for an answer, the code's row of
+  `REFUSAL_HTTP_STATUSES` for a refusal. A
+  request whose body, upload head or form cannot be read is handed on with
+  no values, no CSRF value and no credential (option (a) of the question
+  State 4 carried to State 7, round-51 and round-55 T3).
 - **The import file** (R0-72): one UTF-8 JSON object with the arrays
   `projects` (`project_id`, `name`, `address`, `status`, `customer_ref`,
   `created_at`, `updated_at`, `archived_at`), `rooms` (`room_id`,

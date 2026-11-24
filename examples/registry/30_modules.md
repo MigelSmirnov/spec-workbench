@@ -369,7 +369,10 @@ and every one is exported.
 and `DisclosureClass` for `SERVICE_HIGHEST_CLASSES`; `PersonalDataField` (an
 answer model's name and a field's) for `PERSONAL_DATA_FIELDS`;
 `RefusalHttpStatus` (a code and its status) with `RefusalCode` for
-`REFUSAL_HTTP_STATUSES`. Its other constants are scalars and import nothing.
+`REFUSAL_HTTP_STATUSES`; `OwnerActionRoute` (an owner action, its method and
+path, whether it is a change and whether it touches an uploaded file) with
+`OwnerAction` for `OWNER_ACTIONS`. Its other constants are scalars and
+import nothing.
 
 ### Must not own
 
@@ -431,6 +434,10 @@ SERVICE_ANSWER_STATUS
 REFUSAL_HTTP_STATUSES
 UPLOAD_FORM_HEAD_MAX_BYTES
 LISTENER_READ_TIMEOUT_SECONDS
+OWNER_ACTIONS
+OWNER_TARGET_PARAMETER
+OWNER_CSRF_FIELD
+OWNER_SESSION_COOKIE_NAME
 ```
 
 ### Depth assessment
@@ -495,7 +502,8 @@ sends its CSRF field as the first part of its body and the file as the
 second, so that the CSRF value travels in a form (A13 rules 5, 7) and the
 file still reaches `migration_import` unread. Reading the body's head alone
 — the boundary the request's content type names, the first part, which
-must be the CSRF field, and the second part's headers — at most the
+must be the CSRF field, the form field the data provider's
+`OWNER_CSRF_FIELD` names (owner, 2026-11-24), and the second part's headers — at most the
 data provider's `UPLOAD_FORM_HEAD_MAX_BYTES`, answering the CSRF value, or
 none for a head of another form or longer than the bound; and the file
 part's bytes as a stream that ends where the part ends, read only when its
@@ -1302,12 +1310,23 @@ that browser's, and where it does not, HTTPS there too is the host's
 (Explicit exclusions). Every
 form of a page rendered for a valid session carries the CSRF value
 `owner_sessions` gives for the session; the sign-in form, made without a
-session, carries none (A13 rule 4).
+session, carries none (A13 rule 4). Which action a request names, by its
+method and path, and whether it is a change or touches an uploaded file, are
+the rows of the data provider's `OWNER_ACTIONS`; its target is the query
+parameter `OWNER_TARGET_PARAMETER` names, its CSRF value the form field
+`OWNER_CSRF_FIELD` names, the session cookie's name
+`OWNER_SESSION_COOKIE_NAME`, and a page's HTTP status the service API's
+`SERVICE_ANSWER_STATUS` and `REFUSAL_HTTP_STATUSES` (owner, 2026-11-24). A
+request it cannot read — a body or a head that fails, a form that cannot be
+decoded — is handed on with no values, nothing partly read kept, and
+answered by `operations` as any other; it never closes the connection
+instead of answering (owner, 2026-11-24, option (a) of the question State 4
+carried to State 7).
 
 ### Knows
 
-`models`, `random_values`, `upload_framing`, `owner_sessions`,
-`operations`.
+`models`, `data_provider`, `random_values`, `upload_framing`,
+`owner_sessions`, `operations`.
 
 ### Must not own
 

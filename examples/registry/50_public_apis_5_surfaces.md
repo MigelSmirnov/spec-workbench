@@ -131,7 +131,11 @@ the confirmation id from `random_values.mint_identity` only then (A14 rule
 
 ### Errors
 
-Every code of the closed set, from the module that decided it.
+Every code of the closed set, from the module that decided it. A request
+that names no owner action — its method and path are no row of the imported
+`OWNER_ACTIONS` constant — is checked at stage (1) as a read and then
+refused `invalid_request` (`outside_closed_list`) at stage (4), as the
+service API refuses an operation it does not know (owner, 2026-11-24).
 
 ### State impact
 
@@ -227,12 +231,32 @@ its `Content-Length` bytes, or at a chunked body's last chunk
 (`instance_lifecycle`'s listener). A file whose bytes run past that end lacks
 its closing delimiter and is refused as `file_unreadable`; A19 rule 4's
 counting applies to the bytes of the file part the stream gives.
+The action is the row of the imported `OWNER_ACTIONS` constant whose method
+and path are the request's, and that row says whether the request is a
+change and whether it touches an uploaded file — the confirmation step
+touching one only when the action it confirms is the import; the target is
+the query parameter the imported `OWNER_TARGET_PARAMETER` constant names;
+the CSRF value is the form field the imported `OWNER_CSRF_FIELD` constant
+names; the session is the cookie the imported `OWNER_SESSION_COOKIE_NAME`
+constant names (owner, 2026-11-24). A request whose body, upload head or
+form cannot be read is handed on with no values, no CSRF value and no
+credential, nothing partly read kept: it is admitted or refused by the
+ordinary checks, a change refused at stage (1) for its missing CSRF value,
+a sign-in as a missing credential (owner, 2026-11-24; option (a) of the
+question State 4 round-51 and round-55 T3 carried to State 7).
 
 ### Outputs
 
 One HTML page: the answer rendered, every stored value escaped as text for
 its place, under a content security policy forbidding any script; or the
 refusal rendered — the sign-in page for a request without a valid session.
+Its HTTP status is the imported `SERVICE_ANSWER_STATUS` constant for an
+answer and, for a refusal, its code's row of the imported
+`REFUSAL_HTTP_STATUSES` constant, as the service API's (owner, 2026-11-24).
+A link or a form addresses its action by that action's row of
+`OWNER_ACTIONS` and its target by `OWNER_TARGET_PARAMETER`; a read is a
+link or a GET form, which carries no CSRF value, and every change a POST
+form carrying it, so no secret is ever in a URL (R0-29).
 
 ### Observable effect
 
@@ -262,7 +286,9 @@ rule 1). Every check is `operations`'.
 
 ### Errors
 
-Renders every refusal of the closed set.
+Renders every refusal of the closed set. Refuses nothing itself: a request
+it cannot read is answered by `operations` as any other, never by a closed
+connection instead of an answer (owner, 2026-11-24).
 
 ### State impact
 
