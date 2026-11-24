@@ -391,7 +391,10 @@ def test_upload_answers_projects_and_changes_nothing(semantic_runtime):
 
 def test_held_pointer_id_refuses_whole_import(semantic_runtime):
     """Required test 2 (A16-3): a file whose one pointer id production holds
-    refuses the whole import — no project of the picks arrives."""
+    refuses the whole import: the mapping names the conflict, no
+    confirmation step is shown, and nothing of the picks — a clean one
+    included — arrives (rules 1, 6: the confirmation applies only a clean
+    mapping, and the step shows its result)."""
     rt = semantic_runtime
     production = _production_project(rt)
     held = _production_pointer(rt, production)
@@ -715,9 +718,11 @@ def test_confirmation_after_session_ended_refused(semantic_runtime):
 
 def test_step_for_conflicting_mapping_refused_makes_no_value(semantic_runtime):
     """Required test 11: asking for the import's confirmation step while the
-    mapping shows a conflicting id is refused, and no confirmation value is
-    made (rule 1; A13 rule 6: a shown step replaces the session's pending
-    value, so a value made here would replace the earlier one)."""
+    mapping shows a conflicting id is answered with that mapping, not with a
+    step: no step is shown and no confirmation value is made, so the value
+    of an earlier clean step stays pending (rule 1; A13 rule 6: a shown step
+    replaces the session's pending value, so a value made here would replace
+    the earlier one)."""
     rt = semantic_runtime
     production = _production_project(rt)
     content = _file(

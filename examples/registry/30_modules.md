@@ -1127,7 +1127,8 @@ projects with one id or a project without a readable id or status (rule 3);
 the mapping for the picks — rooms, pointers, names and aliases, the Customers
 it will make, malformed records and conflicting ids (rules 1, 3–5); that the
 confirmation step is not shown while the mapping shows an error (rule 1);
-checking again at confirmation and, in the one transaction `operations`
+building that mapping once more inside the confirming transaction, applied
+only when clean (A16 rule 6), and, in the one transaction `operations`
 opens, which appends the import's audit entry, having each record written by
 its own module with its source identities and instants — `projects`
 the picked projects with their objects and rooms, `customers` the Customers

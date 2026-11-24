@@ -401,7 +401,7 @@ def test_record_matches_snapshot_mismatch_deleted(semantic_runtime):
     """The readable record holds the snapshot's instant, the release, the
     snapshot's last sequence number and the key's digest; a backup whose
     decrypted sequence differs from its record is deleted (A18 rules 1, 4;
-    A18-1, A18-2)."""
+    A18-3, A18-2)."""
     rt = semantic_runtime
     _start_with_key(rt, KEY_ONE)
     _create_project(rt, "Uno")
@@ -514,7 +514,7 @@ def test_backup_unreadable_without_its_key(semantic_runtime):
 def test_integrity_failure_deleted_and_reported(semantic_runtime):
     """A backup whose integrity check fails is deleted, never kept, and the
     run writes a diagnostic naming no value; Registry keeps serving and the
-    next 03:00 tries again (A18 rules 4, 5; A18-1, A18-2)."""
+    next 03:00 tries again (A18 rules 4, 5; A18-3, A18-2)."""
     rt = semantic_runtime
     _start_with_key(rt, KEY_ONE)
     project = _create_project(rt, "Integridad")

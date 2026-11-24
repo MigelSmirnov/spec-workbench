@@ -35,12 +35,11 @@ commits, and two concurrent publishes of one type answer 500.
 ### Formal invariants
 
 ```text
-for each project p and type t:
-  count(pointer of p, t with status published) <= 1   -- A07-1
-  versions of p, t are 1..n without gaps or repeats   -- A07-2
-publish(p, t) accepted:
-  new.version = max(version of p, t) + 1 (or 1)   -- A07-3
-  previous published of p, t becomes superseded in the same transaction   -- A07-4
+for each project p and type t: count(pointer of p, t with status published) <= 1   -- A07-1
+for each project p and type t: versions of p, t are 1..n without gaps or repeats   -- A07-2
+publish(p, t) accepted => new.version = max(version of p, t) + 1 (or 1)   -- A07-3
+publish(p, t) accepted => the previous published pointer of p, t becomes
+superseded in the same transaction as the new one is stored   -- A07-4
 ```
 
 ### Required tests
@@ -50,8 +49,9 @@ publish(p, t) accepted:
 1. Two concurrent publishes of `estimate` on one project, with different
    request ids, make versions n+1 and
    n+2, the first `superseded`, the second `published`; neither answers an
-   internal error.
-   Shows A07-1, A07-2, A07-3, A07-4. [witness: verification:registry_a07_concurrent_publishes_consecutive_versions]
+   internal error. That superseding and storing are one transaction is
+   test 2's: a race shows only their outcome.
+   Shows A07-1, A07-2, A07-3. [witness: verification:registry_a07_concurrent_publishes_consecutive_versions]
 2. A failure after the version is assigned leaves no superseded pointer and no
    new one.
    Shows A07-4. [witness: verification:registry_a07_failed_publish_leaves_nothing]
@@ -65,6 +65,17 @@ publish(p, t) accepted:
 ### Consequence
 
 L07's partial state and internal error are gone; the history is gap-free.
+
+Restated on 2026-11-24, under the owner's direction of that day
+(data-protection matrix, `sources/privacy_requirements_20261123.md`: every
+measure names the test that confirms it), after the witness review
+(`tests/semantic/review/SUMMARY.md`, class 2) found that test 1 claimed
+A07-4, which a race cannot show: test 1 shows A07-1 to A07-3, and A07-4 is
+test 2's. Each formula is written whole, its identifier on its last line.
+No normative rule changed. Rule 2's serialisation is witnessed only when the
+publishes overlap (test 1); a deterministic witness would need a point to
+hold a transaction, which the specification does not name, and remains
+carried to Factory verification.
 
 ## Accepted decision A08 — the agent and the owner link; services do not publish
 
@@ -89,8 +100,8 @@ L07's partial state and internal error are gone; the history is gap-free.
 ### Formal invariants
 
 ```text
-publish or withdraw accepted => caller in {Kernel for a session s with   -- A08-1
-                                project in granted(s), owner}
+publish or withdraw accepted => caller in {Kernel for a session s with
+project in granted(s), owner}   -- A08-1
 pointer.owner_service = owner_service(pointer.type)   -- A08-2
 ```
 
@@ -102,7 +113,8 @@ pointer.owner_service = owner_service(pointer.type)   -- A08-2
    its owner service and Kernel for S as its publisher.
    Shows A08-2. [witness: verification:registry_a08_kernel_publish_names_owner_and_publisher]
 3. Kernel withdrawing a pointer on a project outside its session's set is
-   answered as not found (A10).
+   answered as not found: the whole answer equal to that for a pointer that
+   does not exist (A10 rule 3).
    Shows A08-1. [witness: verification:registry_a08_withdraw_outside_set_not_found]
 4. The owner withdraws a pointer Kernel published; the withdrawal records the
    owner.
@@ -111,6 +123,12 @@ pointer.owner_service = owner_service(pointer.type)   -- A08-2
 
 Every pointer is a link someone on the agent's checked path or the owner made
 (R0-88); the owner service always says where the document lives.
+
+Restated on 2026-11-24, after the independent judge of the witnesses read
+the continuation of A08-1 as part of A08-2: A08-1 is written whole, its
+identifier on its last line. Its meaning and no normative rule changed.
+Test 3's answers are compared whole with that for a pointer that does not
+exist, as A10 rule 3 now states what is equal.
 
 ## Accepted decision A22 — one declared type; the vocabulary changes only by a release
 
@@ -149,8 +167,9 @@ publish(t) or latest(t) with t not declared => unknown type   -- A22-3
 
 ### Required tests
 
-1. Publishing `wall_plan` is refused as an unknown type.
-   Shows A22-1, A22-3. [witness: verification:registry_a22_undeclared_type_publish_refused]
+1. Publishing `wall_plan` is refused as an unknown type. That `estimate`
+   is the one declared type is test 4's.
+   Shows A22-3. [witness: verification:registry_a22_undeclared_type_publish_refused]
 2. After a release without a type, its pointers are still listed by 'list
    artifacts' with their statuses.
    Shows A22-2. [witness: verification:registry_a22_removed_type_pointers_still_listed]
@@ -166,3 +185,9 @@ publish(t) or latest(t) with t not declared => unknown type   -- A22-3
 
 The manifest and the implementation agree on the vocabulary (R0-33, R0-78);
 history survives any change of it.
+
+Restated on 2026-11-24, under the owner's direction of that day
+(data-protection matrix), after the witness review
+(`tests/semantic/review/SUMMARY.md`, class 2) found that test 1 claimed
+A22-1, which a refused undeclared type does not show: test 1 shows A22-3,
+and A22-1 is test 4's. No normative rule changed.

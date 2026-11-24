@@ -30,9 +30,8 @@ an entry (round 28 P1) — and how the audit log is protected (R0-37).
 ### Formal invariants
 
 ```text
-entry e exists <=> accepted action a in M09.actions, with changed(a) or a an   -- A14-1
-                   erasure of old entries, and e written in the transaction
-                   of a
+entry e exists <=> accepted action a in M09.actions, with changed(a) or a an
+erasure of old entries, and e written in the transaction of a   -- A14-1
 e.outcome = accepted   -- A14-2
 ```
 
@@ -60,6 +59,13 @@ e.outcome = accepted   -- A14-2
 
 The log is a record of what changed, never of attempts (R0-58); it needs no
 outcome but `accepted`.
+
+Restated on 2026-11-24, after the independent judge of the witnesses read
+the continuation of A14-1 as part of A14-2: A14-1 is written whole, its
+identifier on its last line. Its meaning and no normative rule changed; the
+failure tests 3 and 6 now fail the action at its last store call and at its
+record's own write, the points State 6 names, instead of at a commit State 5
+does not name.
 
 ## Accepted decision A15 — the log is append-only and the owner erases it by date
 

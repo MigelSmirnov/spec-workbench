@@ -39,11 +39,12 @@ Fixture surface used here:
 - ``new_request_id()``;
 - ``store_rows(table)`` for `audit_entry_rows`, `audit_sequence_rows`,
   `project_rows`, `customer_rows` (rows compared whole);
-- ``faults.fail_next_commit()``: the next write transaction of the store
-  fails after its step returned and before it commits; and
-  ``faults.fail_store_call("insert_audit_entry_row")``: the next insertion
-  of an audit entry (`StoreRepository`, ``70_persistence_closure.json``)
-  raises, failing the transaction that makes it.
+- ``faults.fail_store_call(method)``: the next call of that
+  `StoreRepository` method (``70_persistence_closure.json``) raises,
+  failing the transaction that makes it — `insert_audit_entry_row`, the
+  last call of an audited action (State 7 `append_audit_entry`: the raised
+  counter, then the entry, after the record's own write), and the record's
+  own write, `update_project_row` or `update_customer_row`, the first.
 """
 
 # 70_data_provider_closure.json
@@ -583,9 +584,10 @@ def test_noop_correction_and_regrant_write_no_entry(semantic_runtime):
 
 
 def test_failed_store_leaves_no_change_no_entry(semantic_runtime):
-    """A14 rule 1, A14-1: a correction whose transaction fails to commit is
-    answered `internal_error` (`transaction_failed`) and leaves neither the
-    change nor its entry; repeated, it stores both."""
+    """A14 rule 1, A14-1: a correction whose transaction fails — at its last
+    store call, the entry's insertion, or at its first, the project's own
+    write — is answered `internal_error` (`transaction_failed`) and leaves
+    neither the change nor its entry; repeated, it stores both."""
     rt = semantic_runtime
     project = _create_project(rt)
     pid = project["project_id"]
@@ -593,7 +595,10 @@ def test_failed_store_leaves_no_change_no_entry(semantic_runtime):
     store_log = _store_log(rt)
     projects = rt.store_rows("project_rows")
 
-    rt.faults.fail_next_commit()
+    # The failure at the action's last store call, the entry's insertion
+    # (after update_project_row and upsert_audit_sequence_row): had the
+    # change been committed apart from its entry, it would stay without one.
+    rt.faults.fail_store_call("insert_audit_entry_row")
     failed = rt.owner(
         "correct_project",
         target=pid,
@@ -608,9 +613,9 @@ def test_failed_store_leaves_no_change_no_entry(semantic_runtime):
     assert _log(rt) == log
     assert _store_log(rt) == store_log
 
-    # The failure at the entry's own write: had the change been committed
-    # apart from its entry, it would stay without one.
-    rt.faults.fail_store_call("insert_audit_entry_row")
+    # The failure at the change's own write, the first call: had the entry
+    # been committed apart from (before) the change, it would stay alone.
+    rt.faults.fail_store_call("update_project_row")
     failed = rt.owner(
         "correct_project",
         target=pid,
@@ -775,7 +780,9 @@ def test_accepted_change_writes_one_entry_in_transaction(semantic_runtime):
     store_log = _store_log(rt)
     customers = rt.store_rows("customer_rows")
 
-    rt.faults.fail_next_commit()
+    # The failure at the restriction's last store call, the entry's
+    # insertion: had the restriction been committed apart, it would stay.
+    rt.faults.fail_store_call("insert_audit_entry_row")
     failed = rt.owner(
         "mark_customer", target=ref, stated_version=customer["revision"], transition="restrict"
     )
@@ -787,8 +794,9 @@ def test_accepted_change_writes_one_entry_in_transaction(semantic_runtime):
     assert _log(rt) == log
     assert _store_log(rt) == store_log
 
-    # The failure at the entry's own write takes the restriction with it.
-    rt.faults.fail_store_call("insert_audit_entry_row")
+    # The failure at the restriction's own write, the first call: an entry
+    # committed apart from it would stay alone.
+    rt.faults.fail_store_call("update_customer_row")
     failed = rt.owner(
         "mark_customer", target=ref, stated_version=customer["revision"], transition="restrict"
     )

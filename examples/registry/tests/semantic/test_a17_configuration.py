@@ -275,7 +275,7 @@ def test_equal_secrets_stop_start(semantic_runtime, tmp_path):
 
 
 def test_secret_length_counted_in_utf8_bytes(semantic_runtime, tmp_path):
-    """Required test 3 (A17-2): a 16-byte token stops the start; for each kind
+    """Required test 3 (A17-3): a 16-byte token stops the start; for each kind
     of secret one byte short of SECRET_MIN_BYTES stops it, exactly
     SECRET_MIN_BYTES passes; the length is UTF-8 bytes, not characters."""
     rt = semantic_runtime
@@ -283,7 +283,7 @@ def test_secret_length_counted_in_utf8_bytes(semantic_runtime, tmp_path):
 
     _stops(rt, {**full, "token_presupro": "t" * 16}, "token_presupro")
 
-    # Every secret of the configuration, each token among them (A17-2).
+    # Every secret of the configuration, each token among them (A17-3).
     for item in SECRET_ITEMS:
         short = (item[:6] + "-" + "x" * SECRET_MIN_BYTES)[: SECRET_MIN_BYTES - 1]
         exact = (item[:6] + "-" + "y" * SECRET_MIN_BYTES)[:SECRET_MIN_BYTES]
@@ -328,10 +328,14 @@ def test_start_diagnostic_never_holds_a_secret(semantic_runtime, tmp_path):
 
 
 def test_listener_failure_serves_nothing_keeps_store(semantic_runtime, tmp_path):
-    """Required test 5 (A17-1): a start that made its store new and then
-    cannot open a listener serves nothing and removes that store; over an
-    existing store it leaves the store's records as they were; an owner-only
-    start opens no service API listener (rules 1, 2)."""
+    """Required test 5 (A17-4): a start that made its store new and then
+    cannot open a listener — the owner interface's, or the service API's
+    after the owner interface's was opened, which is closed again — serves
+    nothing and removes that store; over an existing store it leaves the
+    store's records as they were (rule 2). A removal that fails, leaving an
+    empty store, cannot be made to happen here without failing the store's
+    making too: carried. The owner-only start's missing service listener is
+    Required test 1's."""
     rt = semantic_runtime
     full = _settings(tmp_path)
     store = tmp_path / "store" / "registry.sqlite"
@@ -388,12 +392,6 @@ def test_listener_failure_serves_nothing_keeps_store(semantic_runtime, tmp_path)
     assert _start(rt, full) is None
     card = rt.owner("read_project", target=project_id)
     assert card["answer_kind"] == "project_card"
-    rt.stop()
-
-    # Owner-only: no service API listener at all.
-    assert _start(rt, _owner_only(full)) is None
-    _assert_no_service_listener(rt)
-    assert not _accepts(full["service_listen"])
     rt.stop()
 
 

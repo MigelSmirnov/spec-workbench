@@ -126,3 +126,8 @@
 
 Сопоставление тестов и возможностей сверено скриптом по AST итоговых тестов, с
 транзитивным обходом помощников внутри файла.
+
+
+## После раунда State 2 от 2026-11-24
+
+`faults.fail_next_commit()` удалён из `RUNTIME_SURFACE.md`: три свидетеля, которые на нём держались (A14 `failed_store_leaves_no_change_no_entry`, `accepted_change_writes_one_entry_in_transaction`, A15 `failed_change_leaves_sequence_unchanged`), теперь используют `faults.fail_store_call` с методами `StoreRepository`, названными в State 6 (`insert_audit_entry_row`, `update_project_row`, `update_customer_row`). Строки и выводы выше о `fail_next_commit` — история; шов без опоры остаётся один: `fail_next_backup_check("integrity")` (2 свидетеля A18), плюс частичная опора у удержания проходов.

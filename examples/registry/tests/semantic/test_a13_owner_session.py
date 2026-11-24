@@ -39,21 +39,27 @@ Fixture surface used here:
   returns the confirmation step); ``owner_confirm(step, value=None)``;
 - ``owner(..., csrf=…)``: the CSRF value sent instead of the session's
   (``None`` sends none);
-- ``owner_upload(content)`` with ``export_file(projects=…)``;
-- ``owner_http(method, path, form=None, cookie=…)`` -> (status, html,
-  headers), for the sign-in page and a raw change without CSRF;
+- ``stop()``, ``configure(owner_credential=…)``, ``start()`` and
+  ``diagnostics()`` (Required tests 10 and 11);
+- ``owner_http(method, path, query=None, form=None, cookie=…)`` -> (status,
+  html, headers), for the sign-in page, a raw change without CSRF, the
+  session cookie a sign-in sets and the pages a session is shown;
 - ``restart()``; ``run_session_pass()`` -> int, how many sessions
   `end_expired_sessions` ended (its State 5 output);
 - ``clock.advance``; ``clock.suspend(seconds)``: a host suspension, both
   clocks moved (the monotonic one counts it); ``clock.shift_wall(hours=…)``:
   the recorded (wall) clock alone moved, the monotonic reading unchanged;
-- ``new_request_id()``; ``store_rows("project_rows")``.
+- ``new_request_id()``; ``store_rows(table)``, `project_rows` and, in
+  Required test 11, every table.
 
 The tests rely on ``owner()`` sending the session the fixture holds (the
 last ``sign_in()`` or ``use_owner_session``) as it is, and returning its
 refusal when that session is no longer valid; a new session comes only from
 ``sign_in()`` (RUNTIME_SURFACE.md, "The owner's session").
 """
+
+import json
+from html.parser import HTMLParser
 
 # 70_data_provider_closure.json
 STAGE_AUTHENTICATION = 1  # REFUSAL_STAGE_AUTHENTICATION
@@ -76,6 +82,27 @@ LIST_PROJECTS_PATH = "/"
 CREATE_PROJECT_PATH = "/create_project"
 # OWNER_CSRF_FIELD
 CSRF_FIELD = "csrf"
+# OWNER_SESSION_COOKIE_NAME, OWNER_SESSION_COOKIE_ATTRIBUTES
+SESSION_COOKIE_NAME = "__Host-registry_session"
+SESSION_COOKIE_ATTRIBUTES = "Secure; HttpOnly; SameSite=Strict; Path=/"
+# OwnerRequest.presented_credential: a form field is named by its field's
+# name (60_contracts.md, "The owner interface's requests and pages").
+CREDENTIAL_FIELD = "presented_credential"
+READ_PROJECT_PATH = "/read_project"
+# OWNER_TARGET_PARAMETER
+TARGET_PARAMETER = "target"
+
+# global_spec.json "persistence": every table of the store.
+TABLES = (
+    "project_rows",
+    "room_rows",
+    "customer_rows",
+    "pointer_rows",
+    "agent_session_rows",
+    "audit_entry_rows",
+    "migration_closure_rows",
+    "audit_sequence_rows",
+)
 
 ONE_MICROSECOND = 0.000001  # seconds
 
@@ -163,7 +190,7 @@ def _project_ids(rt):
 
 
 def test_idle_31_minutes_refused(semantic_runtime):
-    """A13 rule 2, A13-1: 31 minutes without an owner request ends the
+    """A13 rule 2, A13-3: 31 minutes without an owner request ends the
     session; its next request is refused at the session check and the
     interface answers it with the sign-in page; signing in again serves."""
     rt = semantic_runtime
@@ -306,7 +333,7 @@ def test_change_without_session_csrf_refused(semantic_runtime):
 
 
 def test_restart_ends_owner_sessions(semantic_runtime):
-    """A13 rule 2, A13-1 ("no restart since s.began"): an owner session is
+    """A13 rule 2, A13-5 ("a restart since s.began"): an owner session is
     never durable; a restart ends every one, a new sign-in serves."""
     rt = semantic_runtime
     _signed_in(rt.sign_in())
@@ -454,7 +481,7 @@ def test_confirmation_value_used_once_and_expires(semantic_runtime):
 
 
 def test_eight_hours_and_sign_out_refused(semantic_runtime):
-    """A13 rule 2, A13-1: a session kept busy every 10 minutes is served
+    """A13 rule 2, A13-1, A13-4: a session kept busy every 10 minutes is served
     until a microsecond before 8 hours after its sign-in and refused at 8
     hours; a signed-out session is refused at its next request within its 30
     minutes, while another open session goes on."""
@@ -470,7 +497,7 @@ def test_eight_hours_and_sign_out_refused(semantic_runtime):
     rt.clock.advance(seconds=10 * 60 - ONE_MICROSECOND)
     _served(rt)  # 7 h 59 min 59.999999 s after sign-in
     rt.clock.advance(seconds=ONE_MICROSECOND)
-    _refused_no_session(rt)  # exactly 8 hours: no longer "t < began + 8h"
+    _refused_no_session(rt)  # exactly 8 hours: A13-1, "t >= began + 8h"
 
     # Sign-out.
     _signed_in(rt.sign_in())
@@ -496,7 +523,7 @@ def test_eight_hours_and_sign_out_refused(semantic_runtime):
 
 
 def test_idle_limit_boundary_exclusive(semantic_runtime):
-    """A13-1 ("t < s.last_request + 30min"): a request a microsecond before
+    """A13-3 ("t >= s.last_request + 30min"), A13-6: a request a microsecond before
     30 minutes after the last one is served and restarts the 30; one exactly
     30 minutes after the last is refused."""
     rt = semantic_runtime
@@ -518,12 +545,14 @@ def test_idle_limit_boundary_exclusive(semantic_runtime):
 
 
 def test_monotonic_clock_decides_validity(semantic_runtime):
-    """A13 rule 2, A13-1: the limits are measured by the monotonic reading
-    alone. Moving the wall clock back or forward by hours changes no
+    """A13 rule 2, A13-3, A13-6: the limits are measured by the monotonic
+    reading alone. Moving the wall clock back or forward by hours changes no
     session's validity; 31 minutes counted by the monotonic reading — a host
-    suspension, which that reading counts — make the next request refused;
-    the next pass ends that session, with its confirmation and upload, and
-    no other."""
+    suspension, which that reading counts — make the next request refused, a
+    submission of its pending confirmation included; the next pass ends that
+    session and no other. (What the pass drops with the ended session — its
+    confirmation and upload — no request can ask about: Required test 9 no
+    longer claims it.)"""
     rt = semantic_runtime
     _signed_in(rt.sign_in())
     project = _create_project(rt, "Reloj")
@@ -542,7 +571,7 @@ def test_monotonic_clock_decides_validity(semantic_runtime):
     rt.clock.advance(minutes=1)
     _served(rt)
 
-    # The session holds a pending confirmation and an upload.
+    # The session holds a pending confirmation.
     step = rt.owner(
         "archive_project",
         target=project["project_id"],
@@ -550,8 +579,6 @@ def test_monotonic_clock_decides_validity(semantic_runtime):
         confirm=False,
     )
     assert step["answer_kind"] == "confirmation_step", step
-    upload = rt.owner_upload(rt.export_file(projects=[], rooms=[], pointers=[]))
-    assert upload["answer_kind"] == "import_upload", upload
     suspended = rt.owner_session()
 
     # A suspension of 31 minutes: the monotonic reading counts it, so from
@@ -570,7 +597,7 @@ def test_monotonic_clock_decides_validity(semantic_runtime):
     fresh = rt.owner_session()
     ended = rt.run_session_pass()
     # end_expired_sessions answers how many sessions it ended (State 5): the
-    # suspended one alone — its confirmation and upload go with it (M11).
+    # suspended one alone.
     assert ended == 1
     assert rt.run_session_pass() == 0
     _served(rt)
@@ -600,3 +627,151 @@ def test_refused_change_restarts_idle(semantic_runtime):
     _served(rt)
     rt.clock.advance(minutes=OWNER_SESSION_IDLE_MINUTES)
     _refused_no_session(rt)
+
+
+# --- Required test 10 (untagged) -------------------------------------------
+
+
+def _header_items(headers):
+    return headers.items() if hasattr(headers, "items") else headers
+
+
+def _set_cookies(headers):
+    return [v for k, v in _header_items(headers) if k.lower() == "set-cookie"]
+
+
+def _cookie_parts(set_cookie):
+    """(name, value, attributes) of one Set-Cookie value; attribute names are
+    case-insensitive (RFC 6265), so they are compared in lower case."""
+    first, *attributes = [part.strip() for part in set_cookie.split(";")]
+    name, _, value = first.partition("=")
+    return name, value, sorted(a.lower() for a in attributes if a)
+
+
+def test_sign_in_sets_session_cookie_attributes(semantic_runtime):
+    """A13 Required test 10: signing in sets the session cookie
+    OWNER_SESSION_COOKIE_NAME with the attributes
+    OWNER_SESSION_COOKIE_ATTRIBUTES and no other — Secure, HttpOnly,
+    SameSite=Strict, Path=/, no Domain — and a refused sign-in sets none
+    (A13 rules 1, 4; 60_contracts.md "The owner's pages"). That a browser
+    then sends it only over HTTPS from another machine is the cookie's
+    `Secure` and the deployment's, carried (A13 rule 7)."""
+    rt = semantic_runtime
+    credential = "a13-owner-credential-" + "c" * SECRET_MIN_BYTES
+    rt.stop()
+    rt.configure(owner_credential=credential)
+    assert rt.start() is None
+
+    # A refused sign-in sets no cookie.
+    status, html, headers = rt.owner_http(
+        "POST", SIGN_IN_PATH, form={CREDENTIAL_FIELD: WRONG}, cookie=None
+    )
+    assert status == STATUS_UNAUTHENTICATED
+    assert _set_cookies(headers) == []
+    assert WRONG not in html  # never echoes the credential (rule 4)
+
+    status, html, headers = rt.owner_http(
+        "POST", SIGN_IN_PATH, form={CREDENTIAL_FIELD: credential}, cookie=None
+    )
+    assert status == STATUS_ANSWER
+    (set_cookie,) = _set_cookies(headers)
+    name, value, attributes = _cookie_parts(set_cookie)
+    assert name == SESSION_COOKIE_NAME
+    assert value
+    assert attributes == sorted(
+        a.strip().lower() for a in SESSION_COOKIE_ATTRIBUTES.split(";")
+    ), set_cookie
+    assert not any(a.startswith("domain") for a in attributes)
+    # The identity travels only in the cookie: not in the page (rule 7).
+    assert value not in html
+    assert credential not in html
+
+
+# --- Required test 11 (untagged) -------------------------------------------
+
+
+class _Page(HTMLParser):
+    """Where a value stands in a page: its text, its URLs (href, action,
+    src) and its form inputs' values."""
+
+    def __init__(self, html):
+        super().__init__()
+        self.texts, self.urls, self.input_values, self.other_attributes = [], [], [], []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        for name, value in attrs:
+            if value is None:
+                continue
+            if name in ("href", "action", "src", "formaction"):
+                self.urls.append(value)
+            elif tag == "input" and name == "value":
+                self.input_values.append(value)
+            else:
+                self.other_attributes.append(value)
+
+    handle_startendtag = handle_starttag
+
+    def handle_data(self, data):
+        self.texts.append(data)
+
+
+def _identity(cookie):
+    """The session identity the held cookie carries (a bare value, or
+    `name=value`)."""
+    text = str(cookie)
+    prefix = SESSION_COOKIE_NAME + "="
+    return text[len(prefix):].split(";")[0] if text.startswith(prefix) else text
+
+
+def test_session_values_never_in_url_log_or_record(semantic_runtime):
+    """A13 Required test 11: the session's identity, its CSRF value and a
+    shown confirmation value appear in no URL of a page the interface serves,
+    in no diagnostic and in no stored row, the audit entries among them; the
+    identity is not in a page, and the CSRF and confirmation values only in
+    its forms (A13 rule 7). Constant-time comparison and the random source
+    are not observable here and are carried (A13 rule 7)."""
+    rt = semantic_runtime
+    _signed_in(rt.sign_in())
+    session = rt.owner_session()
+    identity = _identity(session.cookie)
+    csrf = session.csrf
+    assert identity and csrf and identity != csrf
+
+    card = _create_project(rt, "Valores")
+    step = rt.owner(
+        "archive_project",
+        target=card["project_id"],
+        stated_version=card["revision"],
+        confirm=False,
+    )
+    assert step["answer_kind"] == "confirmation_step", step
+    confirmation = step["confirmation_value"]
+    assert confirmation not in (identity, csrf)
+    values = {"identity": identity, "csrf": csrf, "confirmation": confirmation}
+
+    pages = [(LIST_PROJECTS_PATH, None), (READ_PROJECT_PATH, {TARGET_PARAMETER: card["project_id"]})]
+    for path, query in pages:
+        status, html, headers = rt.owner_http("GET", path, query=query)
+        assert status == STATUS_ANSWER, path
+        page = _Page(html)
+        for label, value in values.items():
+            assert not any(value in url for url in page.urls), (path, label)
+            assert not any(value in text for text in page.texts), (path, label)
+            assert not any(value in a for a in page.other_attributes), (path, label)
+            for _, header in _header_items(headers):
+                if label != "identity":
+                    assert value not in header, (path, label)
+        assert identity not in html, path
+        # Only in a form's input, when the page carries it at all.
+        assert all(csrf not in v or v == csrf for v in page.input_values), path
+
+    archived = rt.owner_confirm(step)
+    assert archived["answer_kind"] == "project_card", archived
+    assert archived["card"]["status"] == "archived"
+
+    lines = rt.diagnostics()
+    rows = json.dumps({table: rt.store_rows(table) for table in TABLES}, default=str)
+    for label, value in values.items():
+        assert not any(value in line for line in lines), label
+        assert value not in rows, label

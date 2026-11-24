@@ -341,9 +341,15 @@ def test_quote_semicolon_name_round_trips(semantic_runtime):
 
 def test_import_file_size_limit_counted_over_received_bytes(semantic_runtime):
     """An import file of exactly 50 MiB, sent by the upload form with its CSRF
-    field first, is read; one byte more is refused `file_too_large` with no
-    mapping, also when its declared length is smaller or absent; the file the
-    session kept stays kept (A19 rule 4; Required test 4)."""
+    field first, is read. One byte more is refused `file_too_large` with no
+    mapping when no length is declared, when the true one is, and when the
+    file part's declared length is one byte short — the body then ends inside
+    the closing delimiter, every byte of the file arriving. A declared length
+    so short that the body ends inside the file's own bytes is refused
+    `file_unreadable`: the file ends before its delimiter and the limit is
+    never passed (State 5 `serve_owner_request`, `read_upload_head`). Either
+    way the file the session kept stays kept (A19 rule 4; Required test
+    4)."""
     rt = semantic_runtime
     exact = _sized_export(rt, IMPORT_FILE_MAX_BYTES)
     over = _sized_export(rt, IMPORT_FILE_MAX_BYTES + 1)
@@ -356,13 +362,24 @@ def test_import_file_size_limit_counted_over_received_bytes(semantic_runtime):
     rows_before = _store(rt)
 
     # A byte over the limit: refused at stage (4), invalid_request,
-    # file_too_large (State 5, "Closed set of refusal codes"), whatever the
-    # declared length: the true one, one byte smaller, none at all. A refusal
-    # carries no mapping and no digest.
+    # file_too_large (State 5, "Closed set of refusal codes"), with the true
+    # declared length, one byte smaller — a shortfall within the closing
+    # delimiter, so more than the limit is still read — or none at all. A
+    # refusal carries no mapping and no digest.
     for declared in (len(over), len(over) - 1, None):
         refused = rt.owner_upload(over, declared_length=declared)
         _refusal(refused, "invalid_request", 4, ["file_too_large"])
         assert "mapping" not in refused and "file_digest" not in refused
+
+    # A shortfall longer than any closing delimiter (a boundary is at most
+    # 70 characters, RFC 2046): the body ends inside the file's own bytes,
+    # at most the limit of them arrive, and the file part ends before its
+    # delimiter — file_unreadable, not file_too_large (State 5).
+    short = len(over) - 1024
+    assert short <= IMPORT_FILE_MAX_BYTES
+    refused = rt.owner_upload(over, declared_length=short)
+    _refusal(refused, "invalid_request", 4, ["file_unreadable"])
+    assert "mapping" not in refused and "file_digest" not in refused
 
     # The kept file stays kept: its mapping is still shown, by its digest
     # (A19 rule 4: "replaces no file the session kept"; A16 rule 2).

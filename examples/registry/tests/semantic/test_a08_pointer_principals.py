@@ -68,14 +68,6 @@ def _assert_refused(answer, code, stage, kinds):
     assert [failure["kind"] for failure in answer["failures"]] == kinds, answer
 
 
-def _shape(answer):
-    return (
-        answer["code"],
-        answer["stage"],
-        [failure["kind"] for failure in answer["failures"]],
-    )
-
-
 def _create_project(rt, name="A08 project"):
     answer = rt.owner(
         "create_project",
@@ -259,7 +251,8 @@ def test_kernel_publish_names_owner_and_publisher(semantic_runtime):
 
 def test_withdraw_outside_set_not_found(semantic_runtime):
     """RT3: Kernel withdrawing a pointer on a project outside its session's set
-    is answered as not found (A10)."""
+    is answered as not found: the whole answer equal to that for a pointer
+    that does not exist (A10 rule 3)."""
     rt = semantic_runtime
     inside = _create_project(rt, "A08 inside")
     outside = _create_project(rt, "A08 outside")
@@ -292,14 +285,18 @@ def test_withdraw_outside_set_not_found(semantic_runtime):
     refused_revoked = _kernel_withdraw(rt, session, on_revoked["pointer_id"])
     _assert_refused(refused_revoked, "not_found", STAGE_AGENT_SESSION, ["agent_call_refused"])
     # The same answer as a pointer that does not exist (A08 rule 7, A10-2):
-    # code, stage and kinds. The failure's path is left out of the comparison:
-    # State 5 "Stages" lets a path name the record by the id the request gave,
-    # which differs between the three requests (see review/A08.md).
+    # the whole answer, field for field. A10 rule 3: the failure's path is
+    # built from the request alone — the name of the input naming the
+    # pointer, never its id — so the three requests, which differ only in
+    # the pointer id they give, are answered equal.
     unknown = _kernel_withdraw(rt, session, "00000000-0000-4000-8000-00000000dead")
     _assert_refused(unknown, "not_found", STAGE_AGENT_SESSION, ["agent_call_refused"])
-    assert _shape(refused_outside) == _shape(unknown)
-    assert _shape(refused_revoked) == _shape(unknown)
-    assert set(refused_outside) == set(unknown)  # no extra field tells them apart
+    assert refused_outside == unknown
+    assert refused_revoked == unknown
+    for answer in (refused_outside, refused_revoked):
+        text = repr(answer)
+        assert never_granted["pointer_id"] not in text
+        assert on_revoked["pointer_id"] not in text
 
     # Nothing changed: both pointers stay published.
     assert _list(rt, outside) == [never_granted]

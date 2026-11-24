@@ -112,9 +112,10 @@ Reads the closure and the ids production holds; writes nothing.
 
 ### Owner
 
-`module:migration_import`. Check the mapping again and have every picked
-record written by its own module, in the import's one transaction (A16
-rules 6, 7).
+`module:migration_import`. Build the mapping of the bound file and picks
+once, inside the import's one transaction, apply it only when it is clean,
+and have every picked record written by its own module there (A16 rules 6,
+7).
 
 ### Callers
 
@@ -148,9 +149,11 @@ The closure first and alone: when it exists, `import_closed` is the answer
 that session's upload of that number, not merely bytes of that digest: when
 it is no longer kept, `file_not_kept` is answered alone, there being no
 bytes to check again (rule 2). Otherwise every other stage (6) failure is
-answered together, the kept bytes' digest computed again: the picks checked
-again — any conflict, malformed record or missing value, or no pick at all
-— refuse the whole import (rule 6); the values the confirmation bound and nothing else;
+answered together, the kept bytes' digest computed again: the mapping of
+the bound file and picks, built once in this transaction, applies only when
+clean — any conflict, malformed record or missing value, or no pick at all
+refuses the whole import (rule 6, restated 2026-11-24: the mapping the step
+showed, so a clean step's confirmation finds no new conflict); the values the confirmation bound and nothing else;
 the projects link to the Customers it makes (R0-80).
 
 ### Errors

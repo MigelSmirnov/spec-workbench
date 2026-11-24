@@ -167,7 +167,8 @@ def _history_with_every_status(rt):
 
 
 def test_undeclared_type_publish_refused(semantic_runtime):
-    """RT1: publishing `wall_plan` is refused as an unknown type."""
+    """RT1: publishing `wall_plan` is refused as an unknown type. Shows
+    A22-3; that `estimate` is the one declared type is RT4's."""
     rt = semantic_runtime
     project_id = _create_project(rt)
     _kernel_with(rt, project_id)
@@ -190,8 +191,8 @@ def test_undeclared_type_publish_refused(semantic_runtime):
         _kernel_publish(rt, project_id, "estimate", "https://presupro.example/e/1"), "pointer"
     )["pointer"]
     assert published["version"] == 1
-    # A22-1: the first release declares `estimate` with owner service
-    # PresuPro (ARTIFACT_TYPE_OWNERS, FIRST_RELEASE above).
+    # Control: its owner service is PresuPro (ARTIFACT_TYPE_OWNERS,
+    # FIRST_RELEASE above; the declared set itself is RT4's).
     assert published["owner_service"] == "presupro"
     assert _owner_list(rt, project_id) == [published]
 

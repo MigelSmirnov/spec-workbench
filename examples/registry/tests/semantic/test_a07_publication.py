@@ -7,7 +7,9 @@ project's pointers are serialised (rule 2). A project has at most one
 ``published`` pointer of a type (rule 3); a withdrawal never makes an earlier
 version ``published`` (rule 4); publishing and withdrawing on an archived
 project are refused, reading stays open (rule 5). Formal invariants A07-1 to
-A07-4. Each tagged test carries the witness name its Required test declares.
+A07-4; Required test 1 shows A07-1 to A07-3 (a race shows only the outcome of
+one transaction), Required test 2 shows A07-4. Each tagged test carries the
+witness name its Required test declares.
 
 The Factory project supplies the ``semantic_runtime`` fixture
 (``RUNTIME_SURFACE.md``); each test gets a fresh instance at
@@ -23,10 +25,10 @@ The Factory project supplies the ``semantic_runtime`` fixture
 - calls of ``service`` from several threads at once (RT1, RT4;
   RUNTIME_SURFACE.md "Concurrency") and ``faults.fail_store_call(method)``
   (RT2): the next call of the named ``StoreRepository`` method (State 6,
-  ``70_persistence_closure.json``) raises once. Not
-  ``faults.fail_next_commit()``: failing a transaction at its commit cannot
-  tell L07's two commits from one, since the first commit fails and nothing
-  is left either way; failing the second write inside the publish can.
+  ``70_persistence_closure.json``) raises once. Not a failure at the
+  commit: that cannot tell L07's two commits from one, since the first
+  commit fails and nothing is left either way; failing the second write
+  inside the publish can.
 
 Expected values: State 5 (``50_public_apis_3_records.md`` publish_pointer,
 withdraw_pointer, latest_pointer_of_type; Conventions, "Closed set of refusal

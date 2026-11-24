@@ -208,7 +208,11 @@ answer has one stage, and it is the earlier, (2), whose refusal hides
 every later failure (A04 rule 6) — so a Kernel call naming a project or
 a pointer that does not exist carries stage (2), not (3), and the stage
 tells nothing the answer must not. It is the only refusal whose stage is
-not its own check's. The codes are
+not its own check's, and the only one whose path names no record: its one
+failure's path is the name of the input by which the request names its
+target — the project, the pointer, or the session for an operation on
+neither — never an id's value, so the answers A10 rule 3 makes equal are
+equal field for field (restated 2026-11-24). The codes are
 distinct where a caller acts on the difference; the kinds are a closed set
 the owner interface renders and State 6 declares as `models`' vocabulary.
 

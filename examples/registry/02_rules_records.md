@@ -73,22 +73,27 @@ each create once.
 ### Formal invariants
 
 ```text
-for each model m in {Project, Customer}, and per project for m in   -- A01-1
-{Room, ArtifactPointer}:
-  for records r1 != r2 of m with r1.request_id and r2.request_id present:
-    r1.request_id != r2.request_id
-create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
-  a check of stages (1) to (4) of A04 rule 6 fails, or m in   -- A01-2
-  {Room, ArtifactPointer} with its project archived => refused, store unchanged
-  otherwise, f = current_facts(r)  => answer r, store unchanged   -- A01-3
-  otherwise, f != current_facts(r) => refused, store unchanged   -- A01-4
+for each model m in {Project, Customer}, and per project for m in
+{Room, ArtifactPointer}: records r1 != r2 of m with request ids present have
+r1.request_id != r2.request_id   -- A01-1
+create(m, request_id = k, facts = f), an existing r of m holding k, and a
+check of stages (1) to (4) of A04 rule 6 fails => refused, store unchanged   -- A01-2
+create(m, request_id = k, facts = f) with m in {Room, ArtifactPointer}, an
+existing r of m holding k, stages (1) to (4) passed, and its project
+archived => refused, store unchanged   -- A01-5
+create(m, request_id = k, facts = f), an existing r of m holding k, stages
+(1) to (4) passed, for m in {Room, ArtifactPointer} its project not
+archived, and f = current_facts(r) => answer r, store unchanged   -- A01-3
+create(m, request_id = k, facts = f), an existing r of m holding k, stages
+(1) to (4) passed, for m in {Room, ArtifactPointer} its project not
+archived, and f != current_facts(r) => refused, store unchanged   -- A01-4
 ```
-
 ### Required tests
 
 1. Two 'create a project' calls with the same request id and equal facts make
-   one project; the second answers it.
-   Shows A01-1, A01-3. [witness: verification:registry_a01_equal_repeat_answers_existing_project]
+   one project; the second answers it. That request ids are unique for
+   every model is shown by test 12.
+   Shows A01-3. [witness: verification:registry_a01_equal_repeat_answers_existing_project]
 2. The same request id with a different display name is refused and nothing
    changes.
    Shows A01-4. [witness: verification:registry_a01_same_request_id_other_name_refused]
@@ -101,8 +106,9 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
 6. After anonymising a project, a create with that project's former request id
    makes a new project with a new id.
 7. Kernel retrying a publish with the same request id gets the same pointer
-   and version; the pointer it made is not superseded.
-   Shows A01-1, A01-3. [witness: verification:registry_a01_publish_retry_returns_same_pointer]
+   and version; the pointer it made is not superseded. That request ids are
+   unique for every model is shown by test 12.
+   Shows A01-3. [witness: verification:registry_a01_publish_retry_returns_same_pointer]
 8. A repeat of a project's create after the project was corrected is refused.
    Shows A01-4. [witness: verification:registry_a01_repeat_after_correction_refused]
 9. A repeat of 'record a customer' giving an empty e-mail equals one that gave
@@ -123,7 +129,7 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
    Shows A01-1, A01-3, A01-4. [witness: verification:registry_a01_concurrent_creates_make_one_record]
 13. A repeat with equal facts of 'add a room' or of a publish, after its
     project was archived, is refused and nothing changes.
-   Shows A01-2. [witness: verification:registry_a01_repeat_on_archived_project_refused]
+   Shows A01-5. [witness: verification:registry_a01_repeat_on_archived_project_refused]
 14. A repeat failing any check of stages (1) to (4) of A04 rule 6 is refused,
     is never answered as a repeat, and nothing changes: one from a service
     without the right (1); Kernel's after the project left its session's set
@@ -137,6 +143,21 @@ Kernel's retried 'add a room' or publish and a resubmitted owner form are
 safe, and Registry keeps nothing but the request id to tell a repeat. A
 request id is not a deduplication of look-alike records: Registry still never
 merges records because they look alike (R0-34).
+
+Restated on 2026-11-24, under the owner's direction of that day
+(data-protection matrix, `sources/privacy_requirements_20261123.md`: every
+measure names the test that confirms it), after the witness review
+(`tests/semantic/review/SUMMARY.md`) and the independent judge of the
+witnesses found that the formulas did not say which test shows which part:
+the refusal of a repeat on an archived project, a branch of A01-2 before,
+is its own invariant A01-5 (rule 3), so a test of one refusal no longer
+answers for the other; each formula is written whole, its identifier on its
+last line, the conditions it rests on in it; tests 1 and 7 show A01-3, and
+A01-1 for every model is test 12's. No normative rule changed. The
+concurrent creates of rule 7 are witnessed only when the calls overlap
+(test 12): a deterministic witness would need a point to hold a
+transaction, which the specification does not name; that remains carried
+to Factory verification.
 
 ## Accepted decision A02 — a required value is present and not blank
 
@@ -179,15 +200,17 @@ merges records because they look alike (R0-34).
 ### Formal invariants
 
 ```text
-missing(v) <=> v is absent or strip(v) = ""   -- A02-1
-for every stored required value v: not missing(v)   -- A02-2
-stored(v) = given(v) whenever not missing(v)   -- A02-3
+v given and strip(v) = "" => v is read as not given: missing when it is
+required, absent when it is optional   -- A02-1
+a required value not given => the action refused as for a missing value,
+store unchanged   -- A02-6
+for every stored required value v: v present and strip(v) != ""   -- A02-2
+stored(v) = given(v) whenever v is given and strip(v) != ""   -- A02-3
 for every stored object: rooms absent or (rooms is a whole number and rooms >= OBJECT_ROOMS_MIN)   -- A02-4
-                         area absent or area > OBJECT_FLOOR_AREA_MIN_EXCLUSIVE
-                         floor absent or floor is a whole number
+for every stored object: area absent or area > OBJECT_FLOOR_AREA_MIN_EXCLUSIVE   -- A02-7
+for every stored object: floor absent or floor is a whole number   -- A02-8
 for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS   -- A02-5
 ```
-
 ### Required tests
 
 1. A project with a display name of three spaces is refused.
@@ -201,23 +224,40 @@ for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS   -
    Shows A02-5. [witness: verification:registry_a02_alias_over_forty_code_points_refused]
 5. A project created with kind `villa`, or with a floor area of 0, is
    refused naming both values; one created with no kind and no
-   characteristic is accepted.
-   Shows A02-4. [witness: verification:registry_a02_out_of_form_values_all_named]
+   characteristic is accepted. The bounds of the number of rooms and of the
+   floor are test 6's.
+   Shows A02-7. [witness: verification:registry_a02_out_of_form_values_all_named]
 6. A number of rooms of 0 and one of 2.5 are each refused as out of form;
    1 and 7 are stored. A floor of -1 is stored; 1.5 is refused. A floor area
    of 0.01 is stored as given; one of 0 or -3 is refused; a project with no
    characteristic at all is stored without one.
-   Shows A02-3, A02-4. [witness: verification:registry_a02_object_characteristic_bounds_checked]
+   Shows A02-3, A02-4, A02-7, A02-8. [witness: verification:registry_a02_object_characteristic_bounds_checked]
 
 7. A Customer's name and an access request text with spaces around them are
    stored as written; a room name, a Customer's name and an access request
    text of spaces only are each refused and nothing changes.
    Shows A02-1, A02-2, A02-3. [witness: verification:registry_a02_required_texts_blank_refused_padded_kept]
+8. A project created without a display name, a room added without a name, a
+   Customer recorded without a kind and an access request without a text
+   are each refused as a missing value, and nothing changes.
+   Shows A02-6. [witness: verification:registry_a02_required_value_not_given_refused]
 
 ### Consequence
 
 L17's empty strings are closed: a blank required value never reaches the
 store.
+
+Restated on 2026-11-24, under the owner's direction of that day
+(data-protection matrix, `sources/privacy_requirements_20261123.md`: every
+measure names the test that confirms it), after the witness review
+(`tests/semantic/review/SUMMARY.md`) and the independent judge of the
+witnesses found that one identifier held several conditions no one test
+shows: A02-1 was the definition `missing(v) <=> v is absent or strip(v) =
+""`; its blank half stays A02-1 (rules 1, 3) and its absent half, a required
+value not given refused, is A02-6 with its own test 8; A02-4 held the
+number of rooms, the floor area and the floor, now A02-4, A02-7 and A02-8,
+test 5 showing the floor area and test 6 all three; each formula is written
+whole, its identifier on its last line. No normative rule changed.
 
 ## Accepted decision A03 — a correction replaces the editable facts as a whole
 
@@ -323,14 +363,17 @@ card it showed, and what the owner emptied is cleared.
 
 ```text
 answer(a) = first failing check of a in the order (1)..(6), else its effect   -- A04-1
-for action a on record r in {Project, Customer} that may move r.revision:
-  a.stated_revision != r.revision => refused, r unchanged   -- A04-2
-  accepted and changed(r) and r keeps a revision   -- A04-3
-                          => r.revision' = r.revision + 1
-                             and r.last_changed' = now
-  accepted erasure, anonymisation or deletion => r has no revision after   -- A04-4
-  r has no revision and a.stated_revision present => refused as stale   -- A04-5
-  accepted and not changed(r) => r.revision' = r.revision   -- A04-6
+action a that may move the revision of r in {Project, Customer}, with
+a.stated_revision != r.revision => refused, r unchanged   -- A04-2
+action a that may move the revision of r in {Project, Customer}, accepted,
+changed(r), r keeping a revision => r.revision' = r.revision + 1 and
+r.last_changed' = now   -- A04-3
+accepted erasure, anonymisation or deletion of r in {Project, Customer} =>
+r has no revision after   -- A04-4
+action a on r in {Project, Customer} with no revision, a.stated_revision
+present => refused as stale, r unchanged   -- A04-5
+action a that may move the revision of r in {Project, Customer}, accepted,
+not changed(r) => r.revision' = r.revision   -- A04-6
 ```
 
 ### Required tests
@@ -378,6 +421,15 @@ One rule for every record change; the owner interface always shows and sends
 the revision of the card it rendered, and none for a card that shows none
 (rule 3).
 
+Restated on 2026-11-24, after the independent judge of the witnesses read
+the continuation of A04-3 as part of A04-4 and the shared heading line as
+part of A04-2 alone: each formula is written whole, its identifier on its
+last line, with the action and record it speaks of. No formula's meaning and
+no normative rule changed. A04-1 is shown by the stage pairs the Required
+tests name — (1) before (5), (2) before (4), (5) before (6) — and not by
+every pair of stages; the other pairs remain carried to Factory
+verification.
+
 ## Accepted decision A05 — a repeated transition returns the record unchanged
 
 ### Normative rules
@@ -405,8 +457,7 @@ the revision of the card it rendered, and none for a card that shows none
 
 ```text
 transition t to state s on record r with state(r) = s, passing every check
-of A04 rule 6:   -- A05-1
-  accepted, r unchanged, no AuditEntry, no confirmation id
+of A04 rule 6 => accepted, r unchanged, no AuditEntry, no confirmation id   -- A05-1
 ```
 
 ### Required tests
@@ -434,6 +485,10 @@ of A04 rule 6:   -- A05-1
 
 The audit log holds changes only (R0-58), and a retried transition is safe.
 
+Restated on 2026-11-24: the formula is written whole with its identifier on
+its last line, as the independent judge of the witnesses reads one
+formula per identified line; its meaning did not change.
+
 ## Accepted decision A06 — every list has one declared order
 
 ### Normative rules
@@ -460,8 +515,8 @@ The audit log holds changes only (R0-58), and a retried transition is safe.
 ### Formal invariants
 
 ```text
-every list answer is totally ordered by its key; equal keys never occur   -- A06-1
-because each key ends in an identity or a sequence number
+every list answer is totally ordered by its key; equal keys never occur,
+because each key ends in an identity or a sequence number   -- A06-1
 ```
 
 ### Required tests
@@ -486,3 +541,7 @@ because each key ends in an identity or a sequence number
 ### Consequence
 
 Answers are deterministic; no list pages (L09 is States 5 and 6).
+
+Restated on 2026-11-24: the formula is written whole with its identifier on
+its last line, as the independent judge of the witnesses reads one
+formula per identified line; its meaning did not change.

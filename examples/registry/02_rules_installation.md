@@ -31,7 +31,8 @@ security review of States 0–2.
    characters included. While the
    mapping shows a malformed record, a conflict or a missing value, the
    import's confirmation step is not shown; nor while a name or alias the
-   owner gives breaks A02; at confirmation Registry checks again (rule 6). Each new
+   owner gives breaks A02; a confirmation applies only a clean mapping
+   (rule 6). Each new
    Customer's `customer_ref` is minted when the import is accepted.
 2. The uploaded file is kept in the owner session that uploaded it, in the
    process's memory only — never in the store, never on a disk — until the import is accepted, another file is uploaded in that
@@ -83,9 +84,28 @@ security review of States 0–2.
    instants are not compared with another record's.
 5. Ids are unique per kind: a project id, a room id and a pointer id are
    compared only with ids of their own kind, in the file and in production.
-6. At confirmation Registry checks again. Any conflict — a project, room or
-   pointer id production holds — or any malformed record of the picks refuses the whole
-   import, and nothing changes (R0-50, R0-79).
+6. A confirmation applies the mapping of the file and the picks it is bound
+   to (rule 2, A13 rule 6), which it builds once, from the kept bytes,
+   inside the confirming transaction, as it must to write the records; it
+   applies that mapping only when it is clean, and otherwise refuses the
+   whole import, and nothing changes (R0-50, R0-79). That mapping is the
+   one the step showed: the file and the picks are bound by their digest,
+   the names, aliases and Customer values with them, and every id
+   production gains between the step and the confirmation is one Registry
+   mints at random (Identity formats; M01, M03, M05), the import — the one
+   path for an id from outside — being closed after its one success
+   (rule 8). So no confirmation finds a conflict — a project, room or
+   pointer id production holds — or a malformed record of the picks that
+   its step did not show, and what a test sees of this rule is that a
+   mapping showing one gives no step and changes nothing (Required tests 2
+   and 11). Restated on 2026-11-24, under the owner's direction of that
+   day (data-protection matrix, `sources/privacy_requirements_20261123.md`:
+   every measure names the test that confirms it), after the witness review
+   (`tests/semantic/review/SUMMARY.md`, finding 1) found the former text,
+   "At confirmation Registry checks again", naming a second check that no
+   history reaches: the check is the building of the mapping the
+   confirmation applies, made once in its transaction, and the step shows
+   its result.
 7. An accepted import stores every picked project with its rooms and pointers,
    the Customers it makes, the migration closure (M10) and its one audit entry
    (M09) in one transaction. The import has succeeded when that transaction
@@ -106,18 +126,21 @@ security review of States 0–2.
 ### Formal invariants
 
 ```text
-import(file f, picks P) accepted =>   -- A16-1
-  stored(P with rooms, pointers) and stored(new customers of P)
-  and closure.file_digest = digest(f) and one AuditEntry, in one transaction
+import(file f, picks P) accepted => stored(P with rooms, pointers) and
+stored(new customers of P) and closure.file_digest = digest(f) and one
+AuditEntry, in one transaction   -- A16-1
 exists closure => import refused   -- A16-2
-conflict at confirmation => store unchanged   -- A16-3
+mapping(f, P) shows a conflict or a malformed record => no confirmation step
+for P, import(f, P) not accepted, store unchanged   -- A16-3
 ```
 
 ### Required tests
 
 1. Uploading answers the mapping and changes nothing; reading the store after
    it shows no imported record.
-2. A file whose one pointer id production holds refuses the whole import.
+2. A file whose one pointer id production holds refuses the whole import:
+   the mapping names the conflict, no confirmation step is shown, and
+   nothing of the picks — a clean one included — is imported.
    Shows A16-3. [witness: verification:registry_a16_held_pointer_id_refuses_whole_import]
 3. Confirming a mapping after another file was uploaded in the session is
    refused: the file it named is no longer kept — also when the new file has
@@ -137,7 +160,11 @@ conflict at confirmation => store unchanged   -- A16-3
 10. Confirming after the owner session that uploaded the file has ended is
     refused.
 11. Asking for the import's confirmation step while the mapping shows a
-    conflicting id is refused, and no confirmation value is made.
+    conflicting id is answered with that mapping, not with a step: no step
+    is shown and no confirmation value is made, so the value of an earlier
+    clean step stays pending. (Restated on 2026-11-24 after the witness
+    review, finding 2: it read "is refused", and the request is answered,
+    not refused — rule 1, "the import's confirmation step is not shown".)
 12. An accepted import stores every picked project with its rooms and
     pointers, the Customers it made, one closure holding the file's digest and
     exactly one audit entry; a failure inside its transaction leaves none of
@@ -271,7 +298,11 @@ closure is the one proof of success.
 
 ```text
 serving => checks_passed(config)   -- A17-1
-for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYTES   -- A17-2
+for secrets s1 != s2 in config: value(s1) != value(s2)   -- A17-2
+for every secret s in config: utf8_bytes(value(s)) >= SECRET_MIN_BYTES   -- A17-3
+a start whose listener cannot be opened => it serves nothing, leaves no
+listener of it open, and the store holds the records it held before that
+start — none, for a store that start made new   -- A17-4
 ```
 
 ### Required tests
@@ -291,14 +322,17 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
    bytes, not characters: a token of 16 two-byte characters (32 bytes) is
    accepted, and one of 15 two-byte characters and one one-byte character
    (31 bytes) stops the start.
-   Shows A17-2. [witness: verification:registry_a17_secret_length_counted_in_utf8_bytes]
+   Shows A17-3. [witness: verification:registry_a17_secret_length_counted_in_utf8_bytes]
 4. The start diagnostic never contains a secret's value.
 5. A start whose store is made new and whose listener then cannot be opened
-   stops, serves nothing and removes that store — or, when the removal
-   fails, leaves it as an empty store of the release's version; one whose
-   listener cannot be opened over an existing store leaves that store's
-   records as they were. An owner-only start opens no service API listener.
-   Shows A17-1. [witness: verification:registry_a17_listener_failure_serves_nothing_keeps_store]
+   — the owner interface's, or the service API's after the owner
+   interface's was opened, which is closed again — stops, serves nothing and
+   removes that store; one whose listener cannot be opened over an existing
+   store leaves that store's records as they were. A removal that fails,
+   leaving an empty store of the release's version, cannot be made to happen
+   through the surfaces without failing the store's making too; it is
+   carried to Factory verification.
+   Shows A17-4. [witness: verification:registry_a17_listener_failure_serves_nothing_keeps_store]
 7. A complete configuration with variables that name no item —
    `REGISTRY_EXTRA`, `REGISTRY_`, and one without the prefix — starts, and
    none of them appears in a diagnostic or a setting; one where the backup key
@@ -337,6 +371,22 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
 
 A wrong configuration is found at start, not by a caller; a leaked or weak
 secret cannot be shared between holders.
+
+Restated on 2026-11-24, under the owner's direction of that day
+(data-protection matrix P6 and D5: every security measure names the test
+that confirms it), after the witness review
+(`tests/semantic/review/SUMMARY.md`) and the independent judge of the
+witnesses found that test 5, about a listener that cannot be opened, was
+bound to A17-1, which speaks of the configuration's checks, and that A17-2
+held two conditions no one test shows: A17-2 was `for secrets s1 != s2 in
+config: value(s1) != value(s2) and len >= SECRET_MIN_BYTES`; it is now the
+distinctness of rule 4 alone, the length of rule 3 is A17-3, and a failed
+listener (rule 2, last check) is A17-4, test 5's. The owner-only start's
+missing service listener is test 1's. No normative rule changed. Test 6's
+start interrupted before the store's rename is shown only by its outcome,
+a file of the temporary name removed by the next start: the interruption
+itself needs a capability the surfaces do not have, and is carried to
+Factory verification.
 
 ## Accepted decision A18 — daily encrypted backups, checked when made, kept 30 days
 
@@ -474,10 +524,12 @@ secret cannot be shared between holders.
 ### Formal invariants
 
 ```text
-after a run whose deletions succeeded: no backup older than 30 × 24 hours and no   -- A18-1
-  backup that failed its check exists
-every kept backup is encrypted, consistent, checked, and records   -- A18-2
-  (instant, release, last sequence); no backup holds an agent session
+after a run whose deletions succeeded: no kept backup made more than
+30 × 24 hours before its third step's cutoff instant exists   -- A18-1
+after a run whose deletions succeeded: no backup that failed its check
+exists, kept or temporary   -- A18-3
+every kept backup is encrypted, consistent, checked, and records (instant,
+release, last sequence); no backup holds an agent session   -- A18-2
 ```
 
 ### Required tests
@@ -497,11 +549,11 @@ every kept backup is encrypted, consistent, checked, and records   -- A18-2
    sequence number of the snapshot it was made from and the digest of its
    key; a backup whose decrypted sequence differs from its record is
    deleted.
-   Shows A18-1, A18-2. [witness: verification:registry_a18_record_matches_snapshot_mismatch_deleted]
+   Shows A18-3, A18-2. [witness: verification:registry_a18_record_matches_snapshot_mismatch_deleted]
 3. A backup cannot be read without the key it was made with.
    Shows A18-2. [witness: verification:registry_a18_backup_unreadable_without_its_key]
 4. A backup whose integrity check fails is deleted and reported.
-   Shows A18-1, A18-2. [witness: verification:registry_a18_integrity_failure_deleted_and_reported]
+   Shows A18-3, A18-2. [witness: verification:registry_a18_integrity_failure_deleted_and_reported]
 5. A store restored from a backup holds no agent session.
    Shows A18-2. [witness: verification:registry_a18_restored_store_holds_no_agent_session]
 6. A 03:00 missed while Registry was stopped makes no backup at the next
@@ -511,6 +563,18 @@ every kept backup is encrypted, consistent, checked, and records   -- A18-2
 
 A tested restore exists after every run that keeps a backup, without a second instance holding
 production data (R0-34); a restore cannot revive a revoked grant.
+
+Restated on 2026-11-24, under the owner's direction of that day
+(data-protection matrix S4 and D5), after the independent judge of the
+witnesses found that A18-1 held two conditions no one test shows and read
+its continuation as part of A18-2: A18-1 was `after a run whose deletions
+succeeded: no backup older than 30 × 24 hours and no backup that failed its
+check exists`; the age is A18-1, and the failed check is A18-3, shown by
+tests 4 and 8; each formula is written whole, its identifier on its last
+line. No normative rule changed. The tests' clocks do not move between two
+reads of one run, so an implementation taking a backup's instant later than
+the read that fixes its snapshot (rule 1) is not told apart; that remains
+carried to Factory verification.
 
 ## Accepted decision A19 — every stored value is data, never code
 
@@ -569,9 +633,17 @@ no stored value is ever evaluated or executed   -- A19-2
    unchanged.
    Shows A19-2. [witness: verification:registry_a19_quote_semicolon_name_round_trips]
 4. An import file of exactly 50 × 1024 × 1024 bytes, sent by the upload form
-   with its CSRF field first, is read; one of a byte more is refused, with
-   no mapping shown, also when its declared length is smaller or absent, and
-   the file the session kept before stays kept.
+   with its CSRF field first, is read. One of a byte more is refused as too
+   large, with no mapping shown, when no length is declared, when the true
+   one is, and when the declared length of the file part is one byte short
+   of it — the request's body then ending inside the closing delimiter, so
+   every byte of the file arrives and more than the limit is read. A
+   declared length so short that the body ends inside the file's own bytes
+   ends the file before its closing delimiter, and the upload is refused as
+   unreadable, the limit not being passed (State 5). Either way the file the
+   session kept before stays kept. (Restated on 2026-11-24 after the witness
+   review, finding 3: it read "also when its declared length is smaller",
+   which held only while the shortfall does not reach the file's own bytes.)
 
 5. A19-1, A19-2: every stored value a page of the owner interface shows —
    a value that is not text in the text it is shown as — in each kind of
@@ -825,6 +897,32 @@ what a release contains or how it is installed moved. Reviewed under
 dependencies (A20): which dependencies run and how they are fixed and
 verified are unchanged, and the place that verifies them is named. No
 outcome changed.
+
+Performed again on 2026-11-24, under the owner's direction of that day
+(data-protection matrix, `sources/privacy_requirements_20261123.md`), after
+the witness review and the independent judge of the witnesses reopened A01,
+A02, A04, A07, A08, A09, A10, A13, A14, A16, A17, A18, A19 and A22 (rule 2);
+A05 and A06, which no category names, changed with them.
+Formal invariants holding several conditions were given one identifier
+each — A01-5, A02-6 to A02-8, A13-3 to A13-6, A17-3, A17-4 and A18-3 —
+and every formula was written whole with its identifier on its last line;
+Required tests that claimed more than they show were narrowed (A01, A02,
+A07, A13 test 9, A22 test 1); A16 rule 6 names the check at confirmation as
+the building of the mapping the confirmation applies, made once in its
+transaction, not a second check, and its tests 2 and 11 say what is seen;
+A19 test 4 says which short declared length is too large and which
+unreadable; A10 rule 3 fixes the whole equal answer, the failure's path
+built from the request alone; A09 rule 4 names the test release on which
+the class check is shown; and A09 rules 1 and 5 and A13 rules 1 and 7 have
+Required tests for what the surfaces show, with A10 rule 6 and the
+constant-time comparison and random source of A13 rule 7 carried to Factory
+verification. Reviewed under authentication_credential_abuse (A09, A13,
+A17), secrets (A13 rule 7, A14, A17), authorization (A04, A08, A09, A10),
+injection_interpreted_input (A02, A16, A19), browser_boundary (A13),
+files_artifacts (A07, A08, A16, A18, A19, A22) and concurrency (A01, A04,
+A07, A14, A16, A17, A18): no right, limit, class, check or answer moved — A10
+rule 3's path now names an input, never an id, which tells the agent less,
+not more — and no outcome changed.
 
 ### Consequence
 

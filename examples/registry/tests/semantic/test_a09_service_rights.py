@@ -6,8 +6,8 @@ it may receive (A09 rules 1, 2). An operation outside the token's row is
 refused whatever the request holds (rule 3). An answer whose class is above the
 token's highest is refused whole, never answered in part (rule 4); Cabinet
 Kernel's highest class is `business_confidential` (R0-74). Each witness test
-carries the name its Required test declares; Required test 3, untagged, has a
-test named by what it shows.
+carries the name its Required test declares; Required tests 3, 7 and 8,
+untagged, have tests named by what they show.
 
 The Factory project `registry` supplies the ``semantic_runtime`` fixture
 (``tests/semantic/RUNTIME_SURFACE.md``): a fresh instance per test, driven
@@ -35,7 +35,8 @@ Fixture surface used here:
   ``service_raw(body, headers)`` -> (status, body, headers);
 - ``owner(action, target=None, stated_version=None, **values)`` -> answer,
   for `create_project`, `record_customer`, `read_session`, `grant_project`;
-- ``new_request_id()``; ``store_rows(table)`` for `pointer_rows`;
+- ``new_request_id()``; ``store_rows(table)`` for `pointer_rows`,
+  `project_rows`, `customer_rows`, `agent_session_rows`, `audit_entry_rows`;
 - ``stop()``, ``start()``, ``sign_in()`` and
   ``configure_release(**constants)``: after ``stop()`` and before
   ``start()``, the instance runs on a test release whose named data-provider
@@ -43,7 +44,8 @@ Fixture surface used here:
   changes only by a release; no Kernel-reachable answer of release v1 holds a
   `PERSONAL_DATA_FIELDS` field and every other service's highest class is
   `personal_data`, so rule 4 can only be observed on a release that differs
-  in one row (tests 5 and 6).
+  in one row (tests 5 and 6, as A09 rule 4 states); rules 1 and 6 on a
+  release whose `SERVICE_RIGHTS` differs in one row (test 7).
 """
 
 import json
@@ -76,6 +78,37 @@ REFUSAL_KEYS = {"answer_kind", "code", "stage", "failures"}
 # The release v1 values of the two class tables
 # (70_data_provider_closure.json), from which the test releases of tests 5
 # and 6 differ in one row each.
+# The release v1 rights table (70_data_provider_closure.json SERVICE_RIGHTS,
+# A09 rule 2), from which the test release of Required test 7 differs in
+# one row.
+SERVICE_RIGHTS_V1 = [
+    {"service": "presupro", "operation": "validate_project_reference"},
+    {"service": "presupro", "operation": "read_project_context"},
+    {"service": "presupro", "operation": "read_customer_billing"},
+    {"service": "presupro", "operation": "list_artifacts"},
+    {"service": "presupro", "operation": "read_latest_artifact"},
+    {"service": "client_portal", "operation": "validate_project_reference"},
+    {"service": "client_portal", "operation": "read_project_context"},
+    {"service": "client_portal", "operation": "read_project"},
+    {"service": "client_portal", "operation": "list_rooms"},
+    {"service": "client_portal", "operation": "list_artifacts"},
+    {"service": "client_portal", "operation": "read_latest_artifact"},
+    {"service": "cabinet", "operation": "list_projects"},
+    {"service": "cabinet", "operation": "read_project_context"},
+    {"service": "cabinet", "operation": "validate_project_reference"},
+    {"service": "cabinet_kernel", "operation": "register_agent_session"},
+    {"service": "cabinet_kernel", "operation": "end_agent_session"},
+    {"service": "cabinet_kernel", "operation": "read_session_access"},
+    {"service": "cabinet_kernel", "operation": "request_project_access"},
+    {"service": "cabinet_kernel", "operation": "validate_project_reference"},
+    {"service": "cabinet_kernel", "operation": "read_agent_projection"},
+    {"service": "cabinet_kernel", "operation": "list_rooms"},
+    {"service": "cabinet_kernel", "operation": "add_room"},
+    {"service": "cabinet_kernel", "operation": "list_artifacts"},
+    {"service": "cabinet_kernel", "operation": "read_latest_artifact"},
+    {"service": "cabinet_kernel", "operation": "publish_artifact_pointer"},
+    {"service": "cabinet_kernel", "operation": "withdraw_artifact_pointer"},
+]
 SERVICE_HIGHEST_CLASSES_V1 = [
     {"service": "presupro", "highest_class": "personal_data"},
     {"service": "client_portal", "highest_class": "personal_data"},
@@ -561,3 +594,83 @@ def test_kernel_highest_class_business_confidential(semantic_runtime):
         "rooms",
     )
     assert rooms["answer_kind"] == "rooms"
+
+
+# --- Required test 7 (untagged) -----------------------------------------------
+
+
+def test_rights_come_from_the_release_not_the_configuration(semantic_runtime):
+    """A09 Required test 7: Cabinet's 'read a customer's billing data',
+    refused on the first release, is answered on a test release whose
+    rights table adds it to Cabinet's row, the configuration — the same
+    tokens — unchanged; the first release again refuses it (A09 rules 1, 6:
+    the configuration holds the tokens, the release their rights)."""
+    rt = semantic_runtime
+    customer_ref = _record_customer(
+        rt, name="Ferrer", customer_kind="company", tax_id=TAX_ID, legal_name=LEGAL_NAME
+    )
+
+    def cabinet_billing():
+        return rt.service(CABINET, "read_customer_billing", {"customer_ref": customer_ref})
+
+    refused = cabinet_billing()
+    _refused(refused, "not_permitted", STAGE_AUTHENTICATION, ["outside_service_rights"])
+    assert TAX_ID not in json.dumps(refused)
+
+    # The same instance, store and configuration on a release whose Cabinet
+    # row holds the operation: the token now carries the right.
+    _restart_on_release(
+        rt,
+        SERVICE_RIGHTS=SERVICE_RIGHTS_V1
+        + [{"service": CABINET, "operation": "read_customer_billing"}],
+    )
+    billing = _answered(cabinet_billing(), "billing")
+    assert billing["tax_id"] == TAX_ID
+    assert billing["legal_name"] == LEGAL_NAME
+
+    # Back on the first release's table: refused again.
+    _restart_on_release(rt, SERVICE_RIGHTS=SERVICE_RIGHTS_V1)
+    _refused(cabinet_billing(), "not_permitted", STAGE_AUTHENTICATION, ["outside_service_rights"])
+
+
+# --- Required test 8 (untagged) -----------------------------------------------
+
+
+def test_no_service_token_reaches_an_owner_action(semantic_runtime):
+    """A09 Required test 8: each of the four tokens asking for an owner
+    action — creating a project, recording a customer, archiving a project,
+    granting a project to a session, erasing audit entries — is refused as
+    outside its rights, and nothing changes (A09 rule 5: no token carries the
+    owner's rights; State 5 `serve_service_request`: a name that is no
+    `ServiceOperation` of the token's row is refused as outside its
+    rights)."""
+    rt = semantic_runtime
+    project_id = _create_project(rt)
+    session_id = _kernel_session_with(rt, project_id)
+    tables = ("project_rows", "customer_rows", "agent_session_rows", "audit_entry_rows")
+    before = {table: rt.store_rows(table) for table in tables}
+
+    owner_actions = (
+        ("create_project", {"request_id": rt.new_request_id(),
+                            "project": {"display_name": "Por token", "address": ADDRESS}}),
+        ("record_customer", {"request_id": rt.new_request_id(),
+                             "customer": {"name": "Por token", "customer_kind": "person"}}),
+        ("archive_project", {"project_id": project_id}),
+        ("grant_project", {"project_id": project_id}),
+        ("erase_audit_entries", {"erase_before": "2026-01-01"}),
+    )
+    for name in (PRESUPRO, CLIENT_PORTAL, CABINET, KERNEL):
+        session = session_id if name == KERNEL else None
+        for operation, inputs in owner_actions:
+            refused = rt.service(name, operation, inputs, kernel_session=session)
+            _refused(refused, "not_permitted", STAGE_AUTHENTICATION, ["outside_service_rights"])
+            assert set(refused) == REFUSAL_KEYS, (name, operation)
+
+    assert {table: rt.store_rows(table) for table in tables} == before
+    # Control: the owner, in an owner session, archives the same project.
+    card = _answered(rt.owner("read_project", target=project_id), "project_card")["card"]
+    archived = _answered(
+        rt.owner("archive_project", target=project_id, stated_version=card["revision"]),
+        "project_card",
+    )
+    assert archived["card"]["status"] == "archived"

@@ -434,7 +434,8 @@ values. The file part's stream is a `MultipartFileBody`, the class
 `upload_framing` owns that implements `UploadBody` (State 6); it fails
 when the request's stream ends before the closing delimiter, which
 `migration_import.read_import_mapping` refuses as `file_unreadable`, as any
-stream that fails.
+stream that fails — unless more than the limit had already been read, which
+is `file_too_large` (A19 rule 4, restated 2026-11-24).
 
 ### Observable effect
 

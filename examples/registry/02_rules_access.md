@@ -27,6 +27,16 @@ here: what each service token and Kernel's agent authority may do and receive
 4. The classes are ordered `open` < `business_confidential` <
    `personal_data` (R0-26). An answer that would carry a class above the
    token's highest is refused whole; Registry never answers part of it.
+   The first release cannot give such an answer: no answer Cabinet Kernel
+   can reach carries a field of `PERSONAL_DATA_FIELDS`, and every other
+   service's highest class is `personal_data`, the highest. The check is
+   made on every answer all the same, and it is shown on a test release
+   whose class tables — `SERVICE_HIGHEST_CLASSES` and
+   `PERSONAL_DATA_FIELDS` — differ from the first release's in the one row a
+   test gives (Required tests 5 and 6). Restated on 2026-11-24, under the
+   owner's direction of that day (data-protection matrix P3 and D3: the
+   measure that keeps `personal_data` from the agent and its AI provider is
+   confirmed by a test, `sources/privacy_requirements_20261123.md`).
 5. Every owner action is made in an owner session (A13), never with a service
    token; no token carries the owner's rights.
 6. A new service, or a change of a row, enters by a specification change and a
@@ -51,18 +61,35 @@ highest_class(Cabinet Kernel) = business_confidential   -- A09-3
 4. PresuPro calling 'publish an artifact pointer' is refused (R0-88).
    Shows A09-1. [witness: verification:registry_a09_presupro_publish_pointer_refused]
 
-5. An answer that would carry a class above the calling token's highest is
-   refused whole: no field of it is disclosed (rule 4).
+5. On a test release whose class tables give a service a highest class
+   below a class one of its answers carries, that answer is refused whole:
+   no field of it is disclosed (rule 4).
    Shows A09-2. [witness: verification:registry_a09_answer_above_class_refused_whole]
 6. An answer to Cabinet Kernel carrying `business_confidential` is answered;
-   one that would carry a `personal_data` field is refused whole. Shows A09-3,
-   A09-2.
+   on a test release whose `PERSONAL_DATA_FIELDS` names a field of an answer
+   Kernel can reach, that answer is refused whole. Shows A09-3, A09-2.
    [witness: verification:registry_a09_kernel_highest_class_business_confidential]
+7. Cabinet's 'read a customer's billing data', refused on the first release,
+   is answered on a test release whose rights table adds it to Cabinet's row,
+   the configuration — the same tokens — unchanged; the first release again
+   refuses it (rules 1, 6).
+8. No service token reaches an owner action: each of the four tokens asking
+   for creating a project, recording a customer, archiving a project,
+   granting a project to a session or erasing audit entries is refused as
+   outside its rights, and nothing changes (rule 5).
 
 ### Consequence
 
 Denial is the default (R0-27); every right is listed in one table, and the
 manifest record derives from it (R0-78).
+
+Restated on 2026-11-24, under the owner's direction of that day
+(data-protection matrix P6 and D2: every security measure names the test
+that confirms it), after the witness review
+(`tests/semantic/review/SUMMARY.md`, findings 5 and 12) found rules 1 and 5
+without a Required test and rule 4 shown only on a test release no rule
+named: tests 7 and 8 show rules 1, 5 and 6, and rule 4 names the test
+release tests 5 and 6 are made on. No right and no class changed.
 
 ## Accepted decision A10 — every agent-authority call is checked three times by Registry
 
@@ -78,6 +105,17 @@ manifest record derives from it (R0-78).
 3. Every refusal of the third check, and of a project that does not exist, is
    the same answer as for a project that does not exist (R0-47); a call naming
    an unregistered session is answered as a call outside the set (R0-53).
+   The same answer is the same whole answer: its code, its stage, its one
+   failure's kind and that failure's path, which is built from the request
+   alone — the name of the input by which the request names its target, the
+   project or the pointer, or the session for an operation on neither, and
+   never an id's value or a fact of a stored record — so two requests that
+   differ only in the ids they give, or in whether their session is
+   registered, are answered equal, field for field (A08 rule 7). Restated on
+   2026-11-24, under the owner's direction of that day (data-protection
+   matrix S10 and the agents' row on authority limited to the task), after the witness review
+   (`tests/semantic/review/SUMMARY.md`, finding 4) found that the path was
+   not fixed, so a test could compare the answers only without it.
 4. A write with agent authority on an archived project of the set is refused
    (R0-12, R0-70); reads of it are answered.
 5. The check is made at every call, a running flow's next step included; a
@@ -86,21 +124,30 @@ manifest record derives from it (R0-78).
    session's end — are applied one at a time: a call whose transaction
    commits before the change is accepted, one that commits after it is
    checked against the changed session and refused when the change removed
-   its right.
+   its right. No answer and no record tells whether a call committed before
+   or after a change of its session — adding a room, publishing and the
+   reads write no audit entry (M09) — so no test through Registry's surfaces
+   shows this rule. It is shown by the flows (State 4), in which every
+   agent-authority call, a read included, takes the store's one write lock
+   and checks its session inside that transaction, and checked by the
+   Factory on the code that implements them; it is carried to Factory
+   verification (owner's direction of 2026-11-24, data-protection matrix
+   P6, D2).
 
 ### Formal invariants
 
 ```text
-agent_call(session x) accepted, other than registering x =>   -- A10-1
-  token = Kernel and registered(x)
-  and, for an operation on project p, p in granted(x)
+agent_call(session x) accepted, other than registering x => token = Kernel
+and registered(x) and, for an operation on project p, p in granted(x)   -- A10-1
 answer(p not in granted(x)) = answer(p does not exist)   -- A10-2
 ```
 
 ### Required tests
 
 1. Kernel reading the projection of a project outside the set receives the
-   not-found answer, identical to that of a random id.
+   not-found answer, identical to that of a random id field for field, the
+   failure's path included (rule 3); so is the answer to an unregistered
+   session.
    Shows A10-1, A10-2. [witness: verification:registry_a10_outside_set_answered_as_not_found]
 2. After the owner revokes a project, the next 'add a room' on it is refused.
    Shows A10-1. [witness: verification:registry_a10_revoked_project_next_call_refused]
@@ -312,27 +359,43 @@ sees every change as a new version.
    `SECRET_MIN_BYTES` constant names (32, SPEC_STANDARD §15.3.1); each is compared
    in constant time and never appears in a URL, a log line, a diagnostic or an
    audit entry (R0-29, R0-37). The identity travels only in the cookie, the
-   other two only in the forms the interface serves.
+   other two only in the forms the interface serves. Where they travel and
+   where they never appear is shown by Required test 11. That each comparison
+   takes constant time and each value is drawn from the operating system's
+   random source cannot be seen through Registry's surfaces: it is checked on
+   the code, where State 5 routes every such comparison through
+   `random_values.equal_in_constant_time` and makes every such value in
+   `random_values.make_secret_value` alone, and carried to Factory
+   verification (owner's direction of 2026-11-24, data-protection matrix P6,
+   D5). Likewise rule 1's HTTPS from another machine: a test reaches
+   Registry on its own host only, and Required test 10 shows the cookie's
+   attributes that make a browser send it only over HTTPS and only to
+   Registry's origin.
 
 ### Formal invariants
 
 ```text
-owner_session s valid at t <=> t < s.began + 8h and   -- A13-1
-                                t < s.last_request + 30min and
-                                not signed_out(s) and no restart since s.began
+owner_session s, t >= s.began + 8h on the monotonic clock => s not valid at t   -- A13-1
+owner_session s, t >= s.last_request + 30min on the monotonic clock => s not
+valid at t   -- A13-3
+owner_session s signed out before t => s not valid at t   -- A13-4
+owner_session s, a restart of the instance since s.began => s not valid at t   -- A13-5
+owner_session s, t < s.began + 8h and t < s.last_request + 30min on the
+monotonic clock, not signed out, no restart since s.began => s valid at t,
+whatever the wall clock reads   -- A13-6
 refused_sign_ins(last 15min) >= 5 => sign_in refused   -- A13-2
 ```
 
 ### Required tests
 
 1. A session idle for 31 minutes is refused and asks for sign-in again.
-   Shows A13-1. [witness: verification:registry_a13_idle_31_minutes_refused]
+   Shows A13-3. [witness: verification:registry_a13_idle_31_minutes_refused]
 2. The sixth sign-in within 15 minutes after five refusals is refused with the
    right credential, and accepted 15 minutes later.
    Shows A13-2. [witness: verification:registry_a13_lockout_refuses_right_credential]
 3. A change without the session's CSRF value is refused.
 4. A restart ends every owner session.
-   Shows A13-1. [witness: verification:registry_a13_restart_ends_owner_sessions]
+   Shows A13-5. [witness: verification:registry_a13_restart_ends_owner_sessions]
 5. A sign-in during a lockout is refused and does not extend it.
    Shows A13-2. [witness: verification:registry_a13_lockout_sign_in_not_extending]
 6. A confirmation value used once — even by a refused submission — is refused
@@ -340,18 +403,43 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused   -- A13-2
 7. A session with a request every 10 minutes is refused 8 hours after its
    sign-in; a session signed out is refused at its next request, also within
    its 30 minutes.
-   Shows A13-1. [witness: verification:registry_a13_eight_hours_and_sign_out_refused]
+   Shows A13-1, A13-4. [witness: verification:registry_a13_eight_hours_and_sign_out_refused]
 8. A request a microsecond before 30 minutes after the last one is served;
    one exactly 30 minutes after it is refused.
-   Shows A13-1. [witness: verification:registry_a13_idle_limit_boundary_exclusive]
+   Shows A13-3, A13-6. [witness: verification:registry_a13_idle_limit_boundary_exclusive]
 9. With the clocks replaced in the test: moving the wall clock back or
    forward by hours changes no session's validity; a suspension of 31
    minutes, counted by the monotonic reading, makes its next request
-   refused; the session is ended, with its confirmation and upload, at the
-   next pass.
-   Shows A13-1. [witness: verification:registry_a13_monotonic_clock_decides_validity]
+   refused, a submission of its pending confirmation included; the next pass
+   ends that session and no other.
+   Shows A13-3, A13-6. [witness: verification:registry_a13_monotonic_clock_decides_validity]
+10. Signing in sets the session cookie `OWNER_SESSION_COOKIE_NAME` with the
+    attributes `OWNER_SESSION_COOKIE_ATTRIBUTES` and no other — `Secure`,
+    `HttpOnly`, `SameSite=Strict`, `Path=/` and no `Domain` — and a refused
+    sign-in sets none (rules 1, 4).
+11. The session's identity, its CSRF value and a shown confirmation value
+    appear in no URL of a page the interface serves, in no diagnostic and in
+    no stored row, the audit entries among them; the identity is not in a
+    page, and the CSRF and confirmation values only in its forms (rule 7).
 
 ### Consequence
 
 The owner credential's exposure is bounded in time; the lockout slows a guess
 without telling who is guessing.
+
+Restated on 2026-11-24, under the owner's direction of that day
+(data-protection matrix P6 and D2, `sources/privacy_requirements_20261123.md`:
+every security measure names the test that confirms it), after the witness
+review (`tests/semantic/review/SUMMARY.md`, findings 5 and class 2) and the
+independent judge of the witnesses found that A13-1 held four limits no one
+test shows and that test 9 claimed what no surface shows: A13-1 was
+`valid(s, t) <=> t < s.began + 8h and t < s.last_request + 30min and not
+signed_out(s) and no restart since s.began`; it is now the 8 hours alone,
+and the 30 minutes, the sign-out, the restart and validity within all four
+are A13-3, A13-4, A13-5 and A13-6, each test naming the limits it shows.
+Test 9 no longer claims that the pass drops the ended session's
+confirmation and upload: an ended session cannot be asked about them, and
+its requests are refused at the session check before either is read. Rules
+1 and 7, which had no Required test, have tests 10 and 11 for what the
+surfaces show; the rest of rule 7 and rule 1's HTTPS are carried to Factory
+verification, as rule 7 now says. No limit and no behaviour changed.

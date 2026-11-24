@@ -239,9 +239,12 @@ head of another form gives no CSRF value, and the upload is refused at stage
 check, once its head has been read (A13 rule 2). The body reaches
 `owner_interface` as a stream that ends where HTTP's framing ends it — after
 its `Content-Length` bytes, or at a chunked body's last chunk
-(`instance_lifecycle`'s listener). A file whose bytes run past that end lacks
-its closing delimiter and is refused as `file_unreadable`; A19 rule 4's
-counting applies to the bytes of the file part the stream gives.
+(`instance_lifecycle`'s listener). A19 rule 4's counting applies to the
+bytes of the file part the stream gives, and comes first: once the file part
+has given more than the limit, the answer is `file_too_large`, whatever
+follows. Only a file whose bytes end, within the limit, before its closing
+delimiter is refused as `file_unreadable` (A19 rule 4 and Required test 4,
+restated 2026-11-24).
 The action is the row of the imported `OWNER_ACTIONS` constant whose method
 and path are the request's, and that row says whether the request is a
 change and whether it touches an uploaded file — the confirmation step

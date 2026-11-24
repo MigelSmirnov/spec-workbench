@@ -334,7 +334,8 @@ def test_out_of_form_values_all_named(semantic_runtime):
 
     A02 Required test 5: a project created with kind ``villa``, or with a
     floor area of 0, is refused naming both values; one created with no kind
-    and no characteristic is accepted. Shows A02-4.
+    and no characteristic is accepted. Shows A02-7 (the bounds of the number
+    of rooms and of the floor are Required test 6's).
     """
     rt = semantic_runtime
     before = _store(rt)
@@ -380,7 +381,7 @@ def test_object_characteristic_bounds_checked(semantic_runtime):
     refused as out of form; 1 and 7 are stored. A floor of -1 is stored; 1.5
     is refused. A floor area of 0.01 is stored as given; one of 0 or -3 is
     refused; a project with no characteristic at all is stored without one.
-    Shows A02-3, A02-4.
+    Shows A02-3, A02-4, A02-7, A02-8.
     """
     rt = semantic_runtime
     before = _store(rt)
@@ -480,3 +481,52 @@ def test_required_texts_blank_refused_padded_kept(semantic_runtime):
     _invalid(record("   "), ("missing_value", "name"))
     assert _store(rt) == before
     assert _session(rt, session_id) == item
+
+
+# --- Required test 8 (untagged) ------------------------------------------
+
+
+def test_required_value_not_given_refused(semantic_runtime):
+    """A02 Required test 8: a project created without a display name, a room
+    added without a name, a Customer recorded without a kind and an access
+    request without a text are each refused as a missing value, and nothing
+    changes. Shows A02-6 (A02 rule 1; State 5 `create_project`, `add_room`,
+    `record_customer`, `request_project_access`: `invalid_request`,
+    `missing_value`, stage (4))."""
+    rt = semantic_runtime
+    session_id = "kernel-session-a02-absent"
+    registered = rt.service(KERNEL, "register_agent_session", inputs=None, kernel_session=session_id)
+    assert registered["answer_kind"] != "refused", registered
+    project_id = _card(_create(rt))["project_id"]
+    before = _store(rt)
+    session_before = _session(rt, session_id)
+
+    # Not given: the field absent (None), not blank.
+    _invalid(_create(rt, display_name=None), ("missing_value", "display_name"))
+    _invalid(
+        rt.owner("add_room", target=project_id, room_name=None, request_id=rt.new_request_id()),
+        ("missing_value", "room_name"),
+    )
+    _invalid(
+        rt.owner("record_customer", request_id=rt.new_request_id(),
+                 customer=_customer_facts(customer_kind=None)),
+        ("missing_value", "customer_kind"),
+    )
+    _invalid(
+        rt.service(KERNEL, "request_project_access",
+                   inputs=_inputs(request_text=None), kernel_session=session_id),
+        ("missing_value", "request_text"),
+    )
+
+    assert _store(rt) == before
+    assert _project_ids(rt) == [project_id]
+    assert _read_card(rt, project_id)["rooms"] == []
+    assert rt.owner("list_customers")["items"] == []
+    assert _session(rt, session_id) == session_before
+
+    # Control: each given is accepted.
+    assert _card(_create(rt, display_name="Casa Sur"))["display_name"] == "Casa Sur"
+    room = rt.owner("add_room", target=project_id, room_name="Cocina", request_id=rt.new_request_id())
+    assert room["answer_kind"] == "room", room
+    assert _customer(rt.owner("record_customer", request_id=rt.new_request_id(),
+                              customer=_customer_facts()))["customer_kind"] == "person"

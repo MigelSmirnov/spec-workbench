@@ -920,8 +920,8 @@ as a stream that ends where the part ends (owner, 2026-11-17).
 `module:owner_sessions` keeps the uploaded file in the session's
 memory, holds the import lock and the session's lock, and owns the
 confirmation value (A16 rule 2, A13 rule 6). `module:migration_import` owns
-reading the file, the mapping and its checks, the re-check at confirmation
-and the closure (A16, M10). `module:projects`, `module:customers` and
+reading the file, the mapping and its checks, the mapping built once in the
+confirming transaction and applied only when clean, and the closure (A16, M10). `module:projects`, `module:customers` and
 `module:artifact_pointers` write their own imported records.
 `module:operations` opens the one transaction, mints the confirmation id and
 appends the entry. `module:data_provider` holds the file's size limit
@@ -977,8 +977,9 @@ minted `customer_ref`.
    `capability:store.run_in_transaction` opens the transaction with the
    action's instant from `capability:clock.recorded_now`; and
    `capability:migration_import.confirm_import` refuses when the closure
-   exists or the file of the bound digest is no longer kept, checks the
-   picks again (rule 6) and has each record written by its own module with
+   exists or the file of the bound digest is no longer kept, builds the
+   mapping of the bound file and picks once and applies it only when clean
+   (rule 6) and has each record written by its own module with
    its source identities and instants: `capability:projects.write_imported_project`
    the projects with their objects and rooms,
    `capability:customers.make_imported_customer` each Customer with a minted

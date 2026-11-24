@@ -265,8 +265,8 @@ def test_equal_repeat_answers_existing_project(semantic_runtime):
     """[witness: verification:registry_a01_equal_repeat_answers_existing_project]
 
     A01 Required test 1: two 'create a project' calls with the same request id
-    and equal facts make one project; the second answers it. Shows A01-1,
-    A01-3.
+    and equal facts make one project; the second answers it. Shows A01-3
+    (request ids unique for every model: Required test 12).
     """
     rt = semantic_runtime
     request_id = rt.new_request_id()
@@ -291,7 +291,7 @@ def test_equal_repeat_answers_existing_project(semantic_runtime):
     assert _card(second) == card
     assert _store(rt) == before
     assert _read_card(rt, project_id) == card
-    # A01-1: one project carries the request id.
+    # One project carries the request id (A01-3: the store unchanged).
     assert _listed_ids(rt) == [project_id]
     # A01 rule 9, State 5 "What answers never carry": the stored request id is
     # in neither answer.
@@ -489,7 +489,7 @@ def test_publish_retry_returns_same_pointer(semantic_runtime):
 
     A01 Required test 7: Kernel retrying a publish with the same request id
     gets the same pointer and version; the pointer it made is not superseded.
-    Shows A01-1, A01-3.
+    Shows A01-3 (request ids unique for every model: Required test 12).
     """
     rt = semantic_runtime
     session_id = "kernel-session-a01-publish"
@@ -910,7 +910,7 @@ def test_repeat_on_archived_project_refused(semantic_runtime):
 
     A01 Required test 13: a repeat with equal facts of 'add a room' or of a
     publish, after its project was archived, is refused and nothing changes.
-    Shows A01-2.
+    Shows A01-5.
     """
     rt = semantic_runtime
     session_id = "kernel-session-a01-archived"

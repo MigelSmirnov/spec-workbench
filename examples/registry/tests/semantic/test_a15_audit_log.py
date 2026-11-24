@@ -39,8 +39,11 @@ Fixture surface used here:
 - ``new_request_id()``; ``clock.set``, ``clock.advance``;
 - ``store_rows(table)`` for `audit_entry_rows` and `audit_sequence_rows`
   (a row of the latter read by its column `last_sequence_number`);
-- ``faults.fail_next_commit()``: the next write transaction fails before it
-  commits;
+- ``faults.fail_store_call("insert_audit_entry_row")``: the next insertion
+  of an audit entry (`StoreRepository`, ``70_persistence_closure.json``)
+  raises, failing its transaction — the last store call of an audited
+  action, after the raised counter was written (State 7
+  `append_audit_entry`);
 - calls from two threads at once (RUNTIME_SURFACE.md "Concurrency"), and
   ``owner_confirm(step)`` submitting in the session the step was shown in;
 - ``sign_in()`` after each move of the clock past the 30 idle minutes (A13
@@ -443,7 +446,10 @@ def test_failed_change_leaves_sequence_unchanged(semantic_runtime):
     last = _last_sequence_number(rt)
     assert last == log[-1]["sequence_number"]
 
-    rt.faults.fail_next_commit()
+    # The transaction fails at its last store call, after
+    # upsert_audit_sequence_row wrote the raised counter: the counter must be
+    # rolled back with it.
+    rt.faults.fail_store_call("insert_audit_entry_row")
     failed = rt.owner(
         "correct_project",
         target=card["project_id"],
