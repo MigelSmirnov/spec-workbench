@@ -152,8 +152,10 @@ bytes to check again (rule 2). Otherwise every other stage (6) failure is
 answered together, the kept bytes' digest computed again: the mapping of
 the bound file and picks, built once in this transaction, applies only when
 clean — any conflict, malformed record or missing value, or no pick at all
-refuses the whole import (rule 6, restated 2026-11-24: the mapping the step
-showed, so a clean step's confirmation finds no new conflict); the values the confirmation bound and nothing else;
+refuses the whole import (rule 6, restated 2026-11-24/25: the mapping the
+step showed but for the ids production minted since, so a conflict a minted
+id makes — improbable, not impossible — refuses it as any other, and
+nothing changes); the values the confirmation bound and nothing else;
 the projects link to the Customers it makes (R0-80).
 
 ### Errors
