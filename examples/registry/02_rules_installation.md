@@ -560,8 +560,9 @@ no stored value is ever evaluated or executed   -- A19-2
    no mapping shown, also when its declared length is smaller or absent, and
    the file the session kept before stays kept.
 
-5. A19-1, A19-2: every text value a page of the owner interface shows, in
-   each kind of place it shows one — an element's content, an attribute's
+5. A19-1, A19-2: every stored value a page of the owner interface shows —
+   a value that is not text in the text it is shown as — in each kind of
+   place it shows one — an element's content, an attribute's
    value, a value of a link's query — shown as that text when the value
    holds `<`, `>`, `&`, `"` and `'`, the page holding no element and no
    attribute made from it; every page forbids every script by its content
@@ -571,11 +572,16 @@ no stored value is ever evaluated or executed   -- A19-2
    [witness: note:_render_owner_page]
 6. A19-2: a display name holding a quote, a semicolon, a comment mark and
    a statement of the store's query language is stored and read back exactly
-   as given, and every other record is unchanged. Every value reaches the
-   store through the one statement backend the specification fixes, which
-   fills value places only (rule 3), so this shows it for every value
-   given or imported.
+   as given, and every record that existed before is unchanged. Every
+   value of a record reaches the store through the one statement backend
+   the specification fixes, which fills value places only (rule 3), so this
+   shows it for every value of a record given or imported.
    [witness: note:create_project]
+7. A19-2: an import file whose values hold markup, a statement of the
+   store's query language and text written as program code is read into
+   those same values as text, unchanged, and nothing in it is executed or
+   evaluated (rule 4).
+   [witness: note:_parse_export]
 
 ### Consequence
 
@@ -762,7 +768,7 @@ listener is opened
 — and no outcome changed.
 
 Performed again on 2026-11-24, after A19's invariants were given the
-identifiers A19-1 and A19-2 and its Required tests 5 and 6 the bindings to
+identifiers A19-1 and A19-2 and its Required tests 5, 6 and 7 the bindings to
 the checks that show them. No normative rule changed, and A13 did not
 change. Reviewed under injection_interpreted_input, browser_boundary and
 files_artifacts (A19): the new tests show the escaping and the value
