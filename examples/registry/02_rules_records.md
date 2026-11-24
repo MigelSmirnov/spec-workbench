@@ -78,10 +78,10 @@ for each model m in {Project, Customer}, and per project for m in   -- A01-1
   for records r1 != r2 of m with r1.request_id and r2.request_id present:
     r1.request_id != r2.request_id
 create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
-  a check of stages (1) to (4) of A04 rule 6 fails, or m in {Room,
-  ArtifactPointer} with its project archived => refused, store unchanged   -- A01-2
-  f = current_facts(r)  => answer r, store unchanged   -- A01-3
-  f != current_facts(r) => refused, store unchanged   -- A01-4
+  a check of stages (1) to (4) of A04 rule 6 fails, or m in   -- A01-2
+  {Room, ArtifactPointer} with its project archived => refused, store unchanged
+  otherwise, f = current_facts(r)  => answer r, store unchanged   -- A01-3
+  otherwise, f != current_facts(r) => refused, store unchanged   -- A01-4
 ```
 
 ### Required tests
@@ -112,6 +112,8 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
     other answers it. With different facts, or another publisher, the second
     is refused as a conflict. The same request id for rooms of two different
     projects makes two rooms.
+13. A repeat with equal facts of 'add a room' or of a publish, after its
+    project was archived, is refused and nothing changes.
 
 - Witness, A01-1, A01-3, A01-4: for projects, the test evidence of `create_project` [witness: note:create_project].
 - Witness, A01-1, A01-3, A01-4: for Customers, the test evidence of `record_customer` [witness: note:record_customer].
