@@ -632,7 +632,8 @@ check of Registry:
    transitive one, the Python version and the base image — and no instance
    of that release starts.
 2. A release whose list misses a package the instance would import, or
-   names one without an exact version or a digest, is not made.
+   names a package, the Python version or the base image without an exact
+   version or a digest, is not made.
 3. After an installation that succeeded, the dependencies the running
    instance has are exactly the release's list, by name, version and
    digest, nothing more.
@@ -799,8 +800,9 @@ places the rules already required; no outcome changed.
 
 Performed again on 2026-11-24, after A20 rule 5 recorded that its rules
 are kept by the release process and its installation, outside Registry
-(owner), and A20 declared no formal invariant of Registry's code. No rule
-of what a release contains or how it is installed moved. Reviewed under
+(owner), and A20 declared no formal invariant of Registry's code; its
+Required tests 1–4 now say what the release process shows. No rule of
+what a release contains or how it is installed moved. Reviewed under
 dependencies (A20): which dependencies run and how they are fixed and
 verified are unchanged, and the place that verifies them is named. No
 outcome changed.
