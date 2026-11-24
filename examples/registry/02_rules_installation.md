@@ -560,8 +560,22 @@ no stored value is ever evaluated or executed   -- A19-2
    no mapping shown, also when its declared length is smaller or absent, and
    the file the session kept before stays kept.
 
-- Witness, A19-1, A19-2: the test evidence of `_render_owner_page`, which renders every page of the owner interface [witness: note:_render_owner_page].
-- Witness, A19-2: for a value with a quote and a semicolon that is stored and read back as it was given, never as part of a command, the test evidence of `create_project` [witness: note:create_project].
+5. A19-1, A19-2: every text value a page of the owner interface shows, in
+   each kind of place it shows one — an element's content, an attribute's
+   value, a value of a link's query — shown as that text when the value
+   holds `<`, `>`, `&`, `"` and `'`, the page holding no element and no
+   attribute made from it; every page forbids every script by its content
+   security policy. Every page is made by one renderer, so this shows it for
+   every stored value, whoever wrote it and whichever way it came in, the
+   import file's included.
+   [witness: note:_render_owner_page]
+6. A19-2: a display name holding a quote, a semicolon, a comment mark and
+   a statement of the store's query language is stored and read back exactly
+   as given, and every other record is unchanged. Every value reaches the
+   store through the one statement backend the specification fixes, which
+   fills value places only (rule 3), so this shows it for every value
+   given or imported.
+   [witness: note:create_project]
 
 ### Consequence
 
@@ -748,12 +762,11 @@ listener is opened
 — and no outcome changed.
 
 Performed again on 2026-11-24, after A19's invariants were given the
-identifiers A19-1 and A19-2 and their Required tests the bindings to the
-checks that show them; the session cookie's attributes are now one
-constant of the data provider, `OWNER_SESSION_COOKIE_ATTRIBUTES`, with the
-same attributes as before. No normative rule changed. Reviewed under
-injection_interpreted_input, browser_boundary and files_artifacts (A19) and
-browser_boundary (A13): no outcome changed.
+identifiers A19-1 and A19-2 and its Required tests 5 and 6 the bindings to
+the checks that show them. No normative rule changed, and A13 did not
+change. Reviewed under injection_interpreted_input, browser_boundary and
+files_artifacts (A19): the new tests show the escaping and the value
+places the rules already required; no outcome changed.
 
 ### Consequence
 
