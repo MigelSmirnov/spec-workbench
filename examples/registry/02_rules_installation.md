@@ -631,8 +631,8 @@ check of Registry:
    dependency of each kind rule 1 names — a direct Python package, a
    transitive one, the Python version and the base image — and no instance
    of that release starts.
-2. A release whose list misses a package the instance would import, or
-   names a package, the Python version or the base image without an exact
+2. A release whose list misses a package the instance would import, the
+   Python version or the base image, or names any of them without an exact
    version or a digest, is not made.
 3. After an installation that succeeded, the dependencies the running
    instance has are exactly the release's list, by name, version and
