@@ -193,6 +193,18 @@ checks; A7, A15, A20 and A32 have none. A binding found by reading check code
 is evidence; a binding to a check that does not assert the invariant is a
 false claim.
 
+A decision whose guarantee is kept outside the case — by a release process, a
+deployment, the platform — has no invariant of the case's code: no note and no
+check of the case can show what, say, an installer does, and a binding there
+would be a false witness. Its Formal invariants section then says so on its
+first line, `None: <who keeps it and why no check of the case can show it>`
+(owner decision 2026-11-24, Registry A20, whose dependencies are fixed by a
+release process Registry does not manage). Such a decision declares no formal
+invariant, needs no witness, and is listed by `decision_witness` as
+`invariant_kept_outside` — reported, never a pass. A bare `None`, or `None:`
+after a formula, declares nothing. Whether the claim is true is the State 2
+round's judgement; a guarantee the case's own code keeps is never written so.
+
 ### Flow execution
 
 State 4 names the steps of each flow and the operation (capability) that

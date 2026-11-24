@@ -21,6 +21,11 @@ content beneath headings deeper than its own heading:
 ### Consequence
 ```
 
+A decision whose guarantee is kept outside the case writes
+`None: <who keeps it and why no check of the case can show it>` as the first
+line of its Formal invariants section; the section stays, and the decision
+needs no witness (TRANSITION_PROTOCOL.md, "Invariant evidence").
+
 Use `## Accepted decision` for a supporting decision without an explicit ID.
 Keep its sections at `###` or deeper. A heading at the decision's level or above
 closes the item; content under that heading is intentionally not absorbed by the
