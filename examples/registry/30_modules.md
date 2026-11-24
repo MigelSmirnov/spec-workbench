@@ -1330,8 +1330,19 @@ carried to State 7).
 
 `models`, for `HttpRequest`, `ByteStream` and `HttpResponse`, which its
 surface takes and answers, `OwnerRequest`, `OwnerValues`, `OwnerAdmission`
-and `OwnerAction`, which it reads, builds and matches, and `OperationAnswer`
-with every variant of it and `RefusalCode`, which it renders;
+and `OwnerAction`, which it reads, builds and matches; `OperationAnswer`
+and each of its variants, since `_render_owner_page` takes the whole union
+and renders every variant as itself: `ValidationAnswer`, `ContextAnswer`,
+`ProjectCardAnswer`, `ProjectListAnswer`, `ProjectErasedAnswer`,
+`RoomsAnswer`, `RoomAnswer`, `PointersAnswer`, `LatestPointerAnswer`,
+`PointerAnswer`, `BillingAnswer`, `CustomerAnswer`, `CustomerListAnswer`,
+`SessionAccessAnswer`, `SessionListAnswer`, `SessionEndedAnswer`,
+`RequestPendingAnswer`, `AgentProjectionAnswer`, `AuditViewAnswer`,
+`AuditErasedAnswer`, `ImportUploadAnswer`, `ImportMappingAnswer`,
+`ImportAcceptedAnswer`, `ConfirmationStepAnswer`, `SignedInAnswer`,
+`SignedOutAnswer`, `NewestBackupAnswer` and `RefusedAnswer`; and
+`RefusalCode`, whose
+`UNAUTHENTICATED` member it renders as the sign-in page;
 `data_provider`, for `OWNER_ACTIONS`, `OWNER_TARGET_PARAMETER`,
 `OWNER_CSRF_FIELD`, `OWNER_SESSION_COOKIE_NAME`, `SERVICE_ANSWER_STATUS` and
 `REFUSAL_HTTP_STATUSES`; `random_values`, for `mint_identity`, a create
