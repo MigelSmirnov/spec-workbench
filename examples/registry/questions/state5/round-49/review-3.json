@@ -1,0 +1,58 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "subject": "owner-session read locking",
+   "kind": "contradictory_lock_obligation",
+   "text": "a read takes no lock and is not ordered. Drawing a turn waits for nothing (owner, 2026-11-24; prototype `session_locks_proto`).\n  `owner_sessions` also keeps one session-table lock, which guards every\n  session's entry with its signed-out mark and its last-request reading:\n  each read or write of them is made under it and only there",
+   "question": "Does “a read takes no lock” mean that a read takes neither the import lock nor a session lock but still takes the session-table lock for its session check and last-request update, or does it literally take no lock?",
+   "options": [
+    "A read takes the session-table lock only, and takes neither the import lock nor a session lock.",
+    "A read takes no lock at all; its session check and last-request update need a different concurrency guarantee.",
+    "Only reads that do not inspect owner-session state take no lock; session-bound reads take the table lock."
+   ],
+   "default_guess": "A read takes the session-table lock only, and “takes no lock” is intended to exclude the import and per-session ordering locks.",
+   "witness": {
+    "initial": "A valid owner session exists, and another request currently holds the session-table lock while updating that session's signed-out mark or last-request reading.",
+    "events": [
+     "The owner sends a read request in that session.",
+     "`owner_sessions` performs the session check and updates the last-request reading."
+    ],
+    "outcomes": [
+     "Under “a read takes no lock,” the read does not wait for the session-table lock.",
+     "Under “each read or write of them is made under it and only there,” the read waits for and acquires the session-table lock."
+    ],
+    "observer": "The read caller observes whether the request waits; concurrent owner-session operations can also observe whether the session state access was serialized."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "subject": "admission order for requests sharing a later session lock",
+   "kind": "contradictory_ordering_scope",
+   "text": "requests that wait for the same lock are served in the order they were\n  admitted — a sign-out admitted after a change completes after it, the pass\n  after a change admitted before it began, a second upload after the first —\n  while a change that touches no uploaded file, which waits for no import\n  lock, may complete before an earlier one still waiting for it",
+   "question": "When an earlier uploaded-file request waits first for the import lock and will later wait for the session lock, does it count as sharing that session lock with a later non-file change, or does “the same lock” mean only the first lock on which requests have already drawn tickets?",
+   "options": [
+    "The earlier file request and later non-file change count as sharing the session lock, so admission order forbids the later change from completing first.",
+    "Ordering is per lock ticket already drawn: the file request has only an import-lock ticket until that lock is granted, so a later change may take and complete its session-lock turn first.",
+    "A file request draws both its import-lock and future session-lock places at admission, preserving admission order on the session lock while it waits for the import lock."
+   ],
+   "default_guess": "Ordering is per ticket already drawn; a file request waiting for the import lock has not yet taken a session-lock place, so a later non-file change may complete first.",
+   "witness": {
+    "initial": "A valid owner session exists, and the import lock is held by another request.",
+    "events": [
+     "An upload for the session is admitted first, draws an import-lock ticket, and waits.",
+     "A project correction in the same owner session is admitted later; it touches no uploaded file and draws its place on the session lock.",
+     "The correction reaches the session lock before the upload has acquired the import lock."
+    ],
+    "outcomes": [
+     "Because both requests ultimately wait for the same session lock, the general admission-order promise requires the earlier upload to be served before the correction.",
+     "Because the correction waits for no import lock, the stated exception permits it to complete before the earlier upload."
+    ],
+    "observer": "The owner observes which request completes first and whether the project correction is committed before the upload proceeds."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"subject\":\"owner-session read locking\",\"kind\":\"contradictory_lock_obligation\",\"text\":\"a read takes no lock and is not ordered. Drawing a turn waits for nothing (owner, 2026-11-24; prototype `session_locks_proto`).\\n  `owner_sessions` also keeps one session-table lock, which guards every\\n  session's entry with its signed-out mark and its last-request reading:\\n  each read or write of them is made under it and only there\",\"question\":\"Does “a read takes no lock” mean that a read takes neither the import lock nor a session lock but still takes the session-table lock for its session check and last-request update, or does it literally take no lock?\",\"options\":[\"A read takes the session-table lock only, and takes neither the import lock nor a session lock.\",\"A read takes no lock at all; its session check and last-request update need a different concurrency guarantee.\",\"Only reads that do not inspect owner-session state take no lock; session-bound reads take the table lock.\"],\"default_guess\":\"A read takes the session-table lock only, and “takes no lock” is intended to exclude the import and per-session ordering locks.\",\"witness\":{\"initial\":\"A valid owner session exists, and another request currently holds the session-table lock while updating that session's signed-out mark or last-request reading.\",\"events\":[\"The owner sends a read request in that session.\",\"`owner_sessions` performs the session check and updates the last-request reading.\"],\"outcomes\":[\"Under “a read takes no lock,” the read does not wait for the session-table lock.\",\"Under “each read or write of them is made under it and only there,” the read waits for and acquires the session-table lock.\"],\"observer\":\"The read caller observes whether the request waits; concurrent owner-session operations can also observe whether the session state access was serialized.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"subject\":\"admission order for requests sharing a later session lock\",\"kind\":\"contradictory_ordering_scope\",\"text\":\"requests that wait for the same lock are served in the order they were\\n  admitted — a sign-out admitted after a change completes after it, the pass\\n  after a change admitted before it began, a second upload after the first —\\n  while a change that touches no uploaded file, which waits for no import\\n  lock, may complete before an earlier one still waiting for it\",\"question\":\"When an earlier uploaded-file request waits first for the import lock and will later wait for the session lock, does it count as sharing that session lock with a later non-file change, or does “the same lock” mean only the first lock on which requests have already drawn tickets?\",\"options\":[\"The earlier file request and later non-file change count as sharing the session lock, so admission order forbids the later change from completing first.\",\"Ordering is per lock ticket already drawn: the file request has only an import-lock ticket until that lock is granted, so a later change may take and complete its session-lock turn first.\",\"A file request draws both its import-lock and future session-lock places at admission, preserving admission order on the session lock while it waits for the import lock.\"],\"default_guess\":\"Ordering is per ticket already drawn; a file request waiting for the import lock has not yet taken a session-lock place, so a later non-file change may complete first.\",\"witness\":{\"initial\":\"A valid owner session exists, and the import lock is held by another request.\",\"events\":[\"An upload for the session is admitted first, draws an import-lock ticket, and waits.\",\"A project correction in the same owner session is admitted later; it touches no uploaded file and draws its place on the session lock.\",\"The correction reaches the session lock before the upload has acquired the import lock.\"],\"outcomes\":[\"Because both requests ultimately wait for the same session lock, the general admission-order promise requires the earlier upload to be served before the correction.\",\"Because the correction waits for no import lock, the stated exception permits it to complete before the earlier upload.\"],\"observer\":\"The owner observes which request completes first and whether the project correction is committed before the upload proceeds.\"}}]}",
+ "set_aside": []
+}

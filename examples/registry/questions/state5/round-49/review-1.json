@@ -1,0 +1,83 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "subject": "admit_owner_request admission order",
+   "kind": "undefined_order_key",
+   "text": "requests that wait for the same lock are served in the order they were admitted",
+   "question": "Which event establishes a request's admission order: arrival at the listener, entry into `admit_owner_request`, successful session checking, or ticket assignment while holding the session-table lock?",
+   "options": [
+    "Order by listener arrival.",
+    "Order by entry into `admit_owner_request`.",
+    "Order by successful session checking and ticket assignment under the session-table lock."
+   ],
+   "default_guess": "Order by successful session checking and ticket assignment under the session-table lock.",
+   "witness": {
+    "initial": "One valid owner session exists and its session lock is held by an earlier request.",
+    "events": [
+     "Two state-changing requests arrive concurrently for that session.",
+     "Request A reaches the listener first, but request B acquires the session-table lock and draws its turn first."
+    ],
+    "outcomes": [
+     "If admission means listener arrival, A is served before B.",
+     "If admission means ticket assignment under the session-table lock, B is served before A."
+    ],
+    "observer": "The owner sees which change completes and becomes visible first."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "subject": "scope of same-lock FIFO guarantee",
+   "kind": "ambiguous_ordering",
+   "text": "requests that wait for the same lock are served in the order they were admitted — a sign-out admitted after a change completes after it, the pass after a change admitted before it began, a second upload after the first — while a change that touches no uploaded file, which waits for no import lock, may complete before an earlier one still waiting for it",
+   "question": "Does the FIFO promise cover every pair of requests that eventually acquire the same session lock, or only requests already queued for the same particular lock; specifically, may a later non-file change overtake an earlier file-touching request before that earlier request joins the session-lock queue?",
+   "options": [
+    "FIFO covers eventual use of the session lock, so the earlier file-touching request cannot be overtaken.",
+    "FIFO applies separately to each lock's established queue, so the later non-file change may overtake before the earlier request joins the session queue.",
+    "The explicit overtaking clause is the exception to an otherwise admission-based session FIFO guarantee."
+   ],
+   "default_guess": "FIFO applies separately to established lock queues, so the later non-file change may overtake while the earlier request waits for the import lock.",
+   "witness": {
+    "initial": "A valid owner session exists; its import lock is busy.",
+    "events": [
+     "A file-touching change is admitted first and waits for the import lock.",
+     "A non-file change is admitted later and takes or queues for the same session's lock.",
+     "The import lock later becomes available and the first request proceeds toward the session lock."
+    ],
+    "outcomes": [
+     "Reading the FIFO promise as covering eventual session-lock users requires the first request to be served first.",
+     "Reading it as queue-local permits the later non-file change to complete first, as the exception says."
+    ],
+    "observer": "The owner sees the order in which the two changes complete and their effects become readable."
+   }
+  },
+  {
+   "unit": "50_public_apis_0_conventions.md:Conventions every operation follows",
+   "subject": "locks taken by read requests",
+   "kind": "ambiguous_lock_scope",
+   "text": "a read takes no lock and is not ordered",
+   "question": "Does this mean that a read takes neither the import lock nor a session lock but still takes the session-table lock for session validation and the last-request update, or literally that it takes no owner-session lock at all?",
+   "options": [
+    "A read skips only the import and per-session ordering locks; it still uses the session-table lock.",
+    "A read takes no owner-session lock, including the session-table lock.",
+    "A read uses the session-table lock only for admission and then runs unordered."
+   ],
+   "default_guess": "A read uses the session-table lock for admission and the last-request update, then runs without the import or per-session lock.",
+   "witness": {
+    "initial": "A valid owner session is close to its idle limit.",
+    "events": [
+     "A read request and a sign-out arrive concurrently.",
+     "The read must validate the session and update its last-request reading while the sign-out marks and removes the same session entry."
+    ],
+    "outcomes": [
+     "With the session-table lock, validation/update and removal are serialized, after which the admitted read may continue unordered.",
+     "With literally no lock for the read, its validation or last-request write can race with removal of the session entry."
+    ],
+    "observer": "The owner sees whether the read is admitted and whether the session remains or is treated as signed out."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"subject\":\"admit_owner_request admission order\",\"kind\":\"undefined_order_key\",\"text\":\"requests that wait for the same lock are served in the order they were admitted\",\"question\":\"Which event establishes a request's admission order: arrival at the listener, entry into `admit_owner_request`, successful session checking, or ticket assignment while holding the session-table lock?\",\"options\":[\"Order by listener arrival.\",\"Order by entry into `admit_owner_request`.\",\"Order by successful session checking and ticket assignment under the session-table lock.\"],\"default_guess\":\"Order by successful session checking and ticket assignment under the session-table lock.\",\"witness\":{\"initial\":\"One valid owner session exists and its session lock is held by an earlier request.\",\"events\":[\"Two state-changing requests arrive concurrently for that session.\",\"Request A reaches the listener first, but request B acquires the session-table lock and draws its turn first.\"],\"outcomes\":[\"If admission means listener arrival, A is served before B.\",\"If admission means ticket assignment under the session-table lock, B is served before A.\"],\"observer\":\"The owner sees which change completes and becomes visible first.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"subject\":\"scope of same-lock FIFO guarantee\",\"kind\":\"ambiguous_ordering\",\"text\":\"requests that wait for the same lock are served in the order they were admitted — a sign-out admitted after a change completes after it, the pass after a change admitted before it began, a second upload after the first — while a change that touches no uploaded file, which waits for no import lock, may complete before an earlier one still waiting for it\",\"question\":\"Does the FIFO promise cover every pair of requests that eventually acquire the same session lock, or only requests already queued for the same particular lock; specifically, may a later non-file change overtake an earlier file-touching request before that earlier request joins the session-lock queue?\",\"options\":[\"FIFO covers eventual use of the session lock, so the earlier file-touching request cannot be overtaken.\",\"FIFO applies separately to each lock's established queue, so the later non-file change may overtake before the earlier request joins the session queue.\",\"The explicit overtaking clause is the exception to an otherwise admission-based session FIFO guarantee.\"],\"default_guess\":\"FIFO applies separately to established lock queues, so the later non-file change may overtake while the earlier request waits for the import lock.\",\"witness\":{\"initial\":\"A valid owner session exists; its import lock is busy.\",\"events\":[\"A file-touching change is admitted first and waits for the import lock.\",\"A non-file change is admitted later and takes or queues for the same session's lock.\",\"The import lock later becomes available and the first request proceeds toward the session lock.\"],\"outcomes\":[\"Reading the FIFO promise as covering eventual session-lock users requires the first request to be served first.\",\"Reading it as queue-local permits the later non-file change to complete first, as the exception says.\"],\"observer\":\"The owner sees the order in which the two changes complete and their effects become readable.\"}},{\"unit\":\"50_public_apis_0_conventions.md:Conventions every operation follows\",\"subject\":\"locks taken by read requests\",\"kind\":\"ambiguous_lock_scope\",\"text\":\"a read takes no lock and is not ordered\",\"question\":\"Does this mean that a read takes neither the import lock nor a session lock but still takes the session-table lock for session validation and the last-request update, or literally that it takes no owner-session lock at all?\",\"options\":[\"A read skips only the import and per-session ordering locks; it still uses the session-table lock.\",\"A read takes no owner-session lock, including the session-table lock.\",\"A read uses the session-table lock only for admission and then runs unordered.\"],\"default_guess\":\"A read uses the session-table lock for admission and the last-request update, then runs without the import or per-session lock.\",\"witness\":{\"initial\":\"A valid owner session is close to its idle limit.\",\"events\":[\"A read request and a sign-out arrive concurrently.\",\"The read must validate the session and update its last-request reading while the sign-out marks and removes the same session entry.\"],\"outcomes\":[\"With the session-table lock, validation/update and removal are serialized, after which the admitted read may continue unordered.\",\"With literally no lock for the read, its validation or last-request write can race with removal of the session entry.\"],\"observer\":\"The owner sees whether the read is admitted and whether the session remains or is treated as signed out.\"}}]}",
+ "set_aside": []
+}
