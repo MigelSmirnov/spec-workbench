@@ -1,0 +1,106 @@
+{
+ "open_points": [
+  {
+   "subject": "context: OWNER_ACTIONS route table",
+   "kind": "missing table contents",
+   "text": "Which action a request names, by its method and path, and whether it is a change or touches an uploaded file, are the rows of the data provider's `OWNER_ACTIONS`",
+   "question": "What is every `OWNER_ACTIONS` row: its `OwnerAction`, HTTP method, path, change flag and uploaded-file flag, including upload, mapping, confirmation-step, confirmation, and sign-out requests?",
+   "options": [
+    "Define one explicit row for every owner request and mark session-mutating actions as changes and upload-reading or upload-dropping actions as touching an uploaded file",
+    "Let later route and locking implementations infer the rows and flags from the flows"
+   ],
+   "default_guess": "Define explicit rows now; mark sign-out, upload, mapping, import confirmation-step and import confirmation as touching an uploaded file, and mark every request that changes store or owner-session state as a change.",
+   "witness": {
+    "initial": "A valid owner session holds an uploaded import file while an import confirmation is running.",
+    "events": [
+     "The owner submits sign-out while the confirmation holds or is waiting for the import lock.",
+     "The owner interface looks up sign-out in `OWNER_ACTIONS` to decide whether it takes the import lock before the session lock."
+    ],
+    "outcomes": [
+     "If sign-out is marked as touching an uploaded file, it takes the import lock first and is ordered safely with confirmation.",
+     "If it is not, it takes only the session lock, creating a different lock order or allowing the upload to be dropped concurrently."
+    ],
+    "observer": "The owner sees either a safely ordered sign-out/import result or a hang, race, or different import result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: owner transport constant values",
+   "kind": "unspecified constants",
+   "text": "its target is the query parameter `OWNER_TARGET_PARAMETER` names, its CSRF value the form field `OWNER_CSRF_FIELD` names, the session cookie's name `OWNER_SESSION_COOKIE_NAME`",
+   "question": "What exact query-parameter, form-field and cookie names do these three constants contain?",
+   "options": [
+    "Specify stable literal names as release data",
+    "Allow each implementation or later state to choose the names"
+   ],
+   "default_guess": "Use `target`, `csrf`, and `registry_owner_session`, respectively.",
+   "unit": "?"
+  },
+  {
+   "subject": "context: unmatched owner route",
+   "kind": "unstated failure outcome",
+   "text": "Which action a request names, by its method and path, and whether it is a change or touches an uploaded file, are the rows of the data provider's `OWNER_ACTIONS`",
+   "question": "What does `serve_owner_request` do when the request's method and path match no `OWNER_ACTIONS` row, including a known path with the wrong method?",
+   "options": [
+    "Return a specified refusal code and its mapped HTTP status through the normal response path",
+    "Treat it as a transport-level 404 distinct from an operation refusal",
+    "Close the connection without an answer"
+   ],
+   "default_guess": "Return a normal `not_found` refusal rendered with status 404 and never close the connection unanswered.",
+   "witness": {
+    "initial": "Registry is serving the owner interface normally.",
+    "events": [
+     "A client sends `PUT` to a path for which `OWNER_ACTIONS` contains only a `POST` row.",
+     "`owner_interface` cannot construct the `OwnerAction` required by `OwnerRequest`."
+    ],
+    "outcomes": [
+     "One implementation returns the ordinary `not_found` refusal with HTTP 404.",
+     "Another returns an invalid-value refusal with HTTP 422 or closes the connection because no operation can be called."
+    ],
+    "observer": "The requesting client sees a different status and response body, or no response."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: unread owner request admission",
+   "kind": "ambiguous value loss",
+   "text": "A request it cannot read — a body or a head that fails, a form that cannot be decoded — is handed on with no values, nothing partly read kept, and answered by `operations` as any other",
+   "question": "When parsing fails, which successfully read request facts survive in `OwnerRequest` or `OwnerAdmission`: the method/path-derived action, session cookie, target query parameter, CSRF value, and any complete form fields read before the failure?",
+   "options": [
+    "Keep the route-derived action, cookie and query target, but clear all body/form values including a partly read CSRF value",
+    "Keep only the route-derived action and clear cookie, target and all form values",
+    "Keep every complete field read before the failure and discard only the incomplete field"
+   ],
+   "default_guess": "Keep the route-derived action, cookie and query target; clear every body-derived value, including any CSRF value, and keep no partial or earlier form field.",
+   "witness": {
+    "initial": "A valid owner session has been idle for 29 minutes.",
+    "events": [
+     "The browser sends a change request with the valid session cookie and a malformed form body.",
+     "`owner_interface` fails to decode the form and hands the request to `operations` with 'no values'."
+    ],
+    "outcomes": [
+     "If the cookie survives, `owner_sessions` recognizes a valid session, restarts its idle period, then refuses the missing CSRF or action values.",
+     "If 'no values' includes the cookie, the request is unauthenticated, the idle period is not restarted, and the sign-in page is shown."
+    ],
+    "observer": "The owner sees a different refusal page and the session either remains usable or expires a minute later."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: owner-interface flow delegation",
+   "kind": "unnamed caller and operation",
+   "text": "`capability:owner_interface.serve_owner_request` renders the form with a request id from `capability:random_values.mint_identity` and the session's CSRF value. / `capability:projects.read_project_card` answers the project / `capability:customers.read_customer` answers the Customer / `capability:agent_sessions.list_sessions` answers them / `capability:backups.newest_backup_instant` gives the owner interface the instant",
+   "question": "For each owner-facing form, read, list, mapping, confirmation-step and newest-backup request, does `serve_owner_request` call `capability:operations.perform_owner_operation`, and which operation then calls the named domain capability and supplies the admission or refusal answer?",
+   "options": [
+    "Route every owner request through `perform_owner_operation`, naming an operation for each form and read before rendering",
+    "Let `owner_interface` call the listed domain capabilities directly for read and form-rendering requests",
+    "Split the requests, explicitly listing which go through `operations` and which are interface-owned"
+   ],
+   "default_guess": "Route every owner request through `perform_owner_operation`; `owner_interface` should only parse, delegate and render, while `operations` admits the session and calls the domain capability.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context: OWNER_ACTIONS route table\",\"kind\":\"missing table contents\",\"text\":\"Which action a request names, by its method and path, and whether it is a change or touches an uploaded file, are the rows of the data provider's `OWNER_ACTIONS`\",\"question\":\"What is every `OWNER_ACTIONS` row: its `OwnerAction`, HTTP method, path, change flag and uploaded-file flag, including upload, mapping, confirmation-step, confirmation, and sign-out requests?\",\"options\":[\"Define one explicit row for every owner request and mark session-mutating actions as changes and upload-reading or upload-dropping actions as touching an uploaded file\",\"Let later route and locking implementations infer the rows and flags from the flows\"],\"default_guess\":\"Define explicit rows now; mark sign-out, upload, mapping, import confirmation-step and import confirmation as touching an uploaded file, and mark every request that changes store or owner-session state as a change.\",\"witness\":{\"initial\":\"A valid owner session holds an uploaded import file while an import confirmation is running.\",\"events\":[\"The owner submits sign-out while the confirmation holds or is waiting for the import lock.\",\"The owner interface looks up sign-out in `OWNER_ACTIONS` to decide whether it takes the import lock before the session lock.\"],\"outcomes\":[\"If sign-out is marked as touching an uploaded file, it takes the import lock first and is ordered safely with confirmation.\",\"If it is not, it takes only the session lock, creating a different lock order or allowing the upload to be dropped concurrently.\"],\"observer\":\"The owner sees either a safely ordered sign-out/import result or a hang, race, or different import result.\"}},{\"subject\":\"context: owner transport constant values\",\"kind\":\"unspecified constants\",\"text\":\"its target is the query parameter `OWNER_TARGET_PARAMETER` names, its CSRF value the form field `OWNER_CSRF_FIELD` names, the session cookie's name `OWNER_SESSION_COOKIE_NAME`\",\"question\":\"What exact query-parameter, form-field and cookie names do these three constants contain?\",\"options\":[\"Specify stable literal names as release data\",\"Allow each implementation or later state to choose the names\"],\"default_guess\":\"Use `target`, `csrf`, and `registry_owner_session`, respectively.\"},{\"subject\":\"context: unmatched owner route\",\"kind\":\"unstated failure outcome\",\"text\":\"Which action a request names, by its method and path, and whether it is a change or touches an uploaded file, are the rows of the data provider's `OWNER_ACTIONS`\",\"question\":\"What does `serve_owner_request` do when the request's method and path match no `OWNER_ACTIONS` row, including a known path with the wrong method?\",\"options\":[\"Return a specified refusal code and its mapped HTTP status through the normal response path\",\"Treat it as a transport-level 404 distinct from an operation refusal\",\"Close the connection without an answer\"],\"default_guess\":\"Return a normal `not_found` refusal rendered with status 404 and never close the connection unanswered.\",\"witness\":{\"initial\":\"Registry is serving the owner interface normally.\",\"events\":[\"A client sends `PUT` to a path for which `OWNER_ACTIONS` contains only a `POST` row.\",\"`owner_interface` cannot construct the `OwnerAction` required by `OwnerRequest`.\"],\"outcomes\":[\"One implementation returns the ordinary `not_found` refusal with HTTP 404.\",\"Another returns an invalid-value refusal with HTTP 422 or closes the connection because no operation can be called.\"],\"observer\":\"The requesting client sees a different status and response body, or no response.\"}},{\"subject\":\"context: unread owner request admission\",\"kind\":\"ambiguous value loss\",\"text\":\"A request it cannot read — a body or a head that fails, a form that cannot be decoded — is handed on with no values, nothing partly read kept, and answered by `operations` as any other\",\"question\":\"When parsing fails, which successfully read request facts survive in `OwnerRequest` or `OwnerAdmission`: the method/path-derived action, session cookie, target query parameter, CSRF value, and any complete form fields read before the failure?\",\"options\":[\"Keep the route-derived action, cookie and query target, but clear all body/form values including a partly read CSRF value\",\"Keep only the route-derived action and clear cookie, target and all form values\",\"Keep every complete field read before the failure and discard only the incomplete field\"],\"default_guess\":\"Keep the route-derived action, cookie and query target; clear every body-derived value, including any CSRF value, and keep no partial or earlier form field.\",\"witness\":{\"initial\":\"A valid owner session has been idle for 29 minutes.\",\"events\":[\"The browser sends a change request with the valid session cookie and a malformed form body.\",\"`owner_interface` fails to decode the form and hands the request to `operations` with 'no values'.\"],\"outcomes\":[\"If the cookie survives, `owner_sessions` recognizes a valid session, restarts its idle period, then refuses the missing CSRF or action values.\",\"If 'no values' includes the cookie, the request is unauthenticated, the idle period is not restarted, and the sign-in page is shown.\"],\"observer\":\"The owner sees a different refusal page and the session either remains usable or expires a minute later.\"}},{\"subject\":\"context: owner-interface flow delegation\",\"kind\":\"unnamed caller and operation\",\"text\":\"`capability:owner_interface.serve_owner_request` renders the form with a request id from `capability:random_values.mint_identity` and the session's CSRF value. / `capability:projects.read_project_card` answers the project / `capability:customers.read_customer` answers the Customer / `capability:agent_sessions.list_sessions` answers them / `capability:backups.newest_backup_instant` gives the owner interface the instant\",\"question\":\"For each owner-facing form, read, list, mapping, confirmation-step and newest-backup request, does `serve_owner_request` call `capability:operations.perform_owner_operation`, and which operation then calls the named domain capability and supplies the admission or refusal answer?\",\"options\":[\"Route every owner request through `perform_owner_operation`, naming an operation for each form and read before rendering\",\"Let `owner_interface` call the listed domain capabilities directly for read and form-rendering requests\",\"Split the requests, explicitly listing which go through `operations` and which are interface-owned\"],\"default_guess\":\"Route every owner request through `perform_owner_operation`; `owner_interface` should only parse, delegate and render, while `operations` admits the session and calls the domain capability.\"}]}",
+ "set_aside": []
+}

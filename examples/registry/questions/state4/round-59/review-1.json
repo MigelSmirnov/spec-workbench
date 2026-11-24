@@ -1,0 +1,161 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "owner-interface read timeout",
+   "kind": "contradiction",
+   "text": "“the listeners' read timeout, how long a listener waits for a request's next bytes before it closes the connection” conflicts with “A request it cannot read — a body or a head that fails ... is handed on with no values ... it never closes the connection instead of answering”",
+   "question": "When the next body bytes do not arrive before the listener timeout, must Registry close the connection unanswered or create an empty-valued request and return an operation answer?",
+   "options": [
+    "Close the connection unanswered at the listener timeout",
+    "Pass an empty-valued request to operations and return its refusal",
+    "Distinguish timeout from other read failures and specify each outcome"
+   ],
+   "default_guess": "Treat the listener timeout as the explicit exception: close the connection unanswered; hand other decoding failures to operations.",
+   "witness": {
+    "initial": "Registry is serving; a client sends valid headers for an owner change and only part of its body.",
+    "events": [
+     "The client stops sending bytes.",
+     "module:instance_lifecycle reaches LISTENER_READ_TIMEOUT_SECONDS while waiting for the next byte.",
+     "A careful implementation applies either the listener rule or owner_interface's unreadable-request rule."
+    ],
+    "outcomes": [
+     "The listener closes the connection and the client receives no HTTP answer.",
+     "operations receives a request with no values and the client receives a rendered refusal."
+    ],
+    "observer": "The owner or HTTP client"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "unreadable owner request",
+   "kind": "ambiguous state",
+   "text": "“is handed on with no values, nothing partly read kept”",
+   "question": "Which already-read parts survive when a body, upload head, or form cannot be read: the matched action, target, session cookie and other headers, or none of them?",
+   "options": [
+    "Discard only body/form values; retain action, target and session admission data",
+    "Discard every parsed value, including the cookie and target",
+    "Specify a separate retained-value set for body, head and form failures"
+   ],
+   "default_guess": "Retain the method/path-derived action and header/query admission data, but discard every body or form value.",
+   "witness": {
+    "initial": "A valid owner session submits a malformed correction form with its session cookie present.",
+    "events": [
+     "module:owner_interface matches the correction route and reads the cookie.",
+     "Decoding the form fails.",
+     "It hands operations a request with “no values”."
+    ],
+    "outcomes": [
+     "The cookie survives; the request is a valid owner request, restarts the idle limit, and is refused for missing values or CSRF.",
+     "The cookie is discarded; the request is refused as unauthenticated, shows the sign-in page, and does not restart the session's idle limit."
+    ],
+    "observer": "The owner, who sees the refusal page and later whether the session expired"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "unknown owner route",
+   "kind": "missing failure outcome",
+   "text": "“Which action a request names, by its method and path ... are the rows of the data provider's OWNER_ACTIONS”",
+   "question": "What answer is produced when the request's method and path match no OWNER_ACTIONS row?",
+   "options": [
+    "Return a not-found refusal using REFUSAL_HTTP_STATUSES",
+    "Return a values refusal through operations",
+    "Render a fixed owner-interface not-found page without calling operations"
+   ],
+   "default_guess": "Return a fixed 404 not-found response without calling operations.",
+   "witness": {
+    "initial": "Registry is serving the owner interface.",
+    "events": [
+     "A client requests a method/path pair absent from OWNER_ACTIONS.",
+     "module:owner_interface cannot construct the required OwnerAction for perform_owner_operation."
+    ],
+    "outcomes": [
+     "The client receives a 404 owner-interface response.",
+     "The request is converted to some operation or empty request and receives a 422 or another page."
+    ],
+    "observer": "The HTTP client"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "OWNER_ACTIONS route identity",
+   "kind": "ambiguous dispatch",
+   "text": "“Which action a request names, by its method and path ... are the rows of the data provider's OWNER_ACTIONS”",
+   "question": "Must method-and-path pairs be unique, and what happens if two rows match the same request?",
+   "options": [
+    "Require exactly one row per method-and-path pair and reject an invalid release before serving",
+    "Use the first matching row",
+    "Treat an ambiguous match as an internal-error answer"
+   ],
+   "default_guess": "Require unique method-and-path pairs as a release invariant and fail startup or release validation if violated.",
+   "witness": {
+    "initial": "OWNER_ACTIONS contains two actions with the same method and path.",
+    "events": [
+     "The owner sends a request matching both rows.",
+     "module:owner_interface looks up the action."
+    ],
+    "outcomes": [
+     "The first row's operation is executed.",
+     "The second row's operation is executed or the request is refused as ambiguous."
+    ],
+    "observer": "The owner, and potentially the store if either action changes it"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "OWNER_ACTIONS change classification",
+   "kind": "unspecified security policy",
+   "text": "“whether it is a change”",
+   "question": "Which OwnerAction rows are changes, and what invariant makes this flag agree with A13's requirement that every owner-interface change undergo the session's CSRF check?",
+   "options": [
+    "List the flag for every OwnerAction and require every state-changing action to be true",
+    "Derive change status from the operation rather than store it in OWNER_ACTIONS",
+    "Let each route choose the flag independently"
+   ],
+   "default_guess": "List and validate the flag for every action, with every action that can alter session or store state classified as a change.",
+   "witness": {
+    "initial": "A valid owner session receives a create-project request without a CSRF value.",
+    "events": [
+     "The request matches the create-project OWNER_ACTIONS row.",
+     "A careful implementation reads an unspecified or incorrectly inferred is_change flag.",
+     "owner_sessions.admit_owner_request decides whether to check CSRF."
+    ],
+    "outcomes": [
+     "The request is classified as a change and refused at stage (1).",
+     "The request is classified as not a change and may create the project."
+    ],
+    "observer": "The owner and the store"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "uploaded-file lock routing",
+   "kind": "missing executing step",
+   "text": "“whether it ... touches an uploaded file”",
+   "question": "Which module and capability consume this flag, pass it across the owner-interface boundary, and acquire the import lock before the session lock for every affected request?",
+   "options": [
+    "owner_interface passes the flag in OwnerAdmission and owner_sessions.admit_owner_request acquires both locks",
+    "operations looks up OWNER_ACTIONS and explicitly acquires the locks before admission",
+    "Replace the flag with separate admission capabilities for ordinary and upload-touching requests"
+   ],
+   "default_guess": "Carry the flag in OwnerAdmission and have owner_sessions.admit_owner_request acquire the import lock and then the session lock.",
+   "witness": {
+    "initial": "Session A has an uploaded file; session B is concurrently confirming an import.",
+    "events": [
+     "Session A requests its mapping while session B commits the import and drops every upload.",
+     "The mapping route is marked as touching an uploaded file, but no named step says who acts on that mark.",
+     "Implementations either serialize the mapping under the import lock or treat the flag as routing metadata only."
+    ],
+    "outcomes": [
+     "The mapping waits, then sees the closure and is refused with all uploads already dropped.",
+     "The mapping reads or answers from the file concurrently with the accepted import, potentially returning a mapping after the import is closed."
+    ],
+    "observer": "The owner using session A"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"owner-interface read timeout\",\"kind\":\"contradiction\",\"text\":\"“the listeners' read timeout, how long a listener waits for a request's next bytes before it closes the connection” conflicts with “A request it cannot read — a body or a head that fails ... is handed on with no values ... it never closes the connection instead of answering”\",\"question\":\"When the next body bytes do not arrive before the listener timeout, must Registry close the connection unanswered or create an empty-valued request and return an operation answer?\",\"options\":[\"Close the connection unanswered at the listener timeout\",\"Pass an empty-valued request to operations and return its refusal\",\"Distinguish timeout from other read failures and specify each outcome\"],\"default_guess\":\"Treat the listener timeout as the explicit exception: close the connection unanswered; hand other decoding failures to operations.\",\"witness\":{\"initial\":\"Registry is serving; a client sends valid headers for an owner change and only part of its body.\",\"events\":[\"The client stops sending bytes.\",\"module:instance_lifecycle reaches LISTENER_READ_TIMEOUT_SECONDS while waiting for the next byte.\",\"A careful implementation applies either the listener rule or owner_interface's unreadable-request rule.\"],\"outcomes\":[\"The listener closes the connection and the client receives no HTTP answer.\",\"operations receives a request with no values and the client receives a rendered refusal.\"],\"observer\":\"The owner or HTTP client\"}},{\"unit\":\"context\",\"subject\":\"unreadable owner request\",\"kind\":\"ambiguous state\",\"text\":\"“is handed on with no values, nothing partly read kept”\",\"question\":\"Which already-read parts survive when a body, upload head, or form cannot be read: the matched action, target, session cookie and other headers, or none of them?\",\"options\":[\"Discard only body/form values; retain action, target and session admission data\",\"Discard every parsed value, including the cookie and target\",\"Specify a separate retained-value set for body, head and form failures\"],\"default_guess\":\"Retain the method/path-derived action and header/query admission data, but discard every body or form value.\",\"witness\":{\"initial\":\"A valid owner session submits a malformed correction form with its session cookie present.\",\"events\":[\"module:owner_interface matches the correction route and reads the cookie.\",\"Decoding the form fails.\",\"It hands operations a request with “no values”.\"],\"outcomes\":[\"The cookie survives; the request is a valid owner request, restarts the idle limit, and is refused for missing values or CSRF.\",\"The cookie is discarded; the request is refused as unauthenticated, shows the sign-in page, and does not restart the session's idle limit.\"],\"observer\":\"The owner, who sees the refusal page and later whether the session expired\"}},{\"unit\":\"context\",\"subject\":\"unknown owner route\",\"kind\":\"missing failure outcome\",\"text\":\"“Which action a request names, by its method and path ... are the rows of the data provider's OWNER_ACTIONS”\",\"question\":\"What answer is produced when the request's method and path match no OWNER_ACTIONS row?\",\"options\":[\"Return a not-found refusal using REFUSAL_HTTP_STATUSES\",\"Return a values refusal through operations\",\"Render a fixed owner-interface not-found page without calling operations\"],\"default_guess\":\"Return a fixed 404 not-found response without calling operations.\",\"witness\":{\"initial\":\"Registry is serving the owner interface.\",\"events\":[\"A client requests a method/path pair absent from OWNER_ACTIONS.\",\"module:owner_interface cannot construct the required OwnerAction for perform_owner_operation.\"],\"outcomes\":[\"The client receives a 404 owner-interface response.\",\"The request is converted to some operation or empty request and receives a 422 or another page.\"],\"observer\":\"The HTTP client\"}},{\"unit\":\"context\",\"subject\":\"OWNER_ACTIONS route identity\",\"kind\":\"ambiguous dispatch\",\"text\":\"“Which action a request names, by its method and path ... are the rows of the data provider's OWNER_ACTIONS”\",\"question\":\"Must method-and-path pairs be unique, and what happens if two rows match the same request?\",\"options\":[\"Require exactly one row per method-and-path pair and reject an invalid release before serving\",\"Use the first matching row\",\"Treat an ambiguous match as an internal-error answer\"],\"default_guess\":\"Require unique method-and-path pairs as a release invariant and fail startup or release validation if violated.\",\"witness\":{\"initial\":\"OWNER_ACTIONS contains two actions with the same method and path.\",\"events\":[\"The owner sends a request matching both rows.\",\"module:owner_interface looks up the action.\"],\"outcomes\":[\"The first row's operation is executed.\",\"The second row's operation is executed or the request is refused as ambiguous.\"],\"observer\":\"The owner, and potentially the store if either action changes it\"}},{\"unit\":\"context\",\"subject\":\"OWNER_ACTIONS change classification\",\"kind\":\"unspecified security policy\",\"text\":\"“whether it is a change”\",\"question\":\"Which OwnerAction rows are changes, and what invariant makes this flag agree with A13's requirement that every owner-interface change undergo the session's CSRF check?\",\"options\":[\"List the flag for every OwnerAction and require every state-changing action to be true\",\"Derive change status from the operation rather than store it in OWNER_ACTIONS\",\"Let each route choose the flag independently\"],\"default_guess\":\"List and validate the flag for every action, with every action that can alter session or store state classified as a change.\",\"witness\":{\"initial\":\"A valid owner session receives a create-project request without a CSRF value.\",\"events\":[\"The request matches the create-project OWNER_ACTIONS row.\",\"A careful implementation reads an unspecified or incorrectly inferred is_change flag.\",\"owner_sessions.admit_owner_request decides whether to check CSRF.\"],\"outcomes\":[\"The request is classified as a change and refused at stage (1).\",\"The request is classified as not a change and may create the project.\"],\"observer\":\"The owner and the store\"}},{\"unit\":\"context\",\"subject\":\"uploaded-file lock routing\",\"kind\":\"missing executing step\",\"text\":\"“whether it ... touches an uploaded file”\",\"question\":\"Which module and capability consume this flag, pass it across the owner-interface boundary, and acquire the import lock before the session lock for every affected request?\",\"options\":[\"owner_interface passes the flag in OwnerAdmission and owner_sessions.admit_owner_request acquires both locks\",\"operations looks up OWNER_ACTIONS and explicitly acquires the locks before admission\",\"Replace the flag with separate admission capabilities for ordinary and upload-touching requests\"],\"default_guess\":\"Carry the flag in OwnerAdmission and have owner_sessions.admit_owner_request acquire the import lock and then the session lock.\",\"witness\":{\"initial\":\"Session A has an uploaded file; session B is concurrently confirming an import.\",\"events\":[\"Session A requests its mapping while session B commits the import and drops every upload.\",\"The mapping route is marked as touching an uploaded file, but no named step says who acts on that mark.\",\"Implementations either serialize the mapping under the import lock or treat the flag as routing metadata only.\"],\"outcomes\":[\"The mapping waits, then sees the closure and is refused with all uploads already dropped.\",\"The mapping reads or answers from the file concurrently with the accepted import, potentially returning a mapping after the import is closed.\"],\"observer\":\"The owner using session A\"}}]}",
+ "set_aside": []
+}
