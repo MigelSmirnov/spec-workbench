@@ -95,10 +95,13 @@ types and Python signatures are State 6's.
   request touching an uploaded file draws its ticket of the import lock
   there, any other change its place on the session's lock, each without
   waiting; it waits for its turn only after it released the table lock. So
-  requests are served in the order they were admitted — a sign-out admitted
-  after a change completes after it, the pass after a change admitted before
-  it began, a second upload after the first — and drawing a turn waits for
-  nothing (owner, 2026-11-24; prototype `session_locks_proto`).
+  requests that wait for the same lock are served in the order they were
+  admitted — a sign-out admitted after a change completes after it, the pass
+  after a change admitted before it began, a second upload after the first —
+  while a change that touches no uploaded file, which waits for no import
+  lock, may complete before an earlier one still waiting for it
+  (`admit_owner_request`); a read takes no lock and is not ordered. Drawing a
+  turn waits for nothing (owner, 2026-11-24; prototype `session_locks_proto`).
   `owner_sessions` also keeps one session-table lock, which guards every
   session's entry with its signed-out mark and its last-request reading:
   each read or write of them is made under it and only there — a sign-in
