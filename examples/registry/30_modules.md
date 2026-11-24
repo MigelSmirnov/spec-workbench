@@ -361,7 +361,7 @@ and every one is exported.
 
 ### Knows
 
-`models`, for exactly the row models and enumerations of its three tables:
+`models`, for exactly the row models and enumerations of its six tables:
 `ArtifactTypeOwner` (a type with its owner service) and `ServiceName` for
 `ARTIFACT_TYPE_OWNERS`; `ServiceRight` (a service and an operation) with
 `ServiceName` and `ServiceOperation` for `SERVICE_RIGHTS`;
@@ -519,7 +519,10 @@ cannot be read (`file_unreadable`), replacing nothing kept (A16 rule 2).
 
 ### Knows
 
-`models`, `data_provider`.
+`models`, for `ByteStream`, the body it reads, `UploadHead`, which
+`read_upload_head` answers, and `UploadBody`, the port `MultipartFileBody`
+implements; `data_provider`, for `OWNER_CSRF_FIELD` and
+`UPLOAD_FORM_HEAD_MAX_BYTES`.
 
 ### Must not own
 
@@ -1325,8 +1328,16 @@ carried to State 7).
 
 ### Knows
 
-`models`, `data_provider`, `random_values`, `upload_framing`,
-`owner_sessions`, `operations`.
+`models`, for `HttpRequest`, `ByteStream` and `HttpResponse`, which its
+surface takes and answers, `OwnerRequest`, `OwnerValues`, `OwnerAdmission`
+and `OwnerAction`, which it reads, builds and matches, and `OperationAnswer`
+with every variant of it and `RefusalCode`, which it renders;
+`data_provider`, for `OWNER_ACTIONS`, `OWNER_TARGET_PARAMETER`,
+`OWNER_CSRF_FIELD`, `OWNER_SESSION_COOKIE_NAME`, `SERVICE_ANSWER_STATUS` and
+`REFUSAL_HTTP_STATUSES`; `random_values`, for `mint_identity`, a create
+form's request id; `upload_framing`, for `read_upload_head` and
+`MultipartFileBody`; `owner_sessions`, for `give_session_csrf`;
+`operations`, for `perform_owner_operation`.
 
 ### Must not own
 
