@@ -58,6 +58,11 @@ highest_class(Cabinet Kernel) = business_confidential   -- A09-3
    one that would carry a `personal_data` field is refused whole. Shows A09-3,
    A09-2.
    [witness: verification:registry_a09_kernel_highest_class_business_confidential]
+7. For every service and every operation of the closed list of rule 2, a
+   call the service's row of the rights table does not give is refused as
+   outside the service's rights and changes nothing, and a call its row gives
+   passes that check. Shows A09-1.
+   [witness: verification:registry_a09_rights_table_holds_for_every_pair]
 
 ### Consequence
 
@@ -107,6 +112,16 @@ answer(p not in granted(x)) = answer(p does not exist)   -- A10-2
 3. A call naming no project, with no active project, is refused.
 4. 'Add a room' on an archived project of the set is refused.
 5. Kernel registers a new session id and is accepted.
+   Shows A10-1. [witness: verification:registry_a10_kernel_registers_new_session_accepted]
+6. Kernel naming a session id that was never registered, on a project that
+   exists, receives the answer a project outside the set receives.
+   Shows A10-1, A10-2.
+   [witness: verification:registry_a10_unregistered_session_answered_as_outside_set]
+7. Each service other than Cabinet Kernel calling 'request access to a
+   project' or 'read the agent projection', with a registered session's id in
+   the session header, is refused and the session is unchanged.
+   Shows A10-1.
+   [witness: verification:registry_a10_non_kernel_token_has_no_agent_authority]
 
 ### Consequence
 
@@ -148,7 +163,8 @@ register(x) after end(x) => granted(x) = {} and active(x) = none   -- A11-2
 
 1. After Kernel ends a session, reading its access is refused.
    Shows A11-1. [witness: verification:registry_a11_ended_session_access_read_refused]
-2. Registering the ended identity again answers a session with no project.
+2. Registering the ended identity again answers a session with no granted
+   project, no active project and no pending request, at access version 1.
    Shows A11-2. [witness: verification:registry_a11_reregistered_ended_identity_empty]
 3. The owner ends a session; its next agent-authority call is refused.
    Shows A11-1. [witness: verification:registry_a11_owner_ended_session_call_refused]
@@ -204,6 +220,13 @@ accepted change of x other than its end => version(x)' = version(x) + 1   -- A12
 5. The owner ending a session stating a stale access version is refused; the
    session stays registered and unchanged.
    Shows A12-1. [witness: verification:registry_a12_stale_owner_end_refused_unchanged]
+6. Each accepted change of a session — the owner granting a project, revoking
+   one, making a project active, clearing the active project, answering a
+   request by granting and by declining it, and Kernel replacing its request —
+   moves the session's access version by exactly one; each of the owner's
+   actions stating the version before it is refused and changes nothing.
+   Shows A12-1, A12-2.
+   [witness: verification:registry_a12_every_session_change_moves_version_once]
 
 ### Consequence
 

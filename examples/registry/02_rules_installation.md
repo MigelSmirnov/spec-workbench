@@ -811,6 +811,23 @@ change. Reviewed under injection_interpreted_input, browser_boundary and
 files_artifacts (A19): the new tests show the escaping and the value
 places the rules already required; no outcome changed.
 
+Performed again on 2026-11-24, after every formal invariant of A01–A19 and
+A22 was bound to a Factory check of the Required test that shows it
+(`[witness: verification:registry_aNN_*]`), in place of the [TEST_EVIDENCE]
+notes, and Required tests were added to A02, A03, A04, A08, A09, A10, A12
+and A22 and restated in A11 and A22 so that each invariant is shown whole:
+a required address and kind, a project correction's untouched facts, a
+Customer's revision, the rights table for every pair, the publishing
+callers, the token and the registration of an agent call, a re-registered
+identity's empty session, each session change moving the version once. No
+normative rule changed. Reviewed under every category naming them:
+authentication_credential_abuse (A09, A13, A17), secrets (A14, A17, A18),
+authorization (A04, A08, A09, A10, A11, A12), injection_interpreted_input
+(A02, A16, A19), browser_boundary (A13, A19), files_artifacts (A07, A08,
+A16, A18, A19, A22) and concurrency (A01, A04, A07, A12, A13, A14, A15, A16,
+A17, A18): the tests show refusals and guarantees the rules already gave,
+and no outcome changed.
+
 Performed again on 2026-11-24, after A20 rule 5 recorded that its rules
 are kept by the release process and its installation, outside Registry
 (owner), and A20 declared no formal invariant of Registry's code; its

@@ -106,6 +106,11 @@ pointer.owner_service = owner_service(pointer.type)   -- A08-2
    Shows A08-1. [witness: verification:registry_a08_withdraw_outside_set_not_found]
 4. The owner withdraws a pointer Kernel published; the withdrawal records the
    owner.
+5. The owner publishes and withdraws an `estimate`, and Kernel does so for a
+   session whose set holds the project: each is accepted. Client Portal and
+   Cabinet calling 'publish an artifact pointer' or 'withdraw an artifact
+   pointer' are each refused and nothing changes. Shows A08-1.
+   [witness: verification:registry_a08_owner_and_granted_kernel_only_publish]
 
 ### Consequence
 
@@ -158,8 +163,8 @@ publish(t) or latest(t) with t not declared => unknown type   -- A22-3
    unknown type, not answered as none published.
    Shows A22-3. [witness: verification:registry_a22_removed_type_latest_unknown_type]
 4. In the first release publishing `estimate` is accepted and its pointer
-   names PresuPro, and publishing each v1 type (L08) is refused as an unknown
-   type. Shows A22-1.
+   names PresuPro; publishing `Estimate`, which differs from it only in
+   letter case, is refused as an unknown type. Shows A22-1.
    [witness: verification:registry_a22_first_release_declares_only_estimate]
 
 ### Consequence
