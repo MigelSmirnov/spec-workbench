@@ -64,7 +64,7 @@ def test_invariants_without_any_witness_stop(tmp_path):
     report = design_decision_witness.coverage(case, factory)
     assert report["summary"] == {
         "decisions_with_invariants": 1, "witnessed": 0, "unwitnessed": 1,
-        "errors": 1, "handoff_ready": False,
+        "kept_outside": 0, "errors": 1, "handoff_ready": False,
     }
     assert [f["code"] for f in report["findings"]] == ["decision_without_witness"]
     assert report["findings"][0]["severity"] == "error"
@@ -154,3 +154,54 @@ def test_real_case_stops_on_untagged_decisions(tmp_path):
     assert report["summary"]["handoff_ready"] is False
     codes = {f["code"] for f in report["findings"]}
     assert codes <= {"decision_without_witness", "witness_unverifiable"}
+
+
+KEPT_OUTSIDE_MD = """# State 2 — Rules
+
+## Accepted decision A91 — a release fixes its dependencies
+
+### Normative rules
+
+1. A release names every dependency at an exact version with its digest.
+
+### Formal invariants
+
+{invariants}
+
+### Required tests
+
+1. Installing the release with a dependency whose digest differs fails.
+
+### Consequence
+
+What runs is what was verified.
+"""
+
+
+def _kept_outside_case(tmp_path: Path, invariants: str) -> tuple[Path, Path]:
+    case, factory = _case(tmp_path, check_names=[], notes=[])
+    (case / "02_rules.md").write_text(KEPT_OUTSIDE_MD.format(invariants=invariants), encoding="utf-8")
+    return case, factory
+
+
+def test_guarantee_kept_outside_the_case_needs_no_witness_and_is_listed(tmp_path):
+    case, factory = _kept_outside_case(
+        tmp_path, "None: kept by the release process, which the case does not manage.")
+    report = design_decision_witness.coverage(case, factory)
+    assert report["summary"]["decisions_with_invariants"] == 0
+    assert report["summary"]["kept_outside"] == 1
+    assert report["summary"]["handoff_ready"] is True
+    [finding] = report["findings"]
+    assert finding["code"] == "invariant_kept_outside" and finding["severity"] == "info"
+    assert finding["decision"] == "A91" and "release process" in finding["message"]
+    assert design_decision_witness.required_tests(case)["summary"]["decisions_with_invariants"] == 0
+
+
+def test_bare_none_or_none_after_a_formula_is_still_an_invariant(tmp_path):
+    for index, invariants in enumerate(
+            ("None", "None:", "```text\nrunning = release\n```\nNone: kept by the release process.")):
+        (tmp_path / str(index)).mkdir()
+        case, factory = _kept_outside_case(tmp_path / str(index), invariants)
+        report = design_decision_witness.coverage(case, factory)
+        assert report["summary"]["kept_outside"] == 0, invariants
+        assert [f["code"] for f in report["findings"]] == ["decision_without_witness"], invariants
