@@ -1,0 +1,141 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_0_conventions.md:Constants each module imports",
+   "subject": "module_internal[operations][data_provider]",
+   "kind": "standard_violation",
+   "text": "| `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES`, `PERSONAL_DATA_FIELDS` |",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой runtime import surface consumer-модуля, а не копия публичного API provider-а: ровно те символы, которые код consumer-а называет напрямую — вызывает, конструирует, проверяет (членство в enum, тип), пишет в аннотации. Само наличие символа в `models`, `imports.internal` или `module_functions[provider]` зависимостью не является. Недостающий символ — такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже) сгенерированный модуль без него отвергается",
+   "section": "7",
+   "question": "The row must include `OWNER_ACTIONS`, which `operations.perform_owner_operation` explicitly calls imported, or the operation contract must stop requiring `operations` to name that constant."
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`",
+   "subject": "unknown owner-action request passed from owner_interface to operations",
+   "kind": "missing_boundary_obligation",
+   "text": "A request that names no owner action — its method and path are no row of the imported `OWNER_ACTIONS` constant — is checked at stage (1) as a read and then refused `invalid_request` (`outside_closed_list`) at stage (4), as the service API refuses an operation it does not know (owner, 2026-11-24).",
+   "question": "What does `owner_interface` supply to `perform_owner_operation` for an unmatched method and path, and what explicit value tells `operations` that it is the unknown action to be classified as a read?",
+   "options": [
+    "Supply a distinguished unknown-action value together with the original method and path.",
+    "Supply no action and require `operations` to interpret absence as an unknown read.",
+    "Have `owner_interface` resolve the route but construct an explicit invalid-request operation."
+   ],
+   "default_guess": "Supply a distinguished unknown-action value, retain the method and path, and mark its admission class as read.",
+   "witness": {
+    "initial": "Registry is running and the browser has a valid owner session.",
+    "events": [
+     "The browser requests a method/path pair absent from `OWNER_ACTIONS`.",
+     "`owner_interface` must construct the request passed to `operations.perform_owner_operation`.",
+     "`operations` must perform the session check and later produce the stage-(4) refusal."
+    ],
+    "outcomes": [
+     "The interface passes an explicit unknown action classified as a read; the valid session is admitted and the response is `invalid_request` (`outside_closed_list`).",
+     "The interface cannot construct an action or treats absence as a transport failure; `operations` is not called or receives a different operation."
+    ],
+    "observer": "The owner sees either the specified rendered refusal or a different/no answer."
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "metadata retained when a body, upload head or form cannot be read",
+   "kind": "missing_boundary_obligation",
+   "text": "A request whose body, upload head or form cannot be read is handed on with no values, no CSRF value and no credential, nothing partly read kept: it is admitted or refused by the ordinary checks, a change refused at stage (1) for its missing CSRF value, a sign-in as a missing credential (owner, 2026-11-24; option (a) of the question State 4 round-51 and round-55 T3 carried to State 7).",
+   "question": "Which successfully read request facts are still handed on—specifically the method/path action or unknown-action marker, query target, session cookie identity, headers and declared body length—and which are discarded with the unreadable body?",
+   "options": [
+    "Retain all successfully parsed request-line, query, cookie and framing metadata; discard only body-derived values, CSRF and credential.",
+    "Retain only the action and session identity; discard target and all other request metadata.",
+    "Discard every request fact except the action needed to select the ordinary checks."
+   ],
+   "default_guess": "Retain the resolved or unknown action, query target, session identity and safely parsed framing metadata; discard only values derived from the failed body/form read.",
+   "witness": {
+    "initial": "A valid owner session exists and a known POST change targets an existing record.",
+    "events": [
+     "The browser sends the valid session cookie and a target in the query string.",
+     "The form body cannot be decoded before yielding a CSRF field.",
+     "`owner_interface` hands the request to `operations`."
+    ],
+    "outcomes": [
+     "The cookie and action are retained, so the request reaches the change's CSRF check and is refused there for the missing CSRF value.",
+     "The cookie or action is discarded with the unreadable form, so the request is refused as unauthenticated or as an unknown action."
+    ],
+    "observer": "The owner sees a different refusal page and HTTP status."
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "missing upload body after read_upload_head fails",
+   "kind": "missing_boundary_obligation",
+   "text": "A request whose body, upload head or form cannot be read is handed on with no values, no CSRF value and no credential, nothing partly read kept: it is admitted or refused by the ordinary checks, a change refused at stage (1) for its missing CSRF value, a sign-in as a missing credential (owner, 2026-11-24; option (a) of the question State 4 round-51 and round-55 T3 carried to State 7).",
+   "question": "When `read_upload_head` cannot produce a file part, may `perform_owner_operation` receive an absent file length and absent file stream, and must it avoid touching them because the missing-CSRF refusal occurs first?",
+   "options": [
+    "Both the file length and file stream are explicitly absent, and `operations` must not access them before stage (1) refuses the request.",
+    "An inert failing stream is supplied with no declared length.",
+    "The unread remainder stream is supplied as the upload stream even though no valid file part was framed."
+   ],
+   "default_guess": "Make both file length and file stream absent and require the stage-(1) refusal to occur before either is used.",
+   "witness": {
+    "initial": "A valid session submits the upload route with a multipart head that ends before the second part is framed.",
+    "events": [
+     "`read_upload_head` returns none of its values.",
+     "`owner_interface` calls `perform_owner_operation` under the ordinary-check rule.",
+     "The operation attempts to populate or process its upload inputs."
+    ],
+    "outcomes": [
+     "The upload inputs are explicitly absent and stage (1) refuses the missing CSRF value without reading further.",
+     "The contract requires a file stream, so an implementation invents a failing or remainder stream and may produce `file_unreadable` or read more bytes."
+    ],
+    "observer": "The owner sees a stage-(1) CSRF refusal in one implementation and a file refusal or delayed response in another."
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "connection and unread-body disposition after an unreadable non-upload request",
+   "kind": "missing_effect_obligation",
+   "text": "Refuses nothing itself: a request it cannot read is answered by `operations` as any other, never by a closed connection instead of an answer (owner, 2026-11-24).",
+   "question": "After sending that answer, who owns the unread remainder of a non-upload request body, and must the connection be closed, drained before reuse, or made non-reusable by the listener?",
+   "options": [
+    "Send the answer and then close the connection without draining the unread body.",
+    "Drain exactly the remainder of the listener-framed body before permitting connection reuse.",
+    "Return an explicit non-reusable-connection effect to `instance_lifecycle`, which performs the close after the answer."
+   ],
+   "default_guess": "Return the answer and require `instance_lifecycle` to close the connection afterward without draining the unread body.",
+   "witness": {
+    "initial": "A keep-alive owner connection carries a known non-upload POST whose form decoder fails while bytes remain in its framed body.",
+    "events": [
+     "`owner_interface` passes empty body-derived values to `operations`.",
+     "`operations` returns the ordinary rendered refusal.",
+     "The listener must decide what to do with the unread body and connection."
+    ],
+    "outcomes": [
+     "The response is sent and the connection is closed, so remaining bytes cannot affect another request.",
+     "The response is sent and the connection is reused without a stated drain rule, so remaining bytes delay or interfere with the next request."
+    ],
+    "observer": "The browser or proxy observes whether the connection remains usable and whether its next request succeeds."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"subject\":\"module_internal[operations][data_provider]\",\"kind\":\"standard_violation\",\"text\":\"| `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES`, `PERSONAL_DATA_FIELDS` |\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой runtime import surface consumer-модуля, а не копия публичного API provider-а: ровно те символы, которые код consumer-а называет напрямую — вызывает, конструирует, проверяет (членство в enum, тип), пишет в аннотации. Само наличие символа в `models`, `imports.internal` или `module_functions[provider]` зависимостью не является. Недостающий символ — такая же ошибка спеки, как лишний: в строгом режиме импортов (ниже) сгенерированный модуль без него отвергается\",\"section\":\"7\",\"question\":\"The row must include `OWNER_ACTIONS`, which `operations.perform_owner_operation` explicitly calls imported, or the operation contract must stop requiring `operations` to name that constant.\"},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`\",\"subject\":\"unknown owner-action request passed from owner_interface to operations\",\"kind\":\"missing_boundary_obligation\",\"text\":\"A request that names no owner action — its method and path are no row of the imported `OWNER_ACTIONS` constant — is checked at stage (1) as a read and then refused `invalid_request` (`outside_closed_list`) at stage (4), as the service API refuses an operation it does not know (owner, 2026-11-24).\",\"question\":\"What does `owner_interface` supply to `perform_owner_operation` for an unmatched method and path, and what explicit value tells `operations` that it is the unknown action to be classified as a read?\",\"options\":[\"Supply a distinguished unknown-action value together with the original method and path.\",\"Supply no action and require `operations` to interpret absence as an unknown read.\",\"Have `owner_interface` resolve the route but construct an explicit invalid-request operation.\"],\"default_guess\":\"Supply a distinguished unknown-action value, retain the method and path, and mark its admission class as read.\",\"witness\":{\"initial\":\"Registry is running and the browser has a valid owner session.\",\"events\":[\"The browser requests a method/path pair absent from `OWNER_ACTIONS`.\",\"`owner_interface` must construct the request passed to `operations.perform_owner_operation`.\",\"`operations` must perform the session check and later produce the stage-(4) refusal.\"],\"outcomes\":[\"The interface passes an explicit unknown action classified as a read; the valid session is admitted and the response is `invalid_request` (`outside_closed_list`).\",\"The interface cannot construct an action or treats absence as a transport failure; `operations` is not called or receives a different operation.\"],\"observer\":\"The owner sees either the specified rendered refusal or a different/no answer.\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"metadata retained when a body, upload head or form cannot be read\",\"kind\":\"missing_boundary_obligation\",\"text\":\"A request whose body, upload head or form cannot be read is handed on with no values, no CSRF value and no credential, nothing partly read kept: it is admitted or refused by the ordinary checks, a change refused at stage (1) for its missing CSRF value, a sign-in as a missing credential (owner, 2026-11-24; option (a) of the question State 4 round-51 and round-55 T3 carried to State 7).\",\"question\":\"Which successfully read request facts are still handed on—specifically the method/path action or unknown-action marker, query target, session cookie identity, headers and declared body length—and which are discarded with the unreadable body?\",\"options\":[\"Retain all successfully parsed request-line, query, cookie and framing metadata; discard only body-derived values, CSRF and credential.\",\"Retain only the action and session identity; discard target and all other request metadata.\",\"Discard every request fact except the action needed to select the ordinary checks.\"],\"default_guess\":\"Retain the resolved or unknown action, query target, session identity and safely parsed framing metadata; discard only values derived from the failed body/form read.\",\"witness\":{\"initial\":\"A valid owner session exists and a known POST change targets an existing record.\",\"events\":[\"The browser sends the valid session cookie and a target in the query string.\",\"The form body cannot be decoded before yielding a CSRF field.\",\"`owner_interface` hands the request to `operations`.\"],\"outcomes\":[\"The cookie and action are retained, so the request reaches the change's CSRF check and is refused there for the missing CSRF value.\",\"The cookie or action is discarded with the unreadable form, so the request is refused as unauthenticated or as an unknown action.\"],\"observer\":\"The owner sees a different refusal page and HTTP status.\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"missing upload body after read_upload_head fails\",\"kind\":\"missing_boundary_obligation\",\"text\":\"A request whose body, upload head or form cannot be read is handed on with no values, no CSRF value and no credential, nothing partly read kept: it is admitted or refused by the ordinary checks, a change refused at stage (1) for its missing CSRF value, a sign-in as a missing credential (owner, 2026-11-24; option (a) of the question State 4 round-51 and round-55 T3 carried to State 7).\",\"question\":\"When `read_upload_head` cannot produce a file part, may `perform_owner_operation` receive an absent file length and absent file stream, and must it avoid touching them because the missing-CSRF refusal occurs first?\",\"options\":[\"Both the file length and file stream are explicitly absent, and `operations` must not access them before stage (1) refuses the request.\",\"An inert failing stream is supplied with no declared length.\",\"The unread remainder stream is supplied as the upload stream even though no valid file part was framed.\"],\"default_guess\":\"Make both file length and file stream absent and require the stage-(1) refusal to occur before either is used.\",\"witness\":{\"initial\":\"A valid session submits the upload route with a multipart head that ends before the second part is framed.\",\"events\":[\"`read_upload_head` returns none of its values.\",\"`owner_interface` calls `perform_owner_operation` under the ordinary-check rule.\",\"The operation attempts to populate or process its upload inputs.\"],\"outcomes\":[\"The upload inputs are explicitly absent and stage (1) refuses the missing CSRF value without reading further.\",\"The contract requires a file stream, so an implementation invents a failing or remainder stream and may produce `file_unreadable` or read more bytes.\"],\"observer\":\"The owner sees a stage-(1) CSRF refusal in one implementation and a file refusal or delayed response in another.\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"connection and unread-body disposition after an unreadable non-upload request\",\"kind\":\"missing_effect_obligation\",\"text\":\"Refuses nothing itself: a request it cannot read is answered by `operations` as any other, never by a closed connection instead of an answer (owner, 2026-11-24).\",\"question\":\"After sending that answer, who owns the unread remainder of a non-upload request body, and must the connection be closed, drained before reuse, or made non-reusable by the listener?\",\"options\":[\"Send the answer and then close the connection without draining the unread body.\",\"Drain exactly the remainder of the listener-framed body before permitting connection reuse.\",\"Return an explicit non-reusable-connection effect to `instance_lifecycle`, which performs the close after the answer.\"],\"default_guess\":\"Return the answer and require `instance_lifecycle` to close the connection afterward without draining the unread body.\",\"witness\":{\"initial\":\"A keep-alive owner connection carries a known non-upload POST whose form decoder fails while bytes remain in its framed body.\",\"events\":[\"`owner_interface` passes empty body-derived values to `operations`.\",\"`operations` returns the ordinary rendered refusal.\",\"The listener must decide what to do with the unread body and connection.\"],\"outcomes\":[\"The response is sent and the connection is closed, so remaining bytes cannot affect another request.\",\"The response is sent and the connection is reused without a stated drain rule, so remaining bytes delay or interfere with the next request.\"],\"observer\":\"The browser or proxy observes whether the connection remains usable and whether its next request succeeds.\"}},{\"unit\":\"context: agreement of the earlier states' texts with this state\",\"subject\":\"exact OWNER_ACTIONS route catalogue\",\"kind\":\"later_layer_decision\",\"text\":\"Which action a request names, by its method and path, and whether it is a change or touches an uploaded file, are the rows of the data provider's `OWNER_ACTIONS`;\",\"question\":\"Which unique method/path row represents each owner action and page, including sign-in, confirmation and import-related steps, and how are targetless actions represented?\",\"decision_owner\":\"State 6\",\"options\":[\"Give each owner action or page its own unique method/path row.\",\"Share paths only where the method distinguishes rows.\",\"Use shared dispatch paths with another discriminator, which would require revising the accepted method-and-path lookup guarantee.\"],\"consequences\":[\"Unique routes make lookup unambiguous but require more declared rows.\",\"Method-separated routes remain unambiguous while allowing paired GET/POST paths.\",\"A separate discriminator conflicts with the present guarantee that method and path alone select the row unless State 5 is changed.\"],\"requirement\":\"The owner interface carries every action whose 'who' names the owner.\",\"default_guess\":\"Declare one unambiguous method/path row for every owner action and page, using paired GET and POST rows where display and submission are distinct.\"}]}",
+ "set_aside": [
+  {
+   "unit": "context: agreement of the earlier states' texts with this state",
+   "subject": "exact OWNER_ACTIONS route catalogue",
+   "kind": "later_layer_decision",
+   "text": "Which action a request names, by its method and path, and whether it is a change or touches an uploaded file, are the rows of the data provider's `OWNER_ACTIONS`;",
+   "question": "Which unique method/path row represents each owner action and page, including sign-in, confirmation and import-related steps, and how are targetless actions represented?",
+   "decision_owner": "State 6",
+   "options": [
+    "Give each owner action or page its own unique method/path row.",
+    "Share paths only where the method distinguishes rows.",
+    "Use shared dispatch paths with another discriminator, which would require revising the accepted method-and-path lookup guarantee."
+   ],
+   "consequences": [
+    "Unique routes make lookup unambiguous but require more declared rows.",
+    "Method-separated routes remain unambiguous while allowing paired GET/POST paths.",
+    "A separate discriminator conflicts with the present guarantee that method and path alone select the row unless State 5 is changed."
+   ],
+   "requirement": "The owner interface carries every action whose 'who' names the owner.",
+   "default_guess": "Declare one unambiguous method/path row for every owner action and page, using paired GET and POST rows where display and submission are distinct."
+  }
+ ]
+}

@@ -1,0 +1,136 @@
+{
+ "open_points": [
+  {
+   "unit": "50_public_apis_0_conventions.md:Constants each module imports",
+   "subject": "operations import of OWNER_ACTIONS",
+   "kind": "standard_violation",
+   "text": "A request\nthat names no owner action — its method and path are no row of the imported\n`OWNER_ACTIONS` constant — is checked at stage (1) as a read and then\nrefused `invalid_request` (`outside_closed_list`) at stage (4), as the\nservice API refuses an operation it does not know (owner, 2026-11-24).",
+   "rule": "`module_internal[consumer][provider]` — **полный и минимальный** прямой\nruntime import surface consumer-модуля, а не копия публичного API\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\nаннотации.",
+   "section": "7",
+   "question": "The `operations` row must include `OWNER_ACTIONS` in its direct imports from `data_provider`, or the operation contract must stop directly naming and using that constant."
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`",
+   "subject": "handoff of an unmatched owner route",
+   "kind": "missing_boundary_contract",
+   "text": "A request\nthat names no owner action — its method and path are no row of the imported\n`OWNER_ACTIONS` constant — is checked at stage (1) as a read and then\nrefused `invalid_request` (`outside_closed_list`) at stage (4)",
+   "question": "What exactly does `owner_interface` supply to `operations.perform_owner_operation` when method and path match no `OWNER_ACTIONS` row, given that the interface says an action is the matching row?",
+   "options": [
+    "Supply the raw method and path plus an explicit no-action result, which `operations` treats as a read through stage (1) and refuses at stage (4).",
+    "Supply a distinguished unknown-owner-action value with the same required stage behavior.",
+    "Have `owner_interface` synthesize an invalid action before calling `operations`."
+   ],
+   "default_guess": "Supply the raw method and path with an explicit no-action result and let `operations` own the specified refusal.",
+   "witness": {
+    "initial": "A browser has a valid owner session and requests `GET /unlisted`.",
+    "events": [
+     "`owner_interface` looks for the request's method and path in `OWNER_ACTIONS` and finds no row.",
+     "One implementation cannot construct the required action and rejects or closes locally; another passes a no-action request to `operations`."
+    ],
+    "outcomes": [
+     "No ordinary `operations` answer is produced.",
+     "`operations` performs the session check as for a read and returns stage (4) `invalid_request` (`outside_closed_list`)."
+    ],
+    "observer": "The owner browser"
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "cardinality of OWNER_ACTIONS route matches",
+   "kind": "missing_provider_guarantee",
+   "text": "The action is the row of the imported `OWNER_ACTIONS` constant whose method\nand path are the request's",
+   "question": "Must `OWNER_ACTIONS` contain at most one row for each method-and-path pair, and which module or factory check guarantees that uniqueness?",
+   "options": [
+    "Require method and path to be a unique key and reject the specification or release if two rows collide.",
+    "Define an explicit precedence rule when several rows match.",
+    "Permit duplicates only when every duplicated row has identical action, change and upload classifications."
+   ],
+   "default_guess": "Require method and path to be a unique key, checked before generation or release.",
+   "witness": {
+    "initial": "`OWNER_ACTIONS` contains two rows for the same method and path, one classified as a read and one as a change.",
+    "events": [
+     "A browser sends a request matching that method and path.",
+     "One implementation selects the read row; another selects the change row."
+    ],
+    "outcomes": [
+     "The request is admitted without a CSRF value as a read.",
+     "The request is refused at stage (1) for a missing CSRF value as a change."
+    ],
+    "observer": "The owner browser"
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "classification of confirmation requests that touch an uploaded file",
+   "kind": "later_contract_choice",
+   "text": "the confirmation step\ntouching one only when the action it confirms is the import",
+   "question": "How will the generated route contract let `owner_interface` determine, before admission and locking, whether a confirmation request confirms the import and therefore touches an uploaded file?",
+   "decision_owner": "6",
+   "options": [
+    "Give each confirmed action a distinct method-and-path row whose `touches_uploaded_file` value is fixed.",
+    "Use one confirmation route with an explicit action discriminator that is classified by the generated `OWNER_ACTIONS` contract before admission.",
+    "Generate a separate route-classification operation that resolves the confirmation request to its lock classification without inspecting session internals."
+   ],
+   "consequences": [
+    "Distinct routes make lock classification unambiguous from method and path but enlarge the route table.",
+    "A discriminator keeps one route but must be authenticated as request data and must not let an untrusted value bypass the import lock.",
+    "A classifier preserves encapsulation but adds a public boundary operation and dependency."
+   ],
+   "requirement": "the confirmation step\ntouching one only when the action it confirms is the import",
+   "default_guess": "Generate distinct method-and-path rows for import confirmation and other confirmed actions."
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "values retained after request decoding fails",
+   "kind": "ambiguous_failure_handoff",
+   "text": "A request whose body, upload head or\nform cannot be read is handed on with no values, no CSRF value and no\ncredential, nothing partly read kept",
+   "question": "Which independently read components remain available when one source cannot be read: method and path, query target, session cookie, headers, and fields successfully decoded before the failure?",
+   "options": [
+    "Keep method, path, cookie and any independently completed query parsing; discard the failed body or form atomically.",
+    "Keep only method, path and cookie; clear the target and every operation value regardless of where it came from.",
+    "Clear everything except the raw request classification needed to produce the specified ordinary answer."
+   ],
+   "default_guess": "Keep method, path and cookie plus independently completed query parsing, while discarding the failed body or form atomically.",
+   "witness": {
+    "initial": "A valid session sends a known read request whose target is in the query while an additional form or body cannot be decoded.",
+    "events": [
+     "`owner_interface` has already read the method, path, cookie and target, then encounters the decoding failure.",
+     "One implementation preserves the query target; another interprets “no values” as clearing it."
+    ],
+    "outcomes": [
+     "`operations` performs the requested read for the named target.",
+     "`operations` receives no target and returns the applicable missing or invalid-value refusal."
+    ],
+    "observer": "The owner browser"
+   }
+  },
+  {
+   "unit": "50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`",
+   "subject": "unreadable request versus listener connection closure",
+   "kind": "contradictory_failure_effect",
+   "text": "Refuses nothing itself: a request\nit cannot read is answered by `operations` as any other, never by a closed\nconnection instead of an answer (owner, 2026-11-24).",
+   "question": "Does the answer guarantee exclude listener read timeouts, malformed HTTP framing and peer disconnects, or must the listener preserve a writable response path and obtain an `operations` answer for those failures too?",
+   "options": [
+    "Scope the guarantee to requests delivered to `owner_interface` with a response channel still writable; listener-level framing failures and disconnects may close unanswered.",
+    "Require body and form read timeouts seen after dispatch to become failed streams while the listener remains able to send the ordinary answer.",
+    "Remove the listener's close-on-read-timeout behavior for owner requests and route every such failure through `operations`."
+   ],
+   "default_guess": "Scope the guarantee to dispatched requests whose response channel remains writable, while explicitly listing transport-level exceptions.",
+   "witness": {
+    "initial": "A client sends valid owner-request headers with a body length, then stops sending body bytes until `LISTENER_READ_TIMEOUT_SECONDS` passes.",
+    "events": [
+     "The listener waits for the next bytes.",
+     "Under its stated timeout behavior it closes the connection; under the changed owner-interface promise the failed read is handed to `operations` and answered."
+    ],
+    "outcomes": [
+     "The connection closes without an HTTP answer.",
+     "The owner receives the ordinary refusal page and status produced from the `operations` answer."
+    ],
+    "observer": "The owner client"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"50_public_apis_0_conventions.md:Constants each module imports\",\"subject\":\"operations import of OWNER_ACTIONS\",\"kind\":\"standard_violation\",\"text\":\"A request\\nthat names no owner action — its method and path are no row of the imported\\n`OWNER_ACTIONS` constant — is checked at stage (1) as a read and then\\nrefused `invalid_request` (`outside_closed_list`) at stage (4), as the\\nservice API refuses an operation it does not know (owner, 2026-11-24).\",\"rule\":\"`module_internal[consumer][provider]` — **полный и минимальный** прямой\\nruntime import surface consumer-модуля, а не копия публичного API\\nprovider-а: ровно те символы, которые код consumer-а называет напрямую —\\nвызывает, конструирует, проверяет (членство в enum, тип), пишет в\\nаннотации.\",\"section\":\"7\",\"question\":\"The `operations` row must include `OWNER_ACTIONS` in its direct imports from `data_provider`, or the operation contract must stop directly naming and using that constant.\"},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:operations.perform_owner_operation`\",\"subject\":\"handoff of an unmatched owner route\",\"kind\":\"missing_boundary_contract\",\"text\":\"A request\\nthat names no owner action — its method and path are no row of the imported\\n`OWNER_ACTIONS` constant — is checked at stage (1) as a read and then\\nrefused `invalid_request` (`outside_closed_list`) at stage (4)\",\"question\":\"What exactly does `owner_interface` supply to `operations.perform_owner_operation` when method and path match no `OWNER_ACTIONS` row, given that the interface says an action is the matching row?\",\"options\":[\"Supply the raw method and path plus an explicit no-action result, which `operations` treats as a read through stage (1) and refuses at stage (4).\",\"Supply a distinguished unknown-owner-action value with the same required stage behavior.\",\"Have `owner_interface` synthesize an invalid action before calling `operations`.\"],\"default_guess\":\"Supply the raw method and path with an explicit no-action result and let `operations` own the specified refusal.\",\"witness\":{\"initial\":\"A browser has a valid owner session and requests `GET /unlisted`.\",\"events\":[\"`owner_interface` looks for the request's method and path in `OWNER_ACTIONS` and finds no row.\",\"One implementation cannot construct the required action and rejects or closes locally; another passes a no-action request to `operations`.\"],\"outcomes\":[\"No ordinary `operations` answer is produced.\",\"`operations` performs the session check as for a read and returns stage (4) `invalid_request` (`outside_closed_list`).\"],\"observer\":\"The owner browser\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"cardinality of OWNER_ACTIONS route matches\",\"kind\":\"missing_provider_guarantee\",\"text\":\"The action is the row of the imported `OWNER_ACTIONS` constant whose method\\nand path are the request's\",\"question\":\"Must `OWNER_ACTIONS` contain at most one row for each method-and-path pair, and which module or factory check guarantees that uniqueness?\",\"options\":[\"Require method and path to be a unique key and reject the specification or release if two rows collide.\",\"Define an explicit precedence rule when several rows match.\",\"Permit duplicates only when every duplicated row has identical action, change and upload classifications.\"],\"default_guess\":\"Require method and path to be a unique key, checked before generation or release.\",\"witness\":{\"initial\":\"`OWNER_ACTIONS` contains two rows for the same method and path, one classified as a read and one as a change.\",\"events\":[\"A browser sends a request matching that method and path.\",\"One implementation selects the read row; another selects the change row.\"],\"outcomes\":[\"The request is admitted without a CSRF value as a read.\",\"The request is refused at stage (1) for a missing CSRF value as a change.\"],\"observer\":\"The owner browser\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"classification of confirmation requests that touch an uploaded file\",\"kind\":\"later_contract_choice\",\"text\":\"the confirmation step\\ntouching one only when the action it confirms is the import\",\"question\":\"How will the generated route contract let `owner_interface` determine, before admission and locking, whether a confirmation request confirms the import and therefore touches an uploaded file?\",\"decision_owner\":\"6\",\"options\":[\"Give each confirmed action a distinct method-and-path row whose `touches_uploaded_file` value is fixed.\",\"Use one confirmation route with an explicit action discriminator that is classified by the generated `OWNER_ACTIONS` contract before admission.\",\"Generate a separate route-classification operation that resolves the confirmation request to its lock classification without inspecting session internals.\"],\"consequences\":[\"Distinct routes make lock classification unambiguous from method and path but enlarge the route table.\",\"A discriminator keeps one route but must be authenticated as request data and must not let an untrusted value bypass the import lock.\",\"A classifier preserves encapsulation but adds a public boundary operation and dependency.\"],\"requirement\":\"the confirmation step\\ntouching one only when the action it confirms is the import\",\"default_guess\":\"Generate distinct method-and-path rows for import confirmation and other confirmed actions.\"},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"values retained after request decoding fails\",\"kind\":\"ambiguous_failure_handoff\",\"text\":\"A request whose body, upload head or\\nform cannot be read is handed on with no values, no CSRF value and no\\ncredential, nothing partly read kept\",\"question\":\"Which independently read components remain available when one source cannot be read: method and path, query target, session cookie, headers, and fields successfully decoded before the failure?\",\"options\":[\"Keep method, path, cookie and any independently completed query parsing; discard the failed body or form atomically.\",\"Keep only method, path and cookie; clear the target and every operation value regardless of where it came from.\",\"Clear everything except the raw request classification needed to produce the specified ordinary answer.\"],\"default_guess\":\"Keep method, path and cookie plus independently completed query parsing, while discarding the failed body or form atomically.\",\"witness\":{\"initial\":\"A valid session sends a known read request whose target is in the query while an additional form or body cannot be decoded.\",\"events\":[\"`owner_interface` has already read the method, path, cookie and target, then encounters the decoding failure.\",\"One implementation preserves the query target; another interprets “no values” as clearing it.\"],\"outcomes\":[\"`operations` performs the requested read for the named target.\",\"`operations` receives no target and returns the applicable missing or invalid-value refusal.\"],\"observer\":\"The owner browser\"}},{\"unit\":\"50_public_apis_5_surfaces.md:`public_op:owner_interface.serve_owner_request`\",\"subject\":\"unreadable request versus listener connection closure\",\"kind\":\"contradictory_failure_effect\",\"text\":\"Refuses nothing itself: a request\\nit cannot read is answered by `operations` as any other, never by a closed\\nconnection instead of an answer (owner, 2026-11-24).\",\"question\":\"Does the answer guarantee exclude listener read timeouts, malformed HTTP framing and peer disconnects, or must the listener preserve a writable response path and obtain an `operations` answer for those failures too?\",\"options\":[\"Scope the guarantee to requests delivered to `owner_interface` with a response channel still writable; listener-level framing failures and disconnects may close unanswered.\",\"Require body and form read timeouts seen after dispatch to become failed streams while the listener remains able to send the ordinary answer.\",\"Remove the listener's close-on-read-timeout behavior for owner requests and route every such failure through `operations`.\"],\"default_guess\":\"Scope the guarantee to dispatched requests whose response channel remains writable, while explicitly listing transport-level exceptions.\",\"witness\":{\"initial\":\"A client sends valid owner-request headers with a body length, then stops sending body bytes until `LISTENER_READ_TIMEOUT_SECONDS` passes.\",\"events\":[\"The listener waits for the next bytes.\",\"Under its stated timeout behavior it closes the connection; under the changed owner-interface promise the failed read is handed to `operations` and answered.\"],\"outcomes\":[\"The connection closes without an HTTP answer.\",\"The owner receives the ordinary refusal page and status produced from the `operations` answer.\"],\"observer\":\"The owner client\"}}]}",
+ "set_aside": []
+}
