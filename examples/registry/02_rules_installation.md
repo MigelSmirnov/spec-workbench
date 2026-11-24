@@ -544,8 +544,8 @@ request text (M08) — and the import reads a file from outside.
 ### Formal invariants
 
 ```text
-render(v) = escape(v) for every stored value v
-no stored value is ever evaluated or executed
+render(v) = escape(v) for every stored value v   -- A19-1
+no stored value is ever evaluated or executed   -- A19-2
 ```
 
 ### Required tests
@@ -559,6 +559,9 @@ no stored value is ever evaluated or executed
    with its CSRF field first, is read; one of a byte more is refused, with
    no mapping shown, also when its declared length is smaller or absent, and
    the file the session kept before stays kept.
+
+- Witness, A19-1, A19-2: the test evidence of `_render_owner_page`, which renders every page of the owner interface [witness: note:_render_owner_page].
+- Witness, A19-2: for a value with a quote and a semicolon that is stored and read back as it was given, never as part of a command, the test evidence of `create_project` [witness: note:create_project].
 
 ### Consequence
 
@@ -743,6 +746,14 @@ before a stale revision, a session's end removing every fact of it, a stale
 owner end refused, every check made before the listeners stopping the start before any
 listener is opened
 — and no outcome changed.
+
+Performed again on 2026-11-24, after A19's invariants were given the
+identifiers A19-1 and A19-2 and their Required tests the bindings to the
+checks that show them; the session cookie's attributes are now one
+constant of the data provider, `OWNER_SESSION_COOKIE_ATTRIBUTES`, with the
+same attributes as before. No normative rule changed. Reviewed under
+injection_interpreted_input, browser_boundary and files_artifacts (A19) and
+browser_boundary (A13): no outcome changed.
 
 ### Consequence
 

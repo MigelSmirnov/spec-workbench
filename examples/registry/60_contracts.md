@@ -230,7 +230,8 @@ readings, so an action's today is `operations`' (`_today_of`).
   acts on; granting a project to a session, making it the active one and
   revoking it act on the session, and name the project as the field
   `project_id` of `OwnerValues` (owner, 2026-11-24). The session cookie is
-  named `OWNER_SESSION_COOKIE_NAME` (`__Host-registry_session`): set
+  named `OWNER_SESSION_COOKIE_NAME` (`__Host-registry_session`) and set
+  with the attributes `OWNER_SESSION_COOKIE_ATTRIBUTES` holds and no other:
   `Secure`, `HttpOnly`, `Path=/` and no `Domain`, which the `__Host-` prefix
   makes a browser require (A13 rule 1), and `SameSite=Strict`, so a browser
   never sends it with a request another site started (owner, 2026-11-24;

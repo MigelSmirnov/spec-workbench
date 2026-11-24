@@ -445,6 +445,7 @@ OWNER_ACTIONS
 OWNER_TARGET_PARAMETER
 OWNER_CSRF_FIELD
 OWNER_SESSION_COOKIE_NAME
+OWNER_SESSION_COOKIE_ATTRIBUTES
 OWNER_AUDIT_ACTIONS
 LISTENER_CLOSE_DRAIN_SECONDS
 LISTENER_CLOSE_DRAIN_MAX_BYTES
@@ -1333,7 +1334,8 @@ method and path, and whether it is a change or touches an uploaded file, are
 the rows of the data provider's `OWNER_ACTIONS`; its target is the query
 parameter `OWNER_TARGET_PARAMETER` names, its CSRF value the form field
 `OWNER_CSRF_FIELD` names, the session cookie's name
-`OWNER_SESSION_COOKIE_NAME`, and a page's HTTP status the service API's
+`OWNER_SESSION_COOKIE_NAME` and its attributes
+`OWNER_SESSION_COOKIE_ATTRIBUTES`, and a page's HTTP status the service API's
 `SERVICE_ANSWER_STATUS` and `REFUSAL_HTTP_STATUSES` (owner, 2026-11-24). A
 request it cannot read — a body or a head that fails, a form that cannot be
 decoded — is handed on with no values, nothing partly read kept, and
@@ -1352,7 +1354,8 @@ whose session it sets as the cookie, and `NewestBackupAnswer`, each of whose
 outcomes it renders as itself; and `RefusalCode`, whose `UNAUTHENTICATED`
 member it renders as the sign-in page;
 `data_provider`, for `OWNER_ACTIONS`, `OWNER_TARGET_PARAMETER`,
-`OWNER_CSRF_FIELD`, `OWNER_SESSION_COOKIE_NAME`, `SERVICE_ANSWER_STATUS` and
+`OWNER_CSRF_FIELD`, `OWNER_SESSION_COOKIE_NAME`,
+`OWNER_SESSION_COOKIE_ATTRIBUTES`, `SERVICE_ANSWER_STATUS` and
 `REFUSAL_HTTP_STATUSES`; `random_values`, for `mint_identity`, a create
 form's request id; `upload_framing`, for `read_upload_head` and
 `MultipartFileBody`; `owner_sessions`, for `give_session_csrf`;
