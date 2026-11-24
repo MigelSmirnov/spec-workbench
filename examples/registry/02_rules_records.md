@@ -377,12 +377,12 @@ for action a on record r in {Project, Customer} that may move r.revision:
     stating its former revision is refused as stale and changes nothing; a
     project deleted whole is not found.
    Shows A04-4, A04-5. [witness: verification:registry_a04_anonymised_project_former_revision_stale]
-11. A correction that changes a project moves its revision by exactly one and
-   sets its last-changed instant to the current instant; a correction that
-   changes a Customer, and a mark that restricts it, each move the Customer's
-   revision by exactly one and set its last-changed instant to the current
-   instant; a correction of either that changes nothing leaves its revision
-   and its last-changed instant where they were. Shows A04-3, A04-6.
+11. Each action that moves a record's last-changed instant — for a project a
+   correction and archiving (M01); for a Customer a correction, restricting
+   and lifting, ending and resuming the relationship, and erasure (M04) —
+   moves the record's revision by exactly one and sets its last-changed
+   instant to the current instant; each such action that changes nothing
+   (A05) leaves both where they were. Shows A04-3, A04-6.
    [witness: verification:registry_a04_change_moves_revision_and_last_changed]
 
 ### Consequence
