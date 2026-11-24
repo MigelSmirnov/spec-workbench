@@ -232,3 +232,24 @@ for secrets s1 != s2 in config:
     assert design_decision_witness.invariant_statements(
         "```text\ndownload_served -> memory_bounded\n```\n"
     ) == ["download_served -> memory_bounded"]
+
+
+def test_fenced_invariants_read_by_indentation_in_both_styles():
+    """The id may open a statement whose continuation is indented under it
+    (cabinet-kernel, registry A10-1), or a shared head may carry several
+    indented statements (registry A07)."""
+    section = """```text
+agent_call(x) accepted =>   -- A10-1
+  token = Kernel and registered(x)
+answer(p not in granted(x)) = answer(p does not exist)   -- A10-2
+for each project p and type t:
+  count(published) <= 1   -- A07-1
+  versions are 1..n   -- A07-2
+```
+"""
+    assert design_decision_witness.invariant_statements(section) == [
+        "agent_call(x) accepted =>   -- A10-1\n  token = Kernel and registered(x)",
+        "answer(p not in granted(x)) = answer(p does not exist)   -- A10-2",
+        "for each project p and type t:\n  count(published) <= 1   -- A07-1",
+        "for each project p and type t:\n  versions are 1..n   -- A07-2",
+    ]
