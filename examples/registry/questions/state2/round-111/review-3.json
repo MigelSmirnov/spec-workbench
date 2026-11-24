@@ -1,0 +1,221 @@
+{
+ "open_points": [
+  {
+   "unit": "A20",
+   "subject": "Python runtime identity",
+   "kind": "ambiguous_digest",
+   "text": "the Python version",
+   "question": "What artifact has the digest whose mismatch must fail the Python-version case: the interpreter executable, a Python distribution package, the base-image-contained runtime, or something else, and how is that digest represented in the release list?",
+   "options": [
+    "Name the Python version and a digest of a separately identified Python distribution artifact.",
+    "Treat Python as fixed by the base-image digest and test a Python-version mismatch rather than a separate Python digest.",
+    "Give the Python runtime its own name, exact version and digest as a release dependency."
+   ],
+   "default_guess": "Give the Python runtime its own release-list entry with an exact version and the digest of a named distribution artifact.",
+   "witness": {
+    "initial": "A release list names Python 3.13 and a digest for the base image, but no separately identified Python artifact.",
+    "events": [
+     "The release process installs the image whose contained interpreter reports Python 3.13.",
+     "A verifier runs Required test 1 for the Python-version kind."
+    ],
+    "outcomes": [
+     "The verifier accepts because the base-image digest fixes the Python runtime.",
+     "The verifier rejects because no independently verifiable Python digest is present."
+    ],
+    "observer": "the release-process verifier"
+   }
+  },
+  {
+   "unit": "A20",
+   "subject": "running-instance dependency set",
+   "kind": "used_vs_present",
+   "text": "After an installation that succeeded, the dependencies the running instance has are exactly the release's list, by name, version and digest, nothing more.",
+   "question": "Does “has” mean every component installed or present in the runtime environment, or only components whose code the instance can load or execute?",
+   "options": [
+    "No unlisted package, interpreter, library, utility or other executable component may be present.",
+    "Unlisted components may be present but Registry must not load or execute them.",
+    "Only the dependency kinds enumerated by rule 1 are compared; system libraries remain represented collectively by the base-image digest."
+   ],
+   "default_guess": "Compare all Python packages, the Python runtime and the base image as the enumerated dependency kinds; permit image contents fixed transitively by the image digest but forbid Registry from loading unlisted code.",
+   "witness": {
+    "initial": "The base image contains a diagnostic utility used neither to build nor to run Registry.",
+    "events": [
+     "The release list names all Python packages, the Python runtime and the base image but not the utility.",
+     "The installed instance starts without invoking the utility."
+    ],
+    "outcomes": [
+     "Installation passes because the utility is unused and its bytes are fixed by the listed base-image digest.",
+     "Installation fails because the running environment has an unlisted executable dependency, contrary to “nothing more”."
+    ],
+    "observer": "the deployment operator"
+   }
+  },
+  {
+   "unit": "A20",
+   "subject": "failed installation effect",
+   "kind": "failure_guarantee",
+   "text": "Installing the release fails when the digest differs for any one dependency of each kind rule 1 names — a direct Python package, a transitive one, the Python version and the base image — and no instance of that release starts.",
+   "question": "When this installation replaces an already running release, must the previous release remain running and unchanged, or may the failed installation stop it?",
+   "options": [
+    "The previous release remains running and unchanged.",
+    "The previous release may stop, provided no instance of the rejected release starts.",
+    "The required outcome depends on whether the deployment is an in-place replacement or a parallel rollout."
+   ],
+   "default_guess": "Keep the previous release running and unchanged until the new installation has passed verification.",
+   "witness": {
+    "initial": "Release R1 is running and an installation of R2 is attempted with a mismatched base-image digest.",
+    "events": [
+     "The deployer stops R1 to perform an in-place installation.",
+     "R2 verification fails before R2 starts."
+    ],
+    "outcomes": [
+     "R1 is restored or was never stopped, so service continues.",
+     "R1 remains stopped; the requirement is considered satisfied because no R2 instance started."
+    ],
+    "observer": "a Registry client"
+   }
+  },
+  {
+   "unit": "A20",
+   "subject": "release-construction enforcement",
+   "kind": "later_layer_choice",
+   "text": "A release whose list misses a package the instance would import, or names one without an exact version or a digest, is not made.",
+   "question": "How will release construction prove completeness and reject a release before it is made?",
+   "decision_owner": "factory_checks",
+   "options": [
+    "Resolve and compare the complete dependency graph against the release manifest.",
+    "Build the release in an isolated environment and trace all supported import paths.",
+    "Combine resolver-based closure checks with targeted runtime loading tests."
+   ],
+   "consequences": [
+    "Resolver comparison is deterministic but needs an explicit rule for optional and conditional dependencies.",
+    "Runtime tracing observes real loads but can miss unexercised paths.",
+    "The combined approach has broader coverage but requires both static closure and representative runtime fixtures."
+   ],
+   "requirement": "A release whose list misses a package the instance would import, or names one without an exact version or a digest, is not made.",
+   "default_guess": "Use resolver-based closure as the completeness proof and runtime tests for dynamic loading paths."
+  },
+  {
+   "unit": "A20",
+   "subject": "installation verification mechanism",
+   "kind": "later_layer_choice",
+   "text": "After an installation that succeeded, the dependencies the running instance has are exactly the release's list, by name, version and digest, nothing more.",
+   "question": "At what deployment boundary and by what evidence is the installed runtime compared with the release list before startup is admitted?",
+   "decision_owner": "deploy",
+   "options": [
+    "Verify the unpacked environment and image locally before opening any listener.",
+    "Start an isolated candidate instance, inspect its runtime inventory, then promote it.",
+    "Rely on immutable artifact and image digests verified by the deployment platform without inspecting the running process."
+   ],
+   "consequences": [
+    "Pre-start inspection directly preserves the no-start guarantee but must inventory every dependency kind.",
+    "Candidate promotion tests the actual runtime but requires isolation so the candidate is not considered started service.",
+    "Digest-only verification is simpler but depends on the generated artifacts completely describing the runtime closure."
+   ],
+   "requirement": "Installing the release fails when the digest differs for any one dependency of each kind rule 1 names — a direct Python package, a transitive one, the Python version and the base image — and no instance of that release starts.",
+   "default_guess": "Verify immutable artifacts and a complete installed inventory before opening listeners or admitting the instance."
+  },
+  {
+   "unit": "A21",
+   "subject": "dependencies security-review scope",
+   "kind": "incomplete_review_scope",
+   "text": "- dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies",
+   "question": "Does the dependencies review also cover the Python runtime and the base image, now explicitly named and tested by A20, or are they intentionally outside the category's affected subjects?",
+   "options": [
+    "Expand the affected subjects to include the Python runtime and base image.",
+    "State that “Registry release” includes the Python runtime and base image.",
+    "Limit the review to Python packages, which would leave part of A20 outside the claimed complete dependencies review."
+   ],
+   "default_guess": "Expand the affected list to name the Registry release, direct and transitive Python packages, the Python runtime and the base image.",
+   "witness": {
+    "initial": "A release has correct Python-package digests but uses an unreviewed Python runtime or base image.",
+    "events": [
+     "A21 is read as a complete review of the dependencies category.",
+     "A20's expanded Required tests are applied."
+    ],
+    "outcomes": [
+     "The runtime and base image are covered implicitly by the words “Registry release”.",
+     "Only Python dependencies were reviewed because those are the affected subjects A21 explicitly names."
+    ],
+    "observer": "the security reviewer"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A20\",\"subject\":\"Python runtime identity\",\"kind\":\"ambiguous_digest\",\"text\":\"the Python version\",\"question\":\"What artifact has the digest whose mismatch must fail the Python-version case: the interpreter executable, a Python distribution package, the base-image-contained runtime, or something else, and how is that digest represented in the release list?\",\"options\":[\"Name the Python version and a digest of a separately identified Python distribution artifact.\",\"Treat Python as fixed by the base-image digest and test a Python-version mismatch rather than a separate Python digest.\",\"Give the Python runtime its own name, exact version and digest as a release dependency.\"],\"default_guess\":\"Give the Python runtime its own release-list entry with an exact version and the digest of a named distribution artifact.\",\"witness\":{\"initial\":\"A release list names Python 3.13 and a digest for the base image, but no separately identified Python artifact.\",\"events\":[\"The release process installs the image whose contained interpreter reports Python 3.13.\",\"A verifier runs Required test 1 for the Python-version kind.\"],\"outcomes\":[\"The verifier accepts because the base-image digest fixes the Python runtime.\",\"The verifier rejects because no independently verifiable Python digest is present.\"],\"observer\":\"the release-process verifier\"}},{\"unit\":\"A20\",\"subject\":\"dependency closure\",\"kind\":\"undefined_scope\",\"text\":\"every dependency it runs with\",\"question\":\"Which packages belong to the required closure when imports depend on configuration, optional features, platform markers, plugins, or paths not exercised during release tests?\",\"options\":[\"Include every package that can be imported in any supported runtime history.\",\"Include only packages imported by the configured production instance.\",\"Include the complete resolved environment even when some installed packages are never imported.\"],\"default_guess\":\"Include the complete transitive closure for every supported production configuration and platform.\",\"witness\":{\"initial\":\"A package is imported only when an optional production configuration flag is enabled.\",\"events\":[\"The release is built with that flag disabled.\",\"After installation, an operator enables the supported flag.\"],\"outcomes\":[\"The release is not made because the optionally importable package was missing from its list.\",\"The release is made because the package was not imported by the configuration used during construction.\"],\"observer\":\"the operator enabling the feature\"}},{\"unit\":\"A20\",\"subject\":\"running-instance dependency set\",\"kind\":\"used_vs_present\",\"text\":\"After an installation that succeeded, the dependencies the running instance has are exactly the release's list, by name, version and digest, nothing more.\",\"question\":\"Does “has” mean every component installed or present in the runtime environment, or only components whose code the instance can load or execute?\",\"options\":[\"No unlisted package, interpreter, library, utility or other executable component may be present.\",\"Unlisted components may be present but Registry must not load or execute them.\",\"Only the dependency kinds enumerated by rule 1 are compared; system libraries remain represented collectively by the base-image digest.\"],\"default_guess\":\"Compare all Python packages, the Python runtime and the base image as the enumerated dependency kinds; permit image contents fixed transitively by the image digest but forbid Registry from loading unlisted code.\",\"witness\":{\"initial\":\"The base image contains a diagnostic utility used neither to build nor to run Registry.\",\"events\":[\"The release list names all Python packages, the Python runtime and the base image but not the utility.\",\"The installed instance starts without invoking the utility.\"],\"outcomes\":[\"Installation passes because the utility is unused and its bytes are fixed by the listed base-image digest.\",\"Installation fails because the running environment has an unlisted executable dependency, contrary to “nothing more”.\"],\"observer\":\"the deployment operator\"}},{\"unit\":\"A20\",\"subject\":\"runtime external-code prohibition\",\"kind\":\"missing_required_test\",\"text\":\"Registry has no dependency that loads code at run time from outside its release.\",\"question\":\"What required result must a release-process test show for rule 4, including dynamically imported modules, plugins, downloaded code and interpreted remote content?\",\"options\":[\"Show that every runtime code load resolves to content covered by the release dependency list and its digests.\",\"Show only that Registry performs no network download of executable code.\",\"Treat rule 4 as satisfied by the exact dependency-list tests without a separate demonstration.\"],\"default_guess\":\"Require a test showing that every permitted runtime code-loading path resolves only to content fixed by the release.\",\"witness\":{\"initial\":\"All listed packages and image digests match, but a configured plugin loader can fetch and import a module after startup.\",\"events\":[\"The release passes Required tests 1–4 as currently written.\",\"The instance starts and the plugin path is exercised.\"],\"outcomes\":[\"The release is admitted because all stated Required tests pass.\",\"The release is refused because rule 4 prohibits the runtime load.\"],\"observer\":\"the caller exercising the plugin path\"}},{\"unit\":\"A20\",\"subject\":\"failed installation effect\",\"kind\":\"failure_guarantee\",\"text\":\"Installing the release fails when the digest differs for any one dependency of each kind rule 1 names — a direct Python package, a transitive one, the Python version and the base image — and no instance of that release starts.\",\"question\":\"When this installation replaces an already running release, must the previous release remain running and unchanged, or may the failed installation stop it?\",\"options\":[\"The previous release remains running and unchanged.\",\"The previous release may stop, provided no instance of the rejected release starts.\",\"The required outcome depends on whether the deployment is an in-place replacement or a parallel rollout.\"],\"default_guess\":\"Keep the previous release running and unchanged until the new installation has passed verification.\",\"witness\":{\"initial\":\"Release R1 is running and an installation of R2 is attempted with a mismatched base-image digest.\",\"events\":[\"The deployer stops R1 to perform an in-place installation.\",\"R2 verification fails before R2 starts.\"],\"outcomes\":[\"R1 is restored or was never stopped, so service continues.\",\"R1 remains stopped; the requirement is considered satisfied because no R2 instance started.\"],\"observer\":\"a Registry client\"}},{\"unit\":\"A20\",\"subject\":\"release dependency manifest representation\",\"kind\":\"later_layer_choice\",\"text\":\"A release names every dependency it runs with, at an exact version, with its digest\",\"question\":\"What generated artifact carries the dependency names, versions and digests and provides the identity used when the same release is installed again?\",\"decision_owner\":\"generation\",\"options\":[\"A canonical release manifest emitted with the release.\",\"A lockfile plus an image manifest whose combination defines the release.\",\"A signed SBOM or provenance attestation treated as the authoritative list.\"],\"consequences\":[\"A canonical manifest gives one comparison surface but requires its schema and canonicalization to be generated.\",\"A lockfile plus image manifest follows ecosystem formats but requires rules for combining their identities.\",\"An attestation provides provenance and signing integration but makes admission depend on the attestation format and verifier.\"],\"requirement\":\"A release names every dependency it runs with, at an exact version, with its digest\",\"default_guess\":\"Generate one canonical release manifest that references ecosystem lock data and the immutable base-image digest.\"},{\"unit\":\"A20\",\"subject\":\"release-construction enforcement\",\"kind\":\"later_layer_choice\",\"text\":\"A release whose list misses a package the instance would import, or names one without an exact version or a digest, is not made.\",\"question\":\"How will release construction prove completeness and reject a release before it is made?\",\"decision_owner\":\"factory_checks\",\"options\":[\"Resolve and compare the complete dependency graph against the release manifest.\",\"Build the release in an isolated environment and trace all supported import paths.\",\"Combine resolver-based closure checks with targeted runtime loading tests.\"],\"consequences\":[\"Resolver comparison is deterministic but needs an explicit rule for optional and conditional dependencies.\",\"Runtime tracing observes real loads but can miss unexercised paths.\",\"The combined approach has broader coverage but requires both static closure and representative runtime fixtures.\"],\"requirement\":\"A release whose list misses a package the instance would import, or names one without an exact version or a digest, is not made.\",\"default_guess\":\"Use resolver-based closure as the completeness proof and runtime tests for dynamic loading paths.\"},{\"unit\":\"A20\",\"subject\":\"installation verification mechanism\",\"kind\":\"later_layer_choice\",\"text\":\"After an installation that succeeded, the dependencies the running instance has are exactly the release's list, by name, version and digest, nothing more.\",\"question\":\"At what deployment boundary and by what evidence is the installed runtime compared with the release list before startup is admitted?\",\"decision_owner\":\"deploy\",\"options\":[\"Verify the unpacked environment and image locally before opening any listener.\",\"Start an isolated candidate instance, inspect its runtime inventory, then promote it.\",\"Rely on immutable artifact and image digests verified by the deployment platform without inspecting the running process.\"],\"consequences\":[\"Pre-start inspection directly preserves the no-start guarantee but must inventory every dependency kind.\",\"Candidate promotion tests the actual runtime but requires isolation so the candidate is not considered started service.\",\"Digest-only verification is simpler but depends on the generated artifacts completely describing the runtime closure.\"],\"requirement\":\"Installing the release fails when the digest differs for any one dependency of each kind rule 1 names — a direct Python package, a transitive one, the Python version and the base image — and no instance of that release starts.\",\"default_guess\":\"Verify immutable artifacts and a complete installed inventory before opening listeners or admitting the instance.\"},{\"unit\":\"A21\",\"subject\":\"dependencies security-review scope\",\"kind\":\"incomplete_review_scope\",\"text\":\"- dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies\",\"question\":\"Does the dependencies review also cover the Python runtime and the base image, now explicitly named and tested by A20, or are they intentionally outside the category's affected subjects?\",\"options\":[\"Expand the affected subjects to include the Python runtime and base image.\",\"State that “Registry release” includes the Python runtime and base image.\",\"Limit the review to Python packages, which would leave part of A20 outside the claimed complete dependencies review.\"],\"default_guess\":\"Expand the affected list to name the Registry release, direct and transitive Python packages, the Python runtime and the base image.\",\"witness\":{\"initial\":\"A release has correct Python-package digests but uses an unreviewed Python runtime or base image.\",\"events\":[\"A21 is read as a complete review of the dependencies category.\",\"A20's expanded Required tests are applied.\"],\"outcomes\":[\"The runtime and base image are covered implicitly by the words “Registry release”.\",\"Only Python dependencies were reviewed because those are the affected subjects A21 explicitly names.\"],\"observer\":\"the security reviewer\"}}]}",
+ "set_aside": [
+  {
+   "unit": "A20",
+   "subject": "dependency closure",
+   "kind": "undefined_scope",
+   "text": "every dependency it runs with",
+   "question": "Which packages belong to the required closure when imports depend on configuration, optional features, platform markers, plugins, or paths not exercised during release tests?",
+   "options": [
+    "Include every package that can be imported in any supported runtime history.",
+    "Include only packages imported by the configured production instance.",
+    "Include the complete resolved environment even when some installed packages are never imported."
+   ],
+   "default_guess": "Include the complete transitive closure for every supported production configuration and platform.",
+   "witness": {
+    "initial": "A package is imported only when an optional production configuration flag is enabled.",
+    "events": [
+     "The release is built with that flag disabled.",
+     "After installation, an operator enables the supported flag."
+    ],
+    "outcomes": [
+     "The release is not made because the optionally importable package was missing from its list.",
+     "The release is made because the package was not imported by the configuration used during construction."
+    ],
+    "observer": "the operator enabling the feature"
+   },
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  },
+  {
+   "unit": "A20",
+   "subject": "runtime external-code prohibition",
+   "kind": "missing_required_test",
+   "text": "Registry has no dependency that loads code at run time from outside its release.",
+   "question": "What required result must a release-process test show for rule 4, including dynamically imported modules, plugins, downloaded code and interpreted remote content?",
+   "options": [
+    "Show that every runtime code load resolves to content covered by the release dependency list and its digests.",
+    "Show only that Registry performs no network download of executable code.",
+    "Treat rule 4 as satisfied by the exact dependency-list tests without a separate demonstration."
+   ],
+   "default_guess": "Require a test showing that every permitted runtime code-loading path resolves only to content fixed by the release.",
+   "witness": {
+    "initial": "All listed packages and image digests match, but a configured plugin loader can fetch and import a module after startup.",
+    "events": [
+     "The release passes Required tests 1–4 as currently written.",
+     "The instance starts and the plugin path is exercised."
+    ],
+    "outcomes": [
+     "The release is admitted because all stated Required tests pass.",
+     "The release is refused because rule 4 prohibits the runtime load."
+    ],
+    "observer": "the caller exercising the plugin path"
+   },
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  },
+  {
+   "unit": "A20",
+   "subject": "release dependency manifest representation",
+   "kind": "later_layer_choice",
+   "text": "A release names every dependency it runs with, at an exact version, with its digest",
+   "question": "What generated artifact carries the dependency names, versions and digests and provides the identity used when the same release is installed again?",
+   "decision_owner": "generation",
+   "options": [
+    "A canonical release manifest emitted with the release.",
+    "A lockfile plus an image manifest whose combination defines the release.",
+    "A signed SBOM or provenance attestation treated as the authoritative list."
+   ],
+   "consequences": [
+    "A canonical manifest gives one comparison surface but requires its schema and canonicalization to be generated.",
+    "A lockfile plus image manifest follows ecosystem formats but requires rules for combining their identities.",
+    "An attestation provides provenance and signing integration but makes admission depend on the attestation format and verifier."
+   ],
+   "requirement": "A release names every dependency it runs with, at an exact version, with its digest",
+   "default_guess": "Generate one canonical release manifest that references ecosystem lock data and the immutable base-image digest.",
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  }
+ ]
+}
