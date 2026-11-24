@@ -1,0 +1,225 @@
+{
+ "open_points": [
+  {
+   "subject": "service_api module",
+   "kind": "missing_owner",
+   "text": "service_api",
+   "question": "Which module owns the service API’s routing, request decoding, authentication inputs, operation invocation, answer encoding and public capability, given that `service_api` appears in the dependency order and `instance_lifecycle` knows it but no `service_api` section exists?",
+   "options": [
+    "Add a `service_api` module section and public request-serving capability",
+    "Fold the service API into `instance_lifecycle`",
+    "Fold service request handling into `operations`"
+   ],
+   "default_guess": "Add a `service_api` module between `operations` and `instance_lifecycle`, parallel to `owner_interface`.",
+   "witness": {
+    "initial": "Registry has started with the service API listener open.",
+    "events": [
+     "PresuPro sends an authenticated request to read project context.",
+     "The listener must choose a route, decode the request, pass credentials and values to an operation, and encode its answer."
+    ],
+    "outcomes": [
+     "A dedicated `service_api` module performs the adaptation and calls `operations`.",
+     "`instance_lifecycle` or `operations` silently implements the wire protocol and routing itself."
+    ],
+    "observer": "The service client and maintainers changing the HTTP contract"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "validated configuration outputs",
+   "kind": "missing_interface",
+   "text": "load_configuration\ngive_service_tokens\ngive_owner_credential\ngive_backup_key\ngive_backup_location",
+   "question": "How do `store` and `instance_lifecycle` obtain the validated store location and the two validated listener addresses, and does `load_configuration` return a configuration object or only perform checks?",
+   "options": [
+    "`load_configuration` returns one validated configuration object containing all non-secret and secret settings",
+    "Add explicit getters for the store location and both listener addresses",
+    "Let consumers call `runtime_settings` directly for the omitted values"
+   ],
+   "default_guess": "Make `load_configuration` return an immutable validated configuration object and keep secret-specific accessors only where restricted delivery is required.",
+   "witness": {
+    "initial": "Every configuration check passes and the configured store and listener addresses are valid.",
+    "events": [
+     "`instance_lifecycle` asks `store` to open the configured store.",
+     "`instance_lifecycle` then opens the owner and service listeners."
+    ],
+    "outcomes": [
+     "The validated values are returned by `load_configuration` and reused.",
+     "Each consumer obtains or reconstructs the values through an unstated path."
+    ],
+    "observer": "The operator, when the process opens a different path or address from the one configuration validated"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "supporting models and ports",
+   "kind": "unowned_model",
+   "text": "`models`, for `HttpRequest`, `ByteStream` and `HttpResponse`, which its\nsurface takes and answers, `OwnerRequest`, `OwnerValues`, `OwnerAdmission`\nand `OwnerAction`, which it reads, builds and matches; `OperationAnswer`,\nwhich it renders by its fields",
+   "question": "Who owns the transport, request, answer, upload and data-table row types that sections say come from `models`, when `models` explicitly owns M01–M12, enumerations, disclosure classes and refusal vocabulary but does not name these additional models or ports?",
+   "options": [
+    "Expand `models` ownership to every shared DTO, union and port named by the modules",
+    "Give transport types to their surface modules and domain answer types to `operations`",
+    "Introduce separate transport and contract-model modules"
+   ],
+   "default_guess": "Expand the `models` section to enumerate all shared structural types, while leaving concrete transport implementations in the surface modules.",
+   "unit": "?"
+  },
+  {
+   "subject": "fact disclosure classification",
+   "kind": "dual_ownership",
+   "text": "and the disclosure class\nof every fact (\"Disclosure classes by field\")",
+   "question": "Does `models` own each fact’s disclosure class, or does `data_provider` own it through `PERSONAL_DATA_FIELDS`; which source is authoritative if they disagree?",
+   "options": [
+    "`models` owns classifications and `PERSONAL_DATA_FIELDS` is generated from the models",
+    "`data_provider` owns classifications and `models` owns only the `DisclosureClass` vocabulary",
+    "Keep both and require an explicit equality invariant"
+   ],
+   "default_guess": "Let `data_provider` own the release-specific field table and let `models` own only the class vocabulary and ordering.",
+   "witness": {
+    "initial": "A new answer field is added and carries a customer value.",
+    "events": [
+     "The model declaration classifies the field as `personal_data`.",
+     "The release table omits the field.",
+     "Cabinet Kernel requests an answer containing the field."
+    ],
+    "outcomes": [
+     "The model classification makes the whole answer refused.",
+     "The data-provider table treats the field as `business_confidential` and the answer is returned."
+    ],
+    "observer": "Cabinet Kernel and the agent"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "record-to-row mapping",
+   "kind": "dual_ownership",
+   "text": "`store` holds the connection and\nthe transaction and decides which record goes into which row; the row\nstatements themselves are executed by `store_persistence`",
+   "question": "Which module owns the durable record-to-table/row mapping, given that `store` decides which record goes into which row while `store_persistence` owns the schema, row codecs and typed statements?",
+   "options": [
+    "`store_persistence` owns all record-to-row mapping and `store` owns connections, transactions and ordering",
+    "`store` owns the mapping and `store_persistence` is only an untyped SQL executor",
+    "Split schema/codec ownership from repository-operation selection explicitly"
+   ],
+   "default_guess": "Give schema, codecs and record-to-row mapping to `store_persistence`; keep connection, transaction, locking and operation ordering in `store`.",
+   "unit": "?"
+  },
+  {
+   "subject": "audit action and subject policy",
+   "kind": "dual_ownership",
+   "text": "the actions that write an entry and the subject each names (M09)",
+   "question": "Is the authoritative mapping from an accepted owner action to its audit action and subject owned by `audit_log`, by `data_provider.OWNER_AUDIT_ACTIONS`, or by `operations`, which selects the row and appends the entry?",
+   "options": [
+    "`audit_log` owns the policy and exports a lookup used by `operations`",
+    "`data_provider` owns the complete mapping and `audit_log` only allocates sequences and persists entries",
+    "`operations` owns the mapping and passes a fully formed entry to `audit_log`"
+   ],
+   "default_guess": "Make `data_provider.OWNER_AUDIT_ACTIONS` the sole declarative mapping, `operations` its consumer, and `audit_log` responsible only for validating, numbering and storing entries.",
+   "witness": {
+    "initial": "An accepted owner action changes a record and is newly added to the release.",
+    "events": [
+     "The action commits successfully.",
+     "`operations` decides whether and how to append its audit entry."
+    ],
+    "outcomes": [
+     "The `audit_log`-owned action list causes an entry to be written.",
+     "The data-provider mapping has no row, so no entry or a differently named subject is written."
+    ],
+    "observer": "The owner reading the audit log"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "secret encoding and comparison",
+   "kind": "ownership_conflict",
+   "text": "A secret's length is counted in the bytes of its UTF-8\nencoding, and a presented credential is compared in those bytes (A17 rules\n3, 6).",
+   "question": "Why does `runtime_settings` own a rule about presented-credential comparison when it only reads environment values, must not own secret checks, knows no `random_values`, and all presented-secret comparison is assigned to `random_values` plus the authenticating module?",
+   "options": [
+    "`runtime_settings` only loads text; `configuration` encodes it for length checks and authenticators use `random_values` for comparison",
+    "`runtime_settings` exports canonical secret bytes as part of the loaded settings",
+    "`runtime_settings` performs credential comparisons"
+   ],
+   "default_guess": "Have `runtime_settings` load the exact text only; `configuration` checks UTF-8 byte length, and `service_access` or `owner_sessions` invokes `random_values.equal_in_constant_time`.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-session expiry pass",
+   "kind": "dual_ownership",
+   "text": "the pass every 60 seconds that ends sessions by their limits",
+   "question": "Does `owner_sessions` own the 60-second scheduling loop, or only the operation that examines and ends sessions, given that `instance_lifecycle` also owns “the 60-second pass of `owner_sessions`” and `owner_sessions` may not know the later module?",
+   "options": [
+    "`instance_lifecycle` owns cadence and calls an untimed `owner_sessions.end_expired_sessions` capability",
+    "`owner_sessions` owns its own timer",
+    "Introduce a scheduler module"
+   ],
+   "default_guess": "Let `instance_lifecycle` own the timer and let `owner_sessions` own the deterministic expiry pass invoked by it.",
+   "unit": "?"
+  },
+  {
+   "subject": "transaction repository port",
+   "kind": "missing_owner",
+   "text": "A domain module never opens a transaction and\nnever commits; it reads and writes through the transaction it is handed.",
+   "question": "What is the type and owning module of the transaction/repository interface handed to domain modules, and which operations does it expose, given that only `store` may call `store_persistence` but `store` publishes no record read/write capabilities?",
+   "options": [
+    "`store` owns and exports a typed transaction port whose methods delegate to `store_persistence`",
+    "Domain modules receive `SqliteStoreRepository` directly despite the rule that only `store` calls it",
+    "Add record-specific repository capabilities to `store`"
+   ],
+   "default_guess": "Define a `store`-owned transaction port with typed record operations; its implementation alone calls `store_persistence`.",
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle responsibility",
+   "kind": "mixed_responsibility",
+   "text": "The start and the running instance: `configuration` first, then the backup\nprobe and `store`, then the listeners at the configured addresses",
+   "question": "Is `instance_lifecycle` a facade for startup and timers, or also the owner of the full HTTP server, request framing and staged connection close; if it owns both, what is its single hidden mechanism and reason to change?",
+   "options": [
+    "Keep lifecycle orchestration here and move HTTP framing/listener mechanics to a transport module",
+    "Make `instance_lifecycle` a deep runtime-host module rather than a facade",
+    "Keep the present split and explicitly justify the combined responsibility"
+   ],
+   "default_guess": "Move generic HTTP listener, framing and staged-close mechanics into a transport module; keep startup order and periodic scheduling in `instance_lifecycle`.",
+   "unit": "?"
+  },
+  {
+   "subject": "accepted import runtime cleanup",
+   "kind": "unclear_orchestrator",
+   "text": "An accepted import drops the\nuploaded file of every owner session (M11)",
+   "question": "Which module coordinates dropping every session’s uploaded file with the import transaction: `operations`, `migration_import`, or `owner_sessions`, and at what point relative to commit is the runtime cleanup considered complete?",
+   "options": [
+    "`operations` holds the import lock, commits the store transaction, then tells `owner_sessions` to drop all uploads before answering",
+    "`migration_import` directly calls `owner_sessions` while confirming",
+    "`owner_sessions` observes the migration closure and cleans up independently"
+   ],
+   "default_guess": "Let `operations` orchestrate it under the import lock: commit the transaction, synchronously drop all uploads through `owner_sessions`, then answer.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner operation routing tables",
+   "kind": "split_authority",
+   "text": "The operation table: every operation of either surface with its stages and\nthe modules it changes",
+   "question": "How is the `operations` operation table related to `data_provider.OWNER_ACTIONS`, which separately fixes each owner action’s method, path, change flag and upload flag; which table is authoritative for whether a request is a change and which pipeline it enters?",
+   "options": [
+    "`OWNER_ACTIONS` is routing metadata only and references entries in the authoritative `operations` table",
+    "One generated table owns both routing and pipeline metadata",
+    "`owner_interface` owns routing while `operations` independently classifies actions"
+   ],
+   "default_guess": "Use one generated operation definition as the authority, projecting its HTTP-routing fields to `owner_interface` and its stage/module fields to `operations`.",
+   "witness": {
+    "initial": "An owner route is declared with `is_change=false` while the operation table treats its action as changing state.",
+    "events": [
+     "The owner sends the route without a CSRF value.",
+     "`owner_interface` classifies the request from `OWNER_ACTIONS`.",
+     "`operations` dispatches it using its own operation table."
+    ],
+    "outcomes": [
+     "The request is treated as a read and reaches the action without the change-specific interface handling.",
+     "The request is treated as a change and is refused for missing CSRF protection."
+    ],
+    "observer": "The owner using the interface"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"service_api module\",\"kind\":\"missing_owner\",\"text\":\"service_api\",\"question\":\"Which module owns the service API’s routing, request decoding, authentication inputs, operation invocation, answer encoding and public capability, given that `service_api` appears in the dependency order and `instance_lifecycle` knows it but no `service_api` section exists?\",\"options\":[\"Add a `service_api` module section and public request-serving capability\",\"Fold the service API into `instance_lifecycle`\",\"Fold service request handling into `operations`\"],\"default_guess\":\"Add a `service_api` module between `operations` and `instance_lifecycle`, parallel to `owner_interface`.\",\"witness\":{\"initial\":\"Registry has started with the service API listener open.\",\"events\":[\"PresuPro sends an authenticated request to read project context.\",\"The listener must choose a route, decode the request, pass credentials and values to an operation, and encode its answer.\"],\"outcomes\":[\"A dedicated `service_api` module performs the adaptation and calls `operations`.\",\"`instance_lifecycle` or `operations` silently implements the wire protocol and routing itself.\"],\"observer\":\"The service client and maintainers changing the HTTP contract\"}},{\"subject\":\"validated configuration outputs\",\"kind\":\"missing_interface\",\"text\":\"load_configuration\\ngive_service_tokens\\ngive_owner_credential\\ngive_backup_key\\ngive_backup_location\",\"question\":\"How do `store` and `instance_lifecycle` obtain the validated store location and the two validated listener addresses, and does `load_configuration` return a configuration object or only perform checks?\",\"options\":[\"`load_configuration` returns one validated configuration object containing all non-secret and secret settings\",\"Add explicit getters for the store location and both listener addresses\",\"Let consumers call `runtime_settings` directly for the omitted values\"],\"default_guess\":\"Make `load_configuration` return an immutable validated configuration object and keep secret-specific accessors only where restricted delivery is required.\",\"witness\":{\"initial\":\"Every configuration check passes and the configured store and listener addresses are valid.\",\"events\":[\"`instance_lifecycle` asks `store` to open the configured store.\",\"`instance_lifecycle` then opens the owner and service listeners.\"],\"outcomes\":[\"The validated values are returned by `load_configuration` and reused.\",\"Each consumer obtains or reconstructs the values through an unstated path.\"],\"observer\":\"The operator, when the process opens a different path or address from the one configuration validated\"}},{\"subject\":\"supporting models and ports\",\"kind\":\"unowned_model\",\"text\":\"`models`, for `HttpRequest`, `ByteStream` and `HttpResponse`, which its\\nsurface takes and answers, `OwnerRequest`, `OwnerValues`, `OwnerAdmission`\\nand `OwnerAction`, which it reads, builds and matches; `OperationAnswer`,\\nwhich it renders by its fields\",\"question\":\"Who owns the transport, request, answer, upload and data-table row types that sections say come from `models`, when `models` explicitly owns M01–M12, enumerations, disclosure classes and refusal vocabulary but does not name these additional models or ports?\",\"options\":[\"Expand `models` ownership to every shared DTO, union and port named by the modules\",\"Give transport types to their surface modules and domain answer types to `operations`\",\"Introduce separate transport and contract-model modules\"],\"default_guess\":\"Expand the `models` section to enumerate all shared structural types, while leaving concrete transport implementations in the surface modules.\"},{\"subject\":\"fact disclosure classification\",\"kind\":\"dual_ownership\",\"text\":\"and the disclosure class\\nof every fact (\\\"Disclosure classes by field\\\")\",\"question\":\"Does `models` own each fact’s disclosure class, or does `data_provider` own it through `PERSONAL_DATA_FIELDS`; which source is authoritative if they disagree?\",\"options\":[\"`models` owns classifications and `PERSONAL_DATA_FIELDS` is generated from the models\",\"`data_provider` owns classifications and `models` owns only the `DisclosureClass` vocabulary\",\"Keep both and require an explicit equality invariant\"],\"default_guess\":\"Let `data_provider` own the release-specific field table and let `models` own only the class vocabulary and ordering.\",\"witness\":{\"initial\":\"A new answer field is added and carries a customer value.\",\"events\":[\"The model declaration classifies the field as `personal_data`.\",\"The release table omits the field.\",\"Cabinet Kernel requests an answer containing the field.\"],\"outcomes\":[\"The model classification makes the whole answer refused.\",\"The data-provider table treats the field as `business_confidential` and the answer is returned.\"],\"observer\":\"Cabinet Kernel and the agent\"}},{\"subject\":\"record-to-row mapping\",\"kind\":\"dual_ownership\",\"text\":\"`store` holds the connection and\\nthe transaction and decides which record goes into which row; the row\\nstatements themselves are executed by `store_persistence`\",\"question\":\"Which module owns the durable record-to-table/row mapping, given that `store` decides which record goes into which row while `store_persistence` owns the schema, row codecs and typed statements?\",\"options\":[\"`store_persistence` owns all record-to-row mapping and `store` owns connections, transactions and ordering\",\"`store` owns the mapping and `store_persistence` is only an untyped SQL executor\",\"Split schema/codec ownership from repository-operation selection explicitly\"],\"default_guess\":\"Give schema, codecs and record-to-row mapping to `store_persistence`; keep connection, transaction, locking and operation ordering in `store`.\"},{\"subject\":\"audit action and subject policy\",\"kind\":\"dual_ownership\",\"text\":\"the actions that write an entry and the subject each names (M09)\",\"question\":\"Is the authoritative mapping from an accepted owner action to its audit action and subject owned by `audit_log`, by `data_provider.OWNER_AUDIT_ACTIONS`, or by `operations`, which selects the row and appends the entry?\",\"options\":[\"`audit_log` owns the policy and exports a lookup used by `operations`\",\"`data_provider` owns the complete mapping and `audit_log` only allocates sequences and persists entries\",\"`operations` owns the mapping and passes a fully formed entry to `audit_log`\"],\"default_guess\":\"Make `data_provider.OWNER_AUDIT_ACTIONS` the sole declarative mapping, `operations` its consumer, and `audit_log` responsible only for validating, numbering and storing entries.\",\"witness\":{\"initial\":\"An accepted owner action changes a record and is newly added to the release.\",\"events\":[\"The action commits successfully.\",\"`operations` decides whether and how to append its audit entry.\"],\"outcomes\":[\"The `audit_log`-owned action list causes an entry to be written.\",\"The data-provider mapping has no row, so no entry or a differently named subject is written.\"],\"observer\":\"The owner reading the audit log\"}},{\"subject\":\"secret encoding and comparison\",\"kind\":\"ownership_conflict\",\"text\":\"A secret's length is counted in the bytes of its UTF-8\\nencoding, and a presented credential is compared in those bytes (A17 rules\\n3, 6).\",\"question\":\"Why does `runtime_settings` own a rule about presented-credential comparison when it only reads environment values, must not own secret checks, knows no `random_values`, and all presented-secret comparison is assigned to `random_values` plus the authenticating module?\",\"options\":[\"`runtime_settings` only loads text; `configuration` encodes it for length checks and authenticators use `random_values` for comparison\",\"`runtime_settings` exports canonical secret bytes as part of the loaded settings\",\"`runtime_settings` performs credential comparisons\"],\"default_guess\":\"Have `runtime_settings` load the exact text only; `configuration` checks UTF-8 byte length, and `service_access` or `owner_sessions` invokes `random_values.equal_in_constant_time`.\"},{\"subject\":\"owner-session expiry pass\",\"kind\":\"dual_ownership\",\"text\":\"the pass every 60 seconds that ends sessions by their limits\",\"question\":\"Does `owner_sessions` own the 60-second scheduling loop, or only the operation that examines and ends sessions, given that `instance_lifecycle` also owns “the 60-second pass of `owner_sessions`” and `owner_sessions` may not know the later module?\",\"options\":[\"`instance_lifecycle` owns cadence and calls an untimed `owner_sessions.end_expired_sessions` capability\",\"`owner_sessions` owns its own timer\",\"Introduce a scheduler module\"],\"default_guess\":\"Let `instance_lifecycle` own the timer and let `owner_sessions` own the deterministic expiry pass invoked by it.\"},{\"subject\":\"transaction repository port\",\"kind\":\"missing_owner\",\"text\":\"A domain module never opens a transaction and\\nnever commits; it reads and writes through the transaction it is handed.\",\"question\":\"What is the type and owning module of the transaction/repository interface handed to domain modules, and which operations does it expose, given that only `store` may call `store_persistence` but `store` publishes no record read/write capabilities?\",\"options\":[\"`store` owns and exports a typed transaction port whose methods delegate to `store_persistence`\",\"Domain modules receive `SqliteStoreRepository` directly despite the rule that only `store` calls it\",\"Add record-specific repository capabilities to `store`\"],\"default_guess\":\"Define a `store`-owned transaction port with typed record operations; its implementation alone calls `store_persistence`.\"},{\"subject\":\"instance_lifecycle responsibility\",\"kind\":\"mixed_responsibility\",\"text\":\"The start and the running instance: `configuration` first, then the backup\\nprobe and `store`, then the listeners at the configured addresses\",\"question\":\"Is `instance_lifecycle` a facade for startup and timers, or also the owner of the full HTTP server, request framing and staged connection close; if it owns both, what is its single hidden mechanism and reason to change?\",\"options\":[\"Keep lifecycle orchestration here and move HTTP framing/listener mechanics to a transport module\",\"Make `instance_lifecycle` a deep runtime-host module rather than a facade\",\"Keep the present split and explicitly justify the combined responsibility\"],\"default_guess\":\"Move generic HTTP listener, framing and staged-close mechanics into a transport module; keep startup order and periodic scheduling in `instance_lifecycle`.\"},{\"subject\":\"accepted import runtime cleanup\",\"kind\":\"unclear_orchestrator\",\"text\":\"An accepted import drops the\\nuploaded file of every owner session (M11)\",\"question\":\"Which module coordinates dropping every session’s uploaded file with the import transaction: `operations`, `migration_import`, or `owner_sessions`, and at what point relative to commit is the runtime cleanup considered complete?\",\"options\":[\"`operations` holds the import lock, commits the store transaction, then tells `owner_sessions` to drop all uploads before answering\",\"`migration_import` directly calls `owner_sessions` while confirming\",\"`owner_sessions` observes the migration closure and cleans up independently\"],\"default_guess\":\"Let `operations` orchestrate it under the import lock: commit the transaction, synchronously drop all uploads through `owner_sessions`, then answer.\"},{\"subject\":\"owner operation routing tables\",\"kind\":\"split_authority\",\"text\":\"The operation table: every operation of either surface with its stages and\\nthe modules it changes\",\"question\":\"How is the `operations` operation table related to `data_provider.OWNER_ACTIONS`, which separately fixes each owner action’s method, path, change flag and upload flag; which table is authoritative for whether a request is a change and which pipeline it enters?\",\"options\":[\"`OWNER_ACTIONS` is routing metadata only and references entries in the authoritative `operations` table\",\"One generated table owns both routing and pipeline metadata\",\"`owner_interface` owns routing while `operations` independently classifies actions\"],\"default_guess\":\"Use one generated operation definition as the authority, projecting its HTTP-routing fields to `owner_interface` and its stage/module fields to `operations`.\",\"witness\":{\"initial\":\"An owner route is declared with `is_change=false` while the operation table treats its action as changing state.\",\"events\":[\"The owner sends the route without a CSRF value.\",\"`owner_interface` classifies the request from `OWNER_ACTIONS`.\",\"`operations` dispatches it using its own operation table.\"],\"outcomes\":[\"The request is treated as a read and reaches the action without the change-specific interface handling.\",\"The request is treated as a change and is refused for missing CSRF protection.\"],\"observer\":\"The owner using the interface\"}}]}",
+ "set_aside": []
+}
