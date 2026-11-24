@@ -224,7 +224,9 @@ readings, so an action's today is `operations`' (`_today_of`).
   request's admission, since a body is read once. The session cookie is
   named `OWNER_SESSION_COOKIE_NAME` (`__Host-registry_session`): set
   `Secure`, `HttpOnly`, `Path=/` and no `Domain`, which the `__Host-` prefix
-  makes a browser require (A13 rule 1). A page's HTTP status is the service
+  makes a browser require (A13 rule 1), and `SameSite=Strict`, so a browser
+  never sends it with a request another site started (owner, 2026-11-24;
+  OWASP). A page's HTTP status is the service
   API's: `SERVICE_ANSWER_STATUS` for an answer, the code's row of
   `REFUSAL_HTTP_STATUSES` for a refusal. A
   request whose body, upload head or form cannot be read is handed on with
