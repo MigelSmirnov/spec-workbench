@@ -121,7 +121,8 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
     value is now given blank, or a publish of a removed type (4).
 
 - Witness, A01-1, A01-2, A01-3, A01-4: for projects, the test evidence of `create_project` [witness: note:create_project].
-- Witness, A01-1, A01-3, A01-4: for Customers, the test evidence of `record_customer` [witness: note:record_customer].
+- Witness, A01-1, A01-2, A01-3, A01-4: for Customers, the test evidence of `record_customer` [witness: note:record_customer].
+- Witness, A01-2: for an owner's repeat refused at stage (1), the test evidence of `admit_owner_request` [witness: note:admit_owner_request].
 - Witness, A01-1, A01-2, A01-3, A01-4: for rooms, the test evidence of `add_room` [witness: note:add_room].
 - Witness, A01-1, A01-2, A01-3, A01-4: for pointers, the test evidence of `publish_pointer` [witness: note:publish_pointer].
 - Witness, A01-2: for a repeat whose session set fails, the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
