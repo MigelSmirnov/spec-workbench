@@ -39,19 +39,22 @@ e.outcome = accepted   -- A14-2
 ### Required tests
 
 1. A correction refused as stale leaves the log unchanged.
+   Shows A14-1. [witness: verification:registry_a14_stale_refused_correction_writes_no_entry]
 2. Archiving an archived project leaves the log unchanged and mints no
    confirmation id.
+   Shows A14-1. [witness: verification:registry_a14_noop_archive_writes_no_entry_no_confirmation]
 3. A failure while storing a correction leaves neither the change nor its
    entry.
+   Shows A14-1. [witness: verification:registry_a14_failed_store_leaves_no_change_no_entry]
 4. Kernel reading the agent projection leaves the log unchanged.
+   Shows A14-1. [witness: verification:registry_a14_agent_projection_read_writes_no_entry]
 
 5. Every entry written, for every action that writes one, has the outcome
    `accepted`; no other outcome is ever stored.
+   Shows A14-2. [witness: verification:registry_a14_every_entry_outcome_is_accepted]
 6. Each action of M09.actions accepted and changing its record — a Customer's
    restriction among them — writes exactly one entry, in its transaction.
-
-- Witness, A14-1: the test evidence of `OwnerActionStep.run` [witness: note:OwnerActionStep.run].
-- Witness, A14-2: the test evidence of `append_audit_entry` [witness: note:append_audit_entry].
+   Shows A14-1. [witness: verification:registry_a14_accepted_change_writes_one_entry_in_transaction]
 
 ### Consequence
 
@@ -100,25 +103,26 @@ erase(d) accepted => its erasure entry e has e.instant >= start_of(d)   -- A15-3
 
 1. In a log whose entries are all older than today, erasing before today
    leaves exactly the new erasure entry.
+   Shows A15-2. [witness: verification:registry_a15_erase_before_today_leaves_only_own_entry]
 2. Erasing before a date older than every entry removes nothing and writes
    its own erasure entry with a confirmation id.
 8. Erasing before today, at 00:00:00 UTC of today, keeps the erasure's own
    entry, whose instant is not before the start of that date, and removes an
    entry made a microsecond before it.
+   Shows A15-2, A15-3. [witness: verification:registry_a15_erase_at_midnight_keeps_own_entry_boundary]
 3. A date later than today is refused.
 4. After an erasure, the next entry's sequence number is one more than the
    erasure entry's.
+   Shows A15-1. [witness: verification:registry_a15_next_sequence_follows_erasure_entry]
 5. No operation of any service token reads the log.
 6. Two accepted changes in turn write entries numbered n and n + 1, and the
    audit sequence (M12) holds n + 1 after the second; two concurrent changes
    take two distinct consecutive numbers, and the one whose transaction
    committed first holds the lower.
+   Shows A15-1. [witness: verification:registry_a15_sequential_and_concurrent_changes_number_in_order]
 7. A change whose transaction fails writes no entry and leaves the audit
    sequence as it was; the next accepted change takes the number after it.
-
-- Witness, A15-1: the test evidence of `append_audit_entry` [witness: note:append_audit_entry].
-- Witness, A15-2: the test evidence of `erase_audit_entries_before` [witness: note:erase_audit_entries_before].
-- Witness, A15-2, A15-3: for the erasure action with its own entry, the test evidence of `OwnerActionStep.run` [witness: note:OwnerActionStep.run].
+   Shows A15-1. [witness: verification:registry_a15_failed_change_leaves_sequence_unchanged]
 
 ### Consequence
 

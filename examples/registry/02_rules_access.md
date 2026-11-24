@@ -43,18 +43,21 @@ highest_class(Cabinet Kernel) = business_confidential   -- A09-3
 ### Required tests
 
 1. Cabinet calling 'read a customer's billing data' is refused.
+   Shows A09-1. [witness: verification:registry_a09_cabinet_billing_read_refused]
 2. Client Portal reading `context` receives the address; Kernel calling
    `context` is refused.
+   Shows A09-1. [witness: verification:registry_a09_context_portal_answered_kernel_refused]
 3. A token not in the configuration is refused like a wrong one (R0-23).
 4. PresuPro calling 'publish an artifact pointer' is refused (R0-88).
+   Shows A09-1. [witness: verification:registry_a09_presupro_publish_pointer_refused]
 
 5. An answer that would carry a class above the calling token's highest is
    refused whole: no field of it is disclosed (rule 4).
-
-- Witness, A09-1: the test evidence of `perform_service_operation` [witness: note:perform_service_operation].
-- Witness, A09-1: for the rights table, the test evidence of `service_may_call` [witness: note:service_may_call].
-- Witness, A09-2: the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
-- Witness, A09-3: the test evidence of `highest_class_of_service` [witness: note:highest_class_of_service].
+   Shows A09-2. [witness: verification:registry_a09_answer_above_class_refused_whole]
+6. An answer to Cabinet Kernel carrying `business_confidential` is answered;
+   one that would carry a `personal_data` field is refused whole. Shows A09-3,
+   A09-2.
+   [witness: verification:registry_a09_kernel_highest_class_business_confidential]
 
 ### Consequence
 
@@ -98,13 +101,12 @@ answer(p not in granted(x)) = answer(p does not exist)   -- A10-2
 
 1. Kernel reading the projection of a project outside the set receives the
    not-found answer, identical to that of a random id.
+   Shows A10-1, A10-2. [witness: verification:registry_a10_outside_set_answered_as_not_found]
 2. After the owner revokes a project, the next 'add a room' on it is refused.
+   Shows A10-1. [witness: verification:registry_a10_revoked_project_next_call_refused]
 3. A call naming no project, with no active project, is refused.
 4. 'Add a room' on an archived project of the set is refused.
 5. Kernel registers a new session id and is accepted.
-
-- Witness, A10-1, A10-2: the test evidence of `check_agent_call` [witness: note:check_agent_call].
-- Witness, A10-1: for the Kernel token, the test evidence of `perform_service_operation` [witness: note:perform_service_operation].
 
 ### Consequence
 
@@ -145,14 +147,15 @@ register(x) after end(x) => granted(x) = {} and active(x) = none   -- A11-2
 ### Required tests
 
 1. After Kernel ends a session, reading its access is refused.
+   Shows A11-1. [witness: verification:registry_a11_ended_session_access_read_refused]
 2. Registering the ended identity again answers a session with no project.
+   Shows A11-2. [witness: verification:registry_a11_reregistered_ended_identity_empty]
 3. The owner ends a session; its next agent-authority call is refused.
+   Shows A11-1. [witness: verification:registry_a11_owner_ended_session_call_refused]
 
 4. After a session ends the store holds no record of it: neither its set, its
    active project, its pending request nor its access version.
-
-- Witness, A11-1: the test evidence of `end_session` [witness: note:end_session].
-- Witness, A11-2: the test evidence of `register_session` [witness: note:register_session].
+   Shows A11-1. [witness: verification:registry_a11_ended_session_leaves_no_record]
 
 ### Consequence
 
@@ -190,18 +193,17 @@ accepted change of x other than its end => version(x)' = version(x) + 1   -- A12
 
 1. The owner opens a session while the agent replaces its request; granting
    with the old version is refused.
+   Shows A12-1, A12-2. [witness: verification:registry_a12_grant_with_replaced_request_version_refused]
 2. Erasing a project in two sessions' sets moves both versions by one.
+   Shows A12-2. [witness: verification:registry_a12_erasure_moves_both_session_versions]
 3. Granting a project already granted leaves the version.
 4. Granting a project and making it active in one action moves the version
    by one.
+   Shows A12-2. [witness: verification:registry_a12_grant_and_activate_moves_once]
 
 5. The owner ending a session stating a stale access version is refused; the
    session stays registered and unchanged.
-
-- Witness, A12-1, A12-2: for a grant, the test evidence of `grant_project` [witness: note:grant_project].
-- Witness, A12-1, A12-2: for an answer to a request, the test evidence of `answer_access_request` [witness: note:answer_access_request].
-- Witness, A12-2: for an erasure of a project, the test evidence of `drop_project_from_sessions` [witness: note:drop_project_from_sessions].
-- Witness, A12-1: for the owner's end of a session, the test evidence of `end_session` [witness: note:end_session].
+   Shows A12-1. [witness: verification:registry_a12_stale_owner_end_refused_unchanged]
 
 ### Consequence
 
@@ -324,26 +326,30 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused   -- A13-2
 ### Required tests
 
 1. A session idle for 31 minutes is refused and asks for sign-in again.
+   Shows A13-1. [witness: verification:registry_a13_idle_31_minutes_refused]
 2. The sixth sign-in within 15 minutes after five refusals is refused with the
    right credential, and accepted 15 minutes later.
+   Shows A13-2. [witness: verification:registry_a13_lockout_refuses_right_credential]
 3. A change without the session's CSRF value is refused.
 4. A restart ends every owner session.
+   Shows A13-1. [witness: verification:registry_a13_restart_ends_owner_sessions]
 5. A sign-in during a lockout is refused and does not extend it.
+   Shows A13-2. [witness: verification:registry_a13_lockout_sign_in_not_extending]
 6. A confirmation value used once — even by a refused submission — is refused
    the second time; one older than 10 minutes is refused.
 7. A session with a request every 10 minutes is refused 8 hours after its
    sign-in; a session signed out is refused at its next request, also within
    its 30 minutes.
+   Shows A13-1. [witness: verification:registry_a13_eight_hours_and_sign_out_refused]
 8. A request a microsecond before 30 minutes after the last one is served;
    one exactly 30 minutes after it is refused.
+   Shows A13-1. [witness: verification:registry_a13_idle_limit_boundary_exclusive]
 9. With the clocks replaced in the test: moving the wall clock back or
    forward by hours changes no session's validity; a suspension of 31
    minutes, counted by the monotonic reading, makes its next request
    refused; the session is ended, with its confirmation and upload, at the
    next pass.
-
-- Witness, A13-1: the test evidence of `admit_owner_request` [witness: note:admit_owner_request].
-- Witness, A13-2: the test evidence of `sign_in_owner` [witness: note:sign_in_owner].
+   Shows A13-1. [witness: verification:registry_a13_monotonic_clock_decides_validity]
 
 ### Consequence
 

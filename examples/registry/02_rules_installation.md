@@ -118,12 +118,15 @@ conflict at confirmation => store unchanged   -- A16-3
 1. Uploading answers the mapping and changes nothing; reading the store after
    it shows no imported record.
 2. A file whose one pointer id production holds refuses the whole import.
+   Shows A16-3. [witness: verification:registry_a16_held_pointer_id_refuses_whole_import]
 3. Confirming a mapping after another file was uploaded in the session is
    refused: the file it named is no longer kept — also when the new file has
    the same bytes.
 4. A second import after a successful one is refused.
+   Shows A16-2. [witness: verification:registry_a16_second_import_after_success_refused]
 5. A failure during the transaction leaves no project, no Customer and no
    closure.
+   Shows A16-1. [witness: verification:registry_a16_failed_transaction_leaves_no_import]
 6. A conflicting id belonging only to a project the owner did not pick does
    not refuse the import.
 7. A room naming a project absent from the file belongs to no pick: it is
@@ -139,9 +142,7 @@ conflict at confirmation => store unchanged   -- A16-3
     pointers, the Customers it made, one closure holding the file's digest and
     exactly one audit entry; a failure inside its transaction leaves none of
     them — no project, room, pointer, Customer, closure or entry.
-
-- Witness, A16-1: the test evidence of `OwnerActionStep.run` [witness: note:OwnerActionStep.run].
-- Witness, A16-2, A16-3: the test evidence of `confirm_import` [witness: note:confirm_import].
+   Shows A16-1. [witness: verification:registry_a16_accepted_import_stores_all_in_one_transaction]
 
 ### Consequence
 
@@ -278,9 +279,11 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
 1. A configuration with some service tokens but without Client Portal's
    stops the start and names the missing item; one with none of the four
    and no service API address is an owner-only start.
+   Shows A17-1. [witness: verification:registry_a17_missing_token_stops_start_none_owner_only]
 2. Two services with one token stop the start, and so does each other pair
    of equal secrets: a token and the owner credential, a token and the
    backup key, the owner credential and the backup key.
+   Shows A17-2. [witness: verification:registry_a17_equal_secrets_stop_start]
 3. A 16-byte token stops the start. For each kind of secret — a service
    token, the owner credential and the backup key — a value one byte shorter
    than `SECRET_MIN_BYTES` stops the start and one of exactly
@@ -288,12 +291,14 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
    bytes, not characters: a token of 16 two-byte characters (32 bytes) is
    accepted, and one of 15 two-byte characters and one one-byte character
    (31 bytes) stops the start.
+   Shows A17-2. [witness: verification:registry_a17_secret_length_counted_in_utf8_bytes]
 4. The start diagnostic never contains a secret's value.
 5. A start whose store is made new and whose listener then cannot be opened
    stops, serves nothing and removes that store — or, when the removal
    fails, leaves it as an empty store of the release's version; one whose
    listener cannot be opened over an existing store leaves that store's
    records as they were. An owner-only start opens no service API listener.
+   Shows A17-1. [witness: verification:registry_a17_listener_failure_serves_nothing_keeps_store]
 7. A complete configuration with variables that name no item —
    `REGISTRY_EXTRA`, `REGISTRY_`, and one without the prefix — starts, and
    none of them appears in a diagnostic or a setting; one where the backup key
@@ -301,16 +306,19 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
    naming the backup key as missing; one with three tokens set and the fourth
    misspelt stops the start naming that token; one with only a misspelt
    token and no other token starts owner-only.
+   Shows A17-1. [witness: verification:registry_a17_unknown_variables_ignored_misspelt_item_missing]
 8. The four tokens without the service API's address stop the start naming
    the address; the address without the tokens stops it naming the first
    token. An address `127.0.0.1:8781` is accepted, `[::1]:8781` too;
    `localhost:8781`, `127.0.0.1` and `127.0.0.1:0` stop the start, naming the
    item. Two addresses with one port, `127.0.0.1:8781` and
    `0.0.0.0:8781`, stop the start naming the service API's address.
+   Shows A17-1. [witness: verification:registry_a17_service_address_with_tokens_and_wellformed]
 9. `[fe80::1%eth0]:8781`, `[::ffff:127.0.0.1]:8781`, `127.0.0.01:8781` and
    `127.0.0.1:08781` each stop the start, naming the item. While Registry
    runs, a second socket binding the service API's endpoint fails; an IPv4
    client cannot reach an IPv6 listener.
+   Shows A17-1. [witness: verification:registry_a17_address_text_form_and_exclusive_bind]
 6. A store made new holds exactly one audit sequence (M12), at 0, and no
    other record; a start interrupted before the store's rename leaves no
    store under the store's name, and the next start makes a new one with
@@ -323,9 +331,7 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
     request is served. When the service API's listener cannot be opened
     after the owner interface's was, the owner interface's is closed and no
     request is served on it.
-
-- Witness, A17-1: the test evidence of `start_instance` [witness: note:start_instance].
-- Witness, A17-2: the test evidence of `load_configuration` [witness: note:load_configuration].
+   Shows A17-1. [witness: verification:registry_a17_failed_check_stops_before_any_listener]
 
 ### Consequence
 
@@ -478,24 +484,28 @@ every kept backup is encrypted, consistent, checked, and records   -- A18-2
 
 1. A backup taken during a write restores either before or after it, never in
    between.
+   Shows A18-2. [witness: verification:registry_a18_backup_during_write_is_one_snapshot]
 2. After a run in which the backup failed, backups older than 30 × 24 hours
    are still deleted.
+   Shows A18-1. [witness: verification:registry_a18_failed_backup_still_deletes_old_backups]
 7. With the step's cutoff fixed at its start, a kept backup made exactly
    30 × 24 hours before it is kept and one made a microsecond earlier is
    deleted; a record instant with a non-zero fraction of a second is
    compared with that fraction, not at the whole second.
+   Shows A18-1. [witness: verification:registry_a18_retention_cutoff_exact_to_microsecond]
 8. The readable record of a kept backup holds the instant, release and last
    sequence number of the snapshot it was made from and the digest of its
    key; a backup whose decrypted sequence differs from its record is
    deleted.
+   Shows A18-1, A18-2. [witness: verification:registry_a18_record_matches_snapshot_mismatch_deleted]
 3. A backup cannot be read without the key it was made with.
+   Shows A18-2. [witness: verification:registry_a18_backup_unreadable_without_its_key]
 4. A backup whose integrity check fails is deleted and reported.
+   Shows A18-1, A18-2. [witness: verification:registry_a18_integrity_failure_deleted_and_reported]
 5. A store restored from a backup holds no agent session.
+   Shows A18-2. [witness: verification:registry_a18_restored_store_holds_no_agent_session]
 6. A 03:00 missed while Registry was stopped makes no backup at the next
    start; the next one is made at the following 03:00.
-
-- Witness, A18-1, A18-2: the test evidence of `run_daily_backup_if_due` [witness: note:run_daily_backup_if_due].
-- Witness, A18-2: for the agent sessions a backup leaves out, the test evidence of `copy_store_snapshot` [witness: note:copy_store_snapshot].
 
 ### Consequence
 
@@ -552,9 +562,12 @@ no stored value is ever evaluated or executed   -- A19-2
 
 1. A room named `<script>alert(1)</script>` is shown as that text in the owner
    interface.
+   Shows A19-1. [witness: verification:registry_a19_script_room_name_shown_as_text]
 2. An access request text with markup is shown as text.
+   Shows A19-1. [witness: verification:registry_a19_access_request_markup_shown_as_text]
 3. A display name with a quote and a semicolon is stored and read back
    unchanged.
+   Shows A19-2. [witness: verification:registry_a19_quote_semicolon_name_round_trips]
 4. An import file of exactly 50 × 1024 × 1024 bytes, sent by the upload form
    with its CSRF field first, is read; one of a byte more is refused, with
    no mapping shown, also when its declared length is smaller or absent, and
@@ -571,7 +584,7 @@ no stored value is ever evaluated or executed   -- A19-2
    security policy. Every page is made by one renderer, so this shows it for
    every stored value, whoever wrote it and whichever way it came in, the
    import file's included.
-   [witness: note:_render_owner_page]
+   [witness: verification:registry_a19_every_shown_value_escaped_csp_forbids_script]
 6. A19-2: a display name holding a quote, a semicolon, a comment mark and
    a statement of the store's query language is stored and read back exactly
    as given, and the store afterwards holds what it held before, unchanged,
@@ -579,12 +592,12 @@ no stored value is ever evaluated or executed   -- A19-2
    value of a record reaches the store through the one statement backend
    the specification fixes, which fills value places only (rule 3), so this
    shows it for every value of a record given or imported.
-   [witness: note:create_project]
+   [witness: verification:registry_a19_query_language_in_name_not_executed]
 7. A19-2: an import file whose values hold markup, a statement of the
    store's query language and text written as program code is read into
    those same values as text, unchanged, and nothing in it is executed or
    evaluated (rule 4).
-   [witness: note:_parse_export]
+   [witness: verification:registry_a19_import_values_read_as_text_not_evaluated]
 
 ### Consequence
 

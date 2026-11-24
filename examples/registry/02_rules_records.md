@@ -88,45 +88,48 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
 
 1. Two 'create a project' calls with the same request id and equal facts make
    one project; the second answers it.
+   Shows A01-1, A01-3. [witness: verification:registry_a01_equal_repeat_answers_existing_project]
 2. The same request id with a different display name is refused and nothing
    changes.
+   Shows A01-4. [witness: verification:registry_a01_same_request_id_other_name_refused]
 3. Two 'add a room' calls with different request ids and the same name make
    two rooms (R0-10).
 4. A repeat of a project's create after the project was archived answers the
    archived project and does not reactivate it.
+   Shows A01-3. [witness: verification:registry_a01_repeat_after_archive_not_reactivated]
 5. A create without a request id is refused.
 6. After anonymising a project, a create with that project's former request id
    makes a new project with a new id.
 7. Kernel retrying a publish with the same request id gets the same pointer
    and version; the pointer it made is not superseded.
+   Shows A01-1, A01-3. [witness: verification:registry_a01_publish_retry_returns_same_pointer]
 8. A repeat of a project's create after the project was corrected is refused.
+   Shows A01-4. [witness: verification:registry_a01_repeat_after_correction_refused]
 9. A repeat of 'record a customer' giving an empty e-mail equals one that gave
    none.
+   Shows A01-3. [witness: verification:registry_a01_blank_optional_equals_absent_on_repeat]
 10. Kernel repeating 'add a room' after the project left its session's set is
     answered as not found (A10).
+   Shows A01-2. [witness: verification:registry_a01_repeat_outside_session_set_not_found]
 11. Repeating a publish after its type was removed is refused as an unknown
     type (A22).
+   Shows A01-2. [witness: verification:registry_a01_repeat_publish_removed_type_refused]
 12. Two concurrent creates with one request id and equal facts — of a
     project, a Customer, a room of one project, a pointer of one project by
     one publisher (for Kernel, naming one session) — make one record; the
     other answers it. With different facts, or another publisher, the second
     is refused as a conflict. The same request id for rooms of two different
     projects makes two rooms.
+   Shows A01-1, A01-3, A01-4. [witness: verification:registry_a01_concurrent_creates_make_one_record]
 13. A repeat with equal facts of 'add a room' or of a publish, after its
     project was archived, is refused and nothing changes.
+   Shows A01-2. [witness: verification:registry_a01_repeat_on_archived_project_refused]
 14. A repeat failing any check of stages (1) to (4) of A04 rule 6 is refused,
     is never answered as a repeat, and nothing changes: one from a service
     without the right (1); Kernel's after the project left its session's set
     (2); a room's on a project deleted whole since (3); one whose required
     value is now given blank, or a publish of a removed type (4).
-
-- Witness, A01-1, A01-2, A01-3, A01-4: for projects, the test evidence of `create_project` [witness: note:create_project].
-- Witness, A01-1, A01-2, A01-3, A01-4: for Customers, the test evidence of `record_customer` [witness: note:record_customer].
-- Witness, A01-2: for an owner's repeat refused at stage (1), the test evidence of `admit_owner_request` [witness: note:admit_owner_request].
-- Witness, A01-1, A01-2, A01-3, A01-4: for rooms, the test evidence of `add_room` [witness: note:add_room].
-- Witness, A01-1, A01-2, A01-3, A01-4: for pointers, the test evidence of `publish_pointer` [witness: note:publish_pointer].
-- Witness, A01-2: for a repeat whose session set fails, the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
-- Witness, A01-2: for a repeat outside the service's rights, the test evidence of `perform_service_operation` [witness: note:perform_service_operation].
+   Shows A01-2. [witness: verification:registry_a01_repeat_failing_early_stage_refused]
 
 ### Consequence
 
@@ -188,28 +191,28 @@ for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS   -
 ### Required tests
 
 1. A project with a display name of three spaces is refused.
+   Shows A02-1, A02-2. [witness: verification:registry_a02_blank_display_name_refused]
 2. A room name `"  Cocina "` is stored with its spaces.
+   Shows A02-3. [witness: verification:registry_a02_room_name_spaces_kept_as_written]
 3. A Customer correction giving an e-mail of `""` clears the e-mail.
+   Shows A02-1. [witness: verification:registry_a02_empty_optional_email_clears_it]
 4. An alias of 40 characters is stored; one of 41 is refused and nothing
    changes.
+   Shows A02-5. [witness: verification:registry_a02_alias_over_forty_code_points_refused]
 5. A project created with kind `villa`, or with a floor area of 0, is
    refused naming both values; one created with no kind and no
    characteristic is accepted.
+   Shows A02-4. [witness: verification:registry_a02_out_of_form_values_all_named]
 6. A number of rooms of 0 and one of 2.5 are each refused as out of form;
    1 and 7 are stored. A floor of -1 is stored; 1.5 is refused. A floor area
    of 0.01 is stored as given; one of 0 or -3 is refused; a project with no
    characteristic at all is stored without one.
+   Shows A02-3, A02-4. [witness: verification:registry_a02_object_characteristic_bounds_checked]
 
 7. A Customer's name and an access request text with spaces around them are
    stored as written; a room name, a Customer's name and an access request
    text of spaces only are each refused and nothing changes.
-
-- Witness, A02-1: the test evidence of `read_required_text` [witness: note:read_required_text].
-- Witness, A02-4, A02-5: the test evidence of `check_value_forms` [witness: note:check_value_forms].
-- Witness, A02-2, A02-3, A02-4, A02-5: for projects, the test evidence of `create_project` [witness: note:create_project].
-- Witness, A02-2, A02-3: for Customers, the test evidence of `record_customer` [witness: note:record_customer].
-- Witness, A02-2, A02-3: for rooms, the test evidence of `add_room` [witness: note:add_room].
-- Witness, A02-2, A02-3: for access requests, the test evidence of `request_project_access` [witness: note:request_project_access].
+   Shows A02-1, A02-2, A02-3. [witness: verification:registry_a02_required_texts_blank_refused_padded_kept]
 
 ### Consequence
 
@@ -247,16 +250,16 @@ after correct(p, facts f) accepted:
 ### Required tests
 
 1. A project correction without an alias clears the alias.
+   Shows A03-1. [witness: verification:registry_a03_correction_without_alias_clears_it]
 2. A correction equal to the stored card leaves the revision where it was.
+   Shows A03-3. [witness: verification:registry_a03_equal_correction_keeps_revision]
 3. A correction keeping a customer that has since been restricted is accepted;
    one newly naming a restricted customer is refused.
 
 4. A Customer correction replaces every editable fact, clearing an optional
    one it does not give; its identity, created instant, request id and marks
    stay; one giving exactly the stored facts leaves the revision.
-
-- Witness, A03-1, A03-2, A03-3: the test evidence of `correct_project` [witness: note:correct_project].
-- Witness, A03-1, A03-2, A03-3: for Customers, the test evidence of `correct_customer` [witness: note:correct_customer].
+   Shows A03-1, A03-2, A03-3. [witness: verification:registry_a03_customer_correction_replaces_editable_facts]
 
 ### Consequence
 
@@ -333,34 +336,40 @@ for action a on record r in {Project, Customer} that may move r.revision:
 
 1. Two owner tabs correct one project from revision 3; the first is accepted,
    the second is refused as stale.
+   Shows A04-2, A04-3. [witness: verification:registry_a04_second_tab_stale_revision_refused]
 2. Restricting a customer with an old revision is refused.
+   Shows A04-2. [witness: verification:registry_a04_restrict_with_old_revision_refused]
 3. Archiving moves the revision once; archiving again with the new revision
    answers the project unchanged.
+   Shows A04-3, A04-6. [witness: verification:registry_a04_archive_moves_revision_once]
 4. Correcting an archived project with a stale revision is refused as stale,
    not as archived.
+   Shows A04-1, A04-2. [witness: verification:registry_a04_stale_before_archived_refusal]
 5. Kernel naming a project outside its set with a blank room name receives the
    not-found answer, not the missing-name refusal.
+   Shows A04-1. [witness: verification:registry_a04_session_set_hides_missing_name]
 6. Erasing a Customer's contact data again from the form that erased it,
    stating that revision, is refused as stale and changes nothing; erasing it
    stating no revision answers it unchanged.
+   Shows A04-4, A04-5. [witness: verification:registry_a04_erasure_resubmit_with_revision_stale]
 7. Restricting an erased Customer from a card read before its erasure is
    refused as stale, not as erased.
+   Shows A04-1, A04-5. [witness: verification:registry_a04_erased_customer_stale_before_erased]
 8. Restricting a Customer that has a revision, stating none, is refused as
    stale, not as a missing value.
+   Shows A04-2. [witness: verification:registry_a04_missing_revision_refused_as_stale]
 
 9. An owner correction without the session's CSRF value and stating a stale
    revision is refused for the CSRF value, not as stale.
+   Shows A04-1. [witness: verification:registry_a04_csrf_refusal_before_stale]
 10. After anonymising a project it has no revision: correcting or erasing it
     stating its former revision is refused as stale and changes nothing; a
     project deleted whole is not found.
-
-- Witness, A04-1: for the stages of a service call, the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
-- Witness, A04-1, A04-2, A04-3, A04-6: for projects, the test evidence of `correct_project` [witness: note:correct_project].
-- Witness, A04-3, A04-6: for archiving, the test evidence of `archive_project` [witness: note:archive_project].
-- Witness, A04-2, A04-3, A04-5, A04-6: for Customers, the test evidence of `mark_customer` [witness: note:mark_customer].
-- Witness, A04-4, A04-5: for an erasure, the test evidence of `erase_customer_contact` [witness: note:erase_customer_contact].
-- Witness, A04-1: for the owner's stages, the test evidence of `admit_owner_request` [witness: note:admit_owner_request].
-- Witness, A04-4, A04-5: for a project's erasure, the test evidence of `erase_project` [witness: note:erase_project].
+   Shows A04-4, A04-5. [witness: verification:registry_a04_anonymised_project_former_revision_stale]
+11. A correction that changes a project moves its revision by exactly one and
+   sets its last-changed instant to the current instant; one that changes
+   nothing leaves both. Shows A04-3, A04-6.
+   [witness: verification:registry_a04_change_moves_revision_and_last_changed]
 
 ### Consequence
 
@@ -403,8 +412,11 @@ of A04 rule 6:   -- A05-1
 
 1. Restricting a restricted Customer answers it, with the same revision and no
    new audit entry.
+   Shows A05-1. [witness: verification:registry_a05_restrict_restricted_customer_unchanged]
 2. Ending an ended relationship with a new date keeps the old date.
+   Shows A05-1. [witness: verification:registry_a05_end_ended_relationship_keeps_date]
 3. Granting a project already granted leaves the access version.
+   Shows A05-1. [witness: verification:registry_a05_regrant_keeps_access_version]
 4. Withdrawing a withdrawn pointer is refused.
 5. Granting again a granted project that has since been archived is refused,
    and the project stays in the set (R0-46, R0-70).
@@ -415,15 +427,7 @@ of A04 rule 6:   -- A05-1
    active project already clear and registering a registered session each
    answer the record unchanged: its revision, last-changed instant and access
    version stay, no audit entry is written and no confirmation id minted.
-
-- Witness, A05-1: for a Customer's marks, the test evidence of `mark_customer` [witness: note:mark_customer].
-- Witness, A05-1: for a session's grant, the test evidence of `grant_project` [witness: note:grant_project].
-- Witness, A05-1: for the audit entry and confirmation id, the test evidence of `OwnerActionStep.run` [witness: note:OwnerActionStep.run].
-- Witness, A05-1: for archiving, the test evidence of `archive_project` [witness: note:archive_project].
-- Witness, A05-1: for anonymising, the test evidence of `erase_project` [witness: note:erase_project].
-- Witness, A05-1: for a Customer's erasure, the test evidence of `erase_customer_contact` [witness: note:erase_customer_contact].
-- Witness, A05-1: for the active project, the test evidence of `set_active_project` [witness: note:set_active_project].
-- Witness, A05-1: for registering, the test evidence of `register_session` [witness: note:register_session].
+   Shows A05-1. [witness: verification:registry_a05_every_repeated_transition_answers_unchanged]
 
 ### Consequence
 
@@ -462,9 +466,13 @@ because each key ends in an identity or a sequence number
 ### Required tests
 
 1. Two projects changed at the same instant list by id.
+   Shows A06-1. [witness: verification:registry_a06_same_instant_projects_list_by_id]
 2. An erased Customer lists after every Customer that is not erased.
+   Shows A06-1. [witness: verification:registry_a06_erased_customers_list_last]
 3. Artifacts of one type list version 3, 2, 1.
+   Shows A06-1. [witness: verification:registry_a06_artifact_versions_list_highest_first]
 4. A project card lists its rooms in the order of 'list rooms'.
+   Shows A06-1. [witness: verification:registry_a06_project_card_rooms_follow_list_rooms]
 
 5. Two agent sessions registered at the same instant list by session identity;
    the audit log lists by sequence number, ascending; the agent projection's
@@ -472,17 +480,7 @@ because each key ends in an identity or a sequence number
    `project_id`; the import mapping lists its projects by `project_id`, each
    one's rooms and pointers as their lists, and the Customers it makes by their
    v1 value.
-
-- Witness, A06-1: for projects, the test evidence of `list_projects` [witness: note:list_projects].
-- Witness, A06-1: for rooms, the test evidence of `list_rooms` [witness: note:list_rooms].
-- Witness, A06-1: for a project card's rooms, the test evidence of `read_project_card` [witness: note:read_project_card].
-- Witness, A06-1: for Customers, the test evidence of `list_customers` [witness: note:list_customers].
-- Witness, A06-1: for artifacts, the test evidence of `list_pointers` [witness: note:list_pointers].
-- Witness, A06-1: for agent sessions, the test evidence of `list_sessions` [witness: note:list_sessions].
-- Witness, A06-1: for the audit log, the test evidence of `read_audit_entries` [witness: note:read_audit_entries].
-- Witness, A06-1: for the agent projection's pointers, the test evidence of `published_pointers` [witness: note:published_pointers].
-- Witness, A06-1: for a session's granted ids, the test evidence of `_session_access` [witness: note:_session_access].
-- Witness, A06-1: for the import mapping, the test evidence of `_build_mapping` [witness: note:_build_mapping].
+   Shows A06-1. [witness: verification:registry_a06_nested_collections_follow_declared_order]
 
 ### Consequence
 

@@ -46,21 +46,21 @@ publish(p, t) accepted:
 ### Required tests
 
 0. The first publish of a type on a project makes version 1, `published`.
+   Shows A07-2, A07-3. [witness: verification:registry_a07_first_publish_makes_version_one]
 1. Two concurrent publishes of `estimate` on one project, with different
    request ids, make versions n+1 and
    n+2, the first `superseded`, the second `published`; neither answers an
    internal error.
+   Shows A07-1, A07-2, A07-3, A07-4. [witness: verification:registry_a07_concurrent_publishes_consecutive_versions]
 2. A failure after the version is assigned leaves no superseded pointer and no
    new one.
+   Shows A07-4. [witness: verification:registry_a07_failed_publish_leaves_nothing]
 3. After withdrawing the published pointer, 'read the latest artifact of a
    type' answers that none is published.
 4. A withdrawal racing a publish of the same type either withdraws the old
    pointer before it is superseded, or is refused because it was superseded;
    never both.
 5. Publishing on an archived project is refused.
-
-- Witness, A07-1, A07-2, A07-3, A07-4: the test evidence of `publish_pointer` [witness: note:publish_pointer].
-- Witness, A07-1: for a withdrawal, the test evidence of `withdraw_pointer` [witness: note:withdraw_pointer].
 
 ### Consequence
 
@@ -97,16 +97,15 @@ pointer.owner_service = owner_service(pointer.type)   -- A08-2
 ### Required tests
 
 1. PresuPro calling 'publish an artifact pointer' is refused.
+   Shows A08-1. [witness: verification:registry_a08_presupro_publish_refused]
 2. Kernel publishes an `estimate` for session S; the pointer names PresuPro as
    its owner service and Kernel for S as its publisher.
+   Shows A08-2. [witness: verification:registry_a08_kernel_publish_names_owner_and_publisher]
 3. Kernel withdrawing a pointer on a project outside its session's set is
    answered as not found (A10).
+   Shows A08-1. [witness: verification:registry_a08_withdraw_outside_set_not_found]
 4. The owner withdraws a pointer Kernel published; the withdrawal records the
    owner.
-
-- Witness, A08-1: for a service's rights, the test evidence of `perform_service_operation` [witness: note:perform_service_operation].
-- Witness, A08-1: for Kernel and its session, the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
-- Witness, A08-2: the test evidence of `publish_pointer` [witness: note:publish_pointer].
 
 ### Consequence
 
@@ -151,15 +150,17 @@ publish(t) or latest(t) with t not declared => unknown type   -- A22-3
 ### Required tests
 
 1. Publishing `wall_plan` is refused as an unknown type.
+   Shows A22-1, A22-3. [witness: verification:registry_a22_undeclared_type_publish_refused]
 2. After a release without a type, its pointers are still listed by 'list
    artifacts' with their statuses.
+   Shows A22-2. [witness: verification:registry_a22_removed_type_pointers_still_listed]
 3. 'Read the latest artifact of a type' for a removed type is refused as an
    unknown type, not answered as none published.
-
-- Witness, A22-1: the test evidence of `_owner_service_of_type` [witness: note:_owner_service_of_type].
-- Witness, A22-2: the test evidence of `list_pointers` [witness: note:list_pointers].
-- Witness, A22-3: for a read, the test evidence of `latest_pointer_of_type` [witness: note:latest_pointer_of_type].
-- Witness, A22-3: for a publish, the test evidence of `publish_pointer` [witness: note:publish_pointer].
+   Shows A22-3. [witness: verification:registry_a22_removed_type_latest_unknown_type]
+4. In the first release publishing `estimate` is accepted and its pointer
+   names PresuPro, and publishing each v1 type (L08) is refused as an unknown
+   type. Shows A22-1.
+   [witness: verification:registry_a22_first_release_declares_only_estimate]
 
 ### Consequence
 
