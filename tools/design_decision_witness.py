@@ -29,6 +29,16 @@ without one cannot be addressed (``invariant_without_identifier``), and a tag
 naming none binds nothing (``witness_binding_ambiguous``). Whether the check
 really asserts the invariant stays a judgement of the State 2 question round.
 
+A decision whose guarantee is kept outside the case — by a release process, a
+deployment, the platform — has no invariant of the case's code that a note or
+a check of the case could show; one bound there would be a false witness. It
+says so in its Formal invariants section, whose first line is ``None: <who
+keeps it and why no check of the case can show it>``. Such a decision declares
+no formal invariant: it needs no witness and no Required tests item by
+identifier, and coverage lists it (``invariant_kept_outside``, reported, never
+a pass of anything) so the claim stays visible. Whether the claim is true is
+judged by the State 2 question round, as every decision's text is.
+
 Two things are kept apart (TRANSITION_PROTOCOL.md, "Invariant evidence"): the
 Required tests item that describes what must be shown — a State 2 decision,
 checked at the State 2 handoff by ``required_tests`` — and the binding of that
@@ -485,13 +495,54 @@ def _resolve(kind: str, name: str, key: Any, location: str, check_names: set[str
                                "specification does not carry")}
 
 
-def _decisions(case: Path):
-    """(key, invariants (location, text), tests (location, text) | None) per decision with formal invariants."""
+KEPT_OUTSIDE_RE = re.compile(r"^None\s*:\s*(\S.*)$")
+
+
+def kept_outside(section: str) -> str | None:
+    """The reason of a Formal invariants section that declares none (``None: <reason>``), else None.
+
+    Only the section's first non-heading, non-blank line can declare it, and only
+    with a reason after the colon: a bare ``None`` declares nothing and stays an
+    invariant to be witnessed. The reason runs to the end of its paragraph.
+    """
+    lines = section.splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith("#") or not line.strip():
+            continue
+        match = KEPT_OUTSIDE_RE.match(line.strip())
+        if not match:
+            return None
+        reason = [match.group(1).strip()]
+        for following in lines[index + 1:]:
+            if not following.strip():
+                break
+            reason.append(following.strip())
+        return " ".join(reason)
+    return None
+
+
+def _invariant_sections(case: Path):
     for item in design_index.list_items(case, kind="decision"):
         invariants = _section_lines(case, item, "Formal invariant(s)") or _section_lines(case, item, "Formal invariants")
         if invariants is None or not invariants[1].strip():
             continue
+        yield item, invariants
+
+
+def _decisions(case: Path):
+    """(key, invariants (location, text), tests (location, text) | None) per decision with formal invariants."""
+    for item, invariants in _invariant_sections(case):
+        if kept_outside(invariants[1]) is not None:
+            continue
         yield item.get("key"), invariants, _section_lines(case, item, "Required tests")
+
+
+def _kept_outside(case: Path):
+    """(key, location, reason) per decision that declares its guarantee kept outside the case."""
+    for item, invariants in _invariant_sections(case):
+        reason = kept_outside(invariants[1])
+        if reason is not None:
+            yield item.get("key"), invariants[0], reason
 
 
 ITEM_RE = re.compile(r"^\s{0,3}(?:[-*+]|\d+[.)])\s+")
@@ -640,6 +691,14 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
         if (whole or bound) and not unbound and not unidentified:
             witnessed += 1
 
+    outside = 0
+    for key, location, reason in _kept_outside(case):
+        outside += 1
+        findings.append({
+            "severity": "info", "code": "invariant_kept_outside", "decision": key, "location": location,
+            "message": f"{key}: declares no formal invariant of the case; kept outside it: {reason[:200]}",
+        })
+
     findings = fence.enforce(findings)
     errors = fence.stops(findings)
     return {
@@ -649,6 +708,7 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
             "decisions_with_invariants": decisions,
             "witnessed": witnessed,
             "unwitnessed": decisions - witnessed,
+            "kept_outside": outside,
             "errors": errors,
             "handoff_ready": errors == 0,
         },
@@ -672,9 +732,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         summary = report["summary"]
         print(f"Decision witnesses: {summary['witnessed']}/{summary['decisions_with_invariants']} witnessed; "
-              f"{summary['errors']} unresolved; handoff_ready={str(summary['handoff_ready']).lower()}")
+              f"{summary['errors']} unresolved; handoff_ready={str(summary['handoff_ready']).lower()}"
+              + (f"; {summary['kept_outside']} kept outside the case" if summary.get("kept_outside") else ""))
         for finding in report["findings"]:
-            print(f"  {'✗' if finding['severity'] == 'error' else '!'} {finding['message']}")
+            mark = {"error": "✗", "info": "·"}.get(finding["severity"], "!")
+            print(f"  {mark} {finding['message']}")
     return 1 if report["summary"]["errors"] else 0
 
 
