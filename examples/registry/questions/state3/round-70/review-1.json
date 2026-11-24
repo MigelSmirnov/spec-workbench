@@ -1,0 +1,284 @@
+{
+ "open_points": [
+  {
+   "subject": "OWNER_AUDIT_ACTIONS ownership",
+   "kind": "ownership_conflict",
+   "text": "which audit action M09 has each accepted owner action write (R0-58)",
+   "question": "Does `data_provider` own this behavioural selection despite its rule that it must not own “Behaviour, selection, validation or defaults”, or must another module own the mapping while `data_provider` only stores its resulting rows?",
+   "options": [
+    "`data_provider` owns the mapping policy as release data",
+    "`operations` owns the selection and `data_provider` only exposes values",
+    "`audit_log` owns the selection"
+   ],
+   "default_guess": "Treat the mapping as release data owned by `data_provider`, with `operations` owning lookup and application.",
+   "witness": {
+    "initial": "An accepted owner action changes a Customer's relationship mark.",
+    "events": [
+     "`operations` must choose the `AuditAction` to append.",
+     "A maintainer changes the mapping for that transition."
+    ],
+    "outcomes": [
+     "The maintainer changes `OWNER_AUDIT_ACTIONS` in `data_provider`.",
+     "The maintainer changes behavioural logic in `operations` or `audit_log` and leaves the table unchanged."
+    ],
+    "observer": "The owner reading the audit log sees different audit actions."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "OWNER_AUDIT_ACTIONS contents",
+   "kind": "incomplete_table",
+   "text": "`OwnerAuditAction` (an owner action,\na customer mark's transition or a project erasure's kind where the action\nhas one, and the audit action it writes) with `OwnerAction`,\n`CustomerTransition`, `ProjectErasure` and `AuditAction` for\n`OWNER_AUDIT_ACTIONS`.",
+   "question": "What are the exact rows, uniqueness key, and optional-field rules of `OWNER_AUDIT_ACTIONS`, including which owner actions have no row?",
+   "options": [
+    "Rows exist only for owner actions that can produce an M09 entry",
+    "Every owner action has a row, with a nullable audit action",
+    "Rows are keyed by owner action plus an optional customer transition or project-erasure kind"
+   ],
+   "default_guess": "Enumerate only M09-audited owner changes and key each row by `(owner_action, applicable qualifier)`, requiring exactly one match.",
+   "unit": "?"
+  },
+  {
+   "subject": "accepted unchanged owner actions",
+   "kind": "ambiguous_scope",
+   "text": "which audit action M09 has each accepted owner action write (R0-58)",
+   "question": "Does “each accepted owner action” mean every accepted invocation, or only an accepted action that changes state, plus the special audit-erasure case required by A14 and A15?",
+   "options": [
+    "Only accepted state changes listed by M09, plus every accepted erasure of old audit entries",
+    "Every accepted owner action, including unchanged repeats",
+    "Every accepted action having a table row, with the table deciding whether unchanged repeats write"
+   ],
+   "default_guess": "Apply A14: unchanged repeats write nothing, except an accepted erasure of old audit entries.",
+   "witness": {
+    "initial": "A project is already archived and the owner submits archive again with the current revision.",
+    "events": [
+     "The submission passes all checks and is accepted unchanged under A05.",
+     "`operations` consults `OWNER_AUDIT_ACTIONS`."
+    ],
+    "outcomes": [
+     "No audit entry and no confirmation id are produced under A14.",
+     "An archive audit entry is produced because the owner action was accepted and has a mapped audit action."
+    ],
+    "observer": "The owner sees a different audit-log length and confirmation result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "AuditEntry action projection",
+   "kind": "ambiguous_projection",
+   "text": "appending the audit entry in the action's transaction when the action changed\nstate, its action the row of the data provider's `OWNER_AUDIT_ACTIONS` for\nan owner action",
+   "question": "Is `AuditEntry.change` the matched row itself or the row's `AuditAction` field, and which module performs that projection?",
+   "options": [
+    "Store `matched_row.audit_action` in M09",
+    "Store or pass the whole `OwnerAuditAction` row",
+    "Have `audit_log` translate the row to `AuditAction`"
+   ],
+   "default_guess": "`operations` selects exactly one row and passes its `audit_action` field to `audit_log`.",
+   "unit": "?"
+  },
+  {
+   "subject": "customer-transition lookup",
+   "kind": "undefined_lookup",
+   "text": "a customer mark's transition or a project erasure's kind where the action\nhas one",
+   "question": "What exact value identifies a customer transition, and is it derived from the requested action, the before/after marks, or the resulting changed state?",
+   "options": [
+    "A transition enum supplied by the operation definition",
+    "A transition derived from the stored before-state and resulting after-state",
+    "Separate `OwnerAction` values make the transition qualifier redundant"
+   ],
+   "default_guess": "Derive a closed `CustomerTransition` value from the accepted before-to-after state change and use it in the table key.",
+   "witness": {
+    "initial": "A Customer is unrestricted.",
+    "events": [
+     "The owner restricts the Customer.",
+     "Later the owner lifts the restriction."
+    ],
+    "outcomes": [
+     "The two changes match distinct rows by their before-to-after transitions.",
+     "Both changes match one generic customer-mark action row and receive the same audit action."
+    ],
+    "observer": "The owner cannot or can distinguish restriction from lifting in the audit log."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "listener staged-close bounds",
+   "kind": "missing_constant_values",
+   "text": "the bounds of a\nlistener's staged close, how long and how many bytes it reads and drops\nafter answering a request whose body it did not read to its end",
+   "question": "What exact release values must `LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES` hold?",
+   "options": [
+    "A short positive timeout and a finite byte cap chosen here",
+    "Reuse `LISTENER_READ_TIMEOUT_SECONDS` for time and add only a byte cap",
+    "Use zero for either bound, making the corresponding drain effectively absent"
+   ],
+   "default_guess": "Choose separate positive finite bounds, but their numeric values require an explicit decision.",
+   "witness": {
+    "initial": "A client continues sending a large request body after Registry has produced an early refusal.",
+    "events": [
+     "The listener sends the refusal and begins its staged close.",
+     "The client sends slowly for longer than one plausible timeout and beyond one plausible byte cap."
+    ],
+    "outcomes": [
+     "The connection remains open long enough for the response to arrive.",
+     "The listener reaches a smaller guessed bound and closes earlier, potentially producing a reset at the client."
+    ],
+    "observer": "The client and the instance's connection-resource usage differ."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "staged-close sequence",
+   "kind": "ambiguous_sequence",
+   "text": "closes its connection by a staged close — its writing side shut, what the\nclient still sends read and dropped up to the data provider's\n`LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES`, then\nclosed — so the answer reaches a client still sending its body",
+   "question": "What is the exact order and completion condition for writing the answer, shutting down the writing side, draining input, and fully closing the connection?",
+   "options": [
+    "Write and flush the complete answer, call write-half shutdown, drain, then fully close",
+    "Start draining concurrently with writing and half-close after the answer is queued",
+    "Half-close first and rely on already-buffered answer bytes"
+   ],
+   "default_guess": "Write the complete response, ensure it is queued successfully, shut down the write half, drain, then close.",
+   "witness": {
+    "initial": "A client is still uploading when Registry rejects the request.",
+    "events": [
+     "Registry creates the response.",
+     "The listener starts the staged close while the client continues sending."
+    ],
+    "outcomes": [
+     "The full response reaches the client before the write half is shut.",
+     "The connection is half-closed before all response bytes are committed and the client receives a truncated response or only a reset."
+    ],
+    "observer": "The client sees either the complete refusal or a transport failure."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "staged-close drain termination",
+   "kind": "ambiguous_timeout",
+   "text": "what the\nclient still sends read and dropped up to the data provider's\n`LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES`, then\nclosed",
+   "question": "When does the drain timer start, does reaching either bound end the drain, how are EOF and read errors handled, does `LISTENER_READ_TIMEOUT_SECONDS` also apply, and do already-buffered unread body bytes count toward the byte bound?",
+   "options": [
+    "Start after the response is written; stop on EOF, error, elapsed drain time, or byte cap, whichever comes first; count buffered and newly read bytes",
+    "Apply both the ordinary read timeout and the drain timeout independently",
+    "Count only bytes read from the socket after half-close, excluding bytes already buffered by header parsing"
+   ],
+   "default_guess": "Start after the response is written, use the first of EOF/error/time/byte cap, ignore the ordinary read timeout, and count every unread body byte discarded, including buffered bytes.",
+   "witness": {
+    "initial": "Headers and part of the body arrive in one network read, and the remaining body trickles slowly.",
+    "events": [
+     "The surface answers before consuming the body.",
+     "The listener enters staged close with some unread bytes already buffered."
+    ],
+    "outcomes": [
+     "Buffered bytes consume part of the byte budget and the connection closes sooner.",
+     "Only later socket reads count, so more total body bytes are accepted and discarded before close."
+    ],
+    "observer": "The client observes a different close time, and the server consumes different resources."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "staged-close applicability",
+   "kind": "ambiguous_scope",
+   "text": "a request answered before its body was read to its end\ncloses its connection by a staged close",
+   "question": "Which early answers use staged close, especially header-level refusals with malformed `Content-Length` or `Transfer-Encoding`, stream failures from malformed chunks, authentication refusals, and requests whose framing has no knowable body end?",
+   "options": [
+    "Every response produced before a validly framed body reaches its end",
+    "Only requests with valid framing and a body stream whose reader stopped early",
+    "All early responses, including malformed framing, draining raw bytes without seeking a framing end"
+   ],
+   "default_guess": "Use staged close only when a response can be written safely; for malformed framing, send the refusal and boundedly drain raw input without attempting to find a body end.",
+   "witness": {
+    "initial": "A request has a malformed `Content-Length` header and the client continues transmitting bytes.",
+    "events": [
+     "The listener refuses it from the headers alone.",
+     "The implementation must dispose of the connection."
+    ],
+    "outcomes": [
+     "It immediately closes under the earlier malformed-header rule.",
+     "It sends the refusal and performs the new bounded staged drain."
+    ],
+    "observer": "The client either receives the refusal reliably or sees an immediate close/reset."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "HTTP close signalling",
+   "kind": "undefined_wire_behavior",
+   "text": "a request answered before its body was read to its end\ncloses its connection by a staged close",
+   "question": "Must the response explicitly signal that the HTTP connection will close, and if so by what version-specific framing rule?",
+   "options": [
+    "Send `Connection: close` where HTTP permits it and never accept another request on the connection",
+    "Rely only on transport EOF after the drain",
+    "Use version-specific HTTP/1.0 and HTTP/1.1 persistence rules without a universal header"
+   ],
+   "default_guess": "Frame the response as non-persistent, including `Connection: close` for HTTP/1.1, and process no later request on that connection.",
+   "witness": {
+    "initial": "A persistent HTTP/1.1 client receives an early response while it is still sending the request body.",
+    "events": [
+     "The client reads the response headers.",
+     "It decides whether another request may use the connection."
+    ],
+    "outcomes": [
+     "An explicit close signal prevents reuse.",
+     "Without a close signal, the client attempts reuse and its next request is discarded during the drain or fails on close."
+    ],
+    "observer": "The HTTP client sees either a deliberate non-persistent response or a failed subsequent request."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "import upload number",
+   "kind": "unowned_state",
+   "text": "The import's confirmation\nbinding: the kept upload's number and digest with the picks when the step\nis shown, the ones the submitted form carries when it is confirmed",
+   "question": "What is the upload's “number”, which model or module owns it, how is it generated and scoped, and where is it stored, given that M11 currently defines only an uploaded file and no upload number?",
+   "options": [
+    "A monotonically increasing generation within each owner session",
+    "A fresh opaque upload identifier stored beside the file",
+    "A process-wide sequence number",
+    "The multipart part number"
+   ],
+   "default_guess": "Add a session-local upload generation stored with M11's kept file and increment it on every accepted replacement, including replacement by identical bytes.",
+   "witness": {
+    "initial": "An owner session uploads file F and receives a confirmation step.",
+    "events": [
+     "The same session uploads the identical bytes again, replacing F as A16 requires.",
+     "The owner submits the old confirmation form."
+    ],
+    "outcomes": [
+     "A stored upload generation differs, so the old form is refused.",
+     "Only the digest is compared; because the bytes are identical, the old form is accepted against the replacement upload."
+    ],
+    "observer": "The owner sees either a refusal requiring a new confirmation or a completed import."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "import confirmation inputs",
+   "kind": "incomplete_binding",
+   "text": "the kept upload's number and digest with the picks when the step\nis shown, the ones the submitted form carries when it is confirmed",
+   "question": "Does the confirmation bind only upload number, digest and project picks, or also every display name, alias, Customer name, kind and tax-id choice that A16 says the shown mapping fixes?",
+   "options": [
+    "Bind number, digest, picks, names, aliases and all Customer values",
+    "Bind only number, digest and project picks",
+    "Bind a canonical digest of the complete mapping rather than individual form fields"
+   ],
+   "default_guess": "Bind a canonical digest of the complete shown mapping, including the upload generation, file digest, picks, names, aliases and Customer values.",
+   "witness": {
+    "initial": "The confirmation step shows imported project name A and Customer kind `person`.",
+    "events": [
+     "Before submission, form fields are changed to project name B or Customer kind `company`.",
+     "The otherwise valid confirmation value is submitted."
+    ],
+    "outcomes": [
+     "The binding check refuses the altered submission because it differs from the shown mapping.",
+     "The import accepts the altered values because only the file and picks were bound."
+    ],
+    "observer": "The owner and later readers see either the reviewed mapping or unreviewed imported values."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"OWNER_AUDIT_ACTIONS ownership\",\"kind\":\"ownership_conflict\",\"text\":\"which audit action M09 has each accepted owner action write (R0-58)\",\"question\":\"Does `data_provider` own this behavioural selection despite its rule that it must not own “Behaviour, selection, validation or defaults”, or must another module own the mapping while `data_provider` only stores its resulting rows?\",\"options\":[\"`data_provider` owns the mapping policy as release data\",\"`operations` owns the selection and `data_provider` only exposes values\",\"`audit_log` owns the selection\"],\"default_guess\":\"Treat the mapping as release data owned by `data_provider`, with `operations` owning lookup and application.\",\"witness\":{\"initial\":\"An accepted owner action changes a Customer's relationship mark.\",\"events\":[\"`operations` must choose the `AuditAction` to append.\",\"A maintainer changes the mapping for that transition.\"],\"outcomes\":[\"The maintainer changes `OWNER_AUDIT_ACTIONS` in `data_provider`.\",\"The maintainer changes behavioural logic in `operations` or `audit_log` and leaves the table unchanged.\"],\"observer\":\"The owner reading the audit log sees different audit actions.\"}},{\"subject\":\"OWNER_AUDIT_ACTIONS contents\",\"kind\":\"incomplete_table\",\"text\":\"`OwnerAuditAction` (an owner action,\\na customer mark's transition or a project erasure's kind where the action\\nhas one, and the audit action it writes) with `OwnerAction`,\\n`CustomerTransition`, `ProjectErasure` and `AuditAction` for\\n`OWNER_AUDIT_ACTIONS`.\",\"question\":\"What are the exact rows, uniqueness key, and optional-field rules of `OWNER_AUDIT_ACTIONS`, including which owner actions have no row?\",\"options\":[\"Rows exist only for owner actions that can produce an M09 entry\",\"Every owner action has a row, with a nullable audit action\",\"Rows are keyed by owner action plus an optional customer transition or project-erasure kind\"],\"default_guess\":\"Enumerate only M09-audited owner changes and key each row by `(owner_action, applicable qualifier)`, requiring exactly one match.\"},{\"subject\":\"accepted unchanged owner actions\",\"kind\":\"ambiguous_scope\",\"text\":\"which audit action M09 has each accepted owner action write (R0-58)\",\"question\":\"Does “each accepted owner action” mean every accepted invocation, or only an accepted action that changes state, plus the special audit-erasure case required by A14 and A15?\",\"options\":[\"Only accepted state changes listed by M09, plus every accepted erasure of old audit entries\",\"Every accepted owner action, including unchanged repeats\",\"Every accepted action having a table row, with the table deciding whether unchanged repeats write\"],\"default_guess\":\"Apply A14: unchanged repeats write nothing, except an accepted erasure of old audit entries.\",\"witness\":{\"initial\":\"A project is already archived and the owner submits archive again with the current revision.\",\"events\":[\"The submission passes all checks and is accepted unchanged under A05.\",\"`operations` consults `OWNER_AUDIT_ACTIONS`.\"],\"outcomes\":[\"No audit entry and no confirmation id are produced under A14.\",\"An archive audit entry is produced because the owner action was accepted and has a mapped audit action.\"],\"observer\":\"The owner sees a different audit-log length and confirmation result.\"}},{\"subject\":\"AuditEntry action projection\",\"kind\":\"ambiguous_projection\",\"text\":\"appending the audit entry in the action's transaction when the action changed\\nstate, its action the row of the data provider's `OWNER_AUDIT_ACTIONS` for\\nan owner action\",\"question\":\"Is `AuditEntry.change` the matched row itself or the row's `AuditAction` field, and which module performs that projection?\",\"options\":[\"Store `matched_row.audit_action` in M09\",\"Store or pass the whole `OwnerAuditAction` row\",\"Have `audit_log` translate the row to `AuditAction`\"],\"default_guess\":\"`operations` selects exactly one row and passes its `audit_action` field to `audit_log`.\"},{\"subject\":\"customer-transition lookup\",\"kind\":\"undefined_lookup\",\"text\":\"a customer mark's transition or a project erasure's kind where the action\\nhas one\",\"question\":\"What exact value identifies a customer transition, and is it derived from the requested action, the before/after marks, or the resulting changed state?\",\"options\":[\"A transition enum supplied by the operation definition\",\"A transition derived from the stored before-state and resulting after-state\",\"Separate `OwnerAction` values make the transition qualifier redundant\"],\"default_guess\":\"Derive a closed `CustomerTransition` value from the accepted before-to-after state change and use it in the table key.\",\"witness\":{\"initial\":\"A Customer is unrestricted.\",\"events\":[\"The owner restricts the Customer.\",\"Later the owner lifts the restriction.\"],\"outcomes\":[\"The two changes match distinct rows by their before-to-after transitions.\",\"Both changes match one generic customer-mark action row and receive the same audit action.\"],\"observer\":\"The owner cannot or can distinguish restriction from lifting in the audit log.\"}},{\"subject\":\"listener staged-close bounds\",\"kind\":\"missing_constant_values\",\"text\":\"the bounds of a\\nlistener's staged close, how long and how many bytes it reads and drops\\nafter answering a request whose body it did not read to its end\",\"question\":\"What exact release values must `LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES` hold?\",\"options\":[\"A short positive timeout and a finite byte cap chosen here\",\"Reuse `LISTENER_READ_TIMEOUT_SECONDS` for time and add only a byte cap\",\"Use zero for either bound, making the corresponding drain effectively absent\"],\"default_guess\":\"Choose separate positive finite bounds, but their numeric values require an explicit decision.\",\"witness\":{\"initial\":\"A client continues sending a large request body after Registry has produced an early refusal.\",\"events\":[\"The listener sends the refusal and begins its staged close.\",\"The client sends slowly for longer than one plausible timeout and beyond one plausible byte cap.\"],\"outcomes\":[\"The connection remains open long enough for the response to arrive.\",\"The listener reaches a smaller guessed bound and closes earlier, potentially producing a reset at the client.\"],\"observer\":\"The client and the instance's connection-resource usage differ.\"}},{\"subject\":\"staged-close sequence\",\"kind\":\"ambiguous_sequence\",\"text\":\"closes its connection by a staged close — its writing side shut, what the\\nclient still sends read and dropped up to the data provider's\\n`LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES`, then\\nclosed — so the answer reaches a client still sending its body\",\"question\":\"What is the exact order and completion condition for writing the answer, shutting down the writing side, draining input, and fully closing the connection?\",\"options\":[\"Write and flush the complete answer, call write-half shutdown, drain, then fully close\",\"Start draining concurrently with writing and half-close after the answer is queued\",\"Half-close first and rely on already-buffered answer bytes\"],\"default_guess\":\"Write the complete response, ensure it is queued successfully, shut down the write half, drain, then close.\",\"witness\":{\"initial\":\"A client is still uploading when Registry rejects the request.\",\"events\":[\"Registry creates the response.\",\"The listener starts the staged close while the client continues sending.\"],\"outcomes\":[\"The full response reaches the client before the write half is shut.\",\"The connection is half-closed before all response bytes are committed and the client receives a truncated response or only a reset.\"],\"observer\":\"The client sees either the complete refusal or a transport failure.\"}},{\"subject\":\"staged-close drain termination\",\"kind\":\"ambiguous_timeout\",\"text\":\"what the\\nclient still sends read and dropped up to the data provider's\\n`LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES`, then\\nclosed\",\"question\":\"When does the drain timer start, does reaching either bound end the drain, how are EOF and read errors handled, does `LISTENER_READ_TIMEOUT_SECONDS` also apply, and do already-buffered unread body bytes count toward the byte bound?\",\"options\":[\"Start after the response is written; stop on EOF, error, elapsed drain time, or byte cap, whichever comes first; count buffered and newly read bytes\",\"Apply both the ordinary read timeout and the drain timeout independently\",\"Count only bytes read from the socket after half-close, excluding bytes already buffered by header parsing\"],\"default_guess\":\"Start after the response is written, use the first of EOF/error/time/byte cap, ignore the ordinary read timeout, and count every unread body byte discarded, including buffered bytes.\",\"witness\":{\"initial\":\"Headers and part of the body arrive in one network read, and the remaining body trickles slowly.\",\"events\":[\"The surface answers before consuming the body.\",\"The listener enters staged close with some unread bytes already buffered.\"],\"outcomes\":[\"Buffered bytes consume part of the byte budget and the connection closes sooner.\",\"Only later socket reads count, so more total body bytes are accepted and discarded before close.\"],\"observer\":\"The client observes a different close time, and the server consumes different resources.\"}},{\"subject\":\"staged-close applicability\",\"kind\":\"ambiguous_scope\",\"text\":\"a request answered before its body was read to its end\\ncloses its connection by a staged close\",\"question\":\"Which early answers use staged close, especially header-level refusals with malformed `Content-Length` or `Transfer-Encoding`, stream failures from malformed chunks, authentication refusals, and requests whose framing has no knowable body end?\",\"options\":[\"Every response produced before a validly framed body reaches its end\",\"Only requests with valid framing and a body stream whose reader stopped early\",\"All early responses, including malformed framing, draining raw bytes without seeking a framing end\"],\"default_guess\":\"Use staged close only when a response can be written safely; for malformed framing, send the refusal and boundedly drain raw input without attempting to find a body end.\",\"witness\":{\"initial\":\"A request has a malformed `Content-Length` header and the client continues transmitting bytes.\",\"events\":[\"The listener refuses it from the headers alone.\",\"The implementation must dispose of the connection.\"],\"outcomes\":[\"It immediately closes under the earlier malformed-header rule.\",\"It sends the refusal and performs the new bounded staged drain.\"],\"observer\":\"The client either receives the refusal reliably or sees an immediate close/reset.\"}},{\"subject\":\"HTTP close signalling\",\"kind\":\"undefined_wire_behavior\",\"text\":\"a request answered before its body was read to its end\\ncloses its connection by a staged close\",\"question\":\"Must the response explicitly signal that the HTTP connection will close, and if so by what version-specific framing rule?\",\"options\":[\"Send `Connection: close` where HTTP permits it and never accept another request on the connection\",\"Rely only on transport EOF after the drain\",\"Use version-specific HTTP/1.0 and HTTP/1.1 persistence rules without a universal header\"],\"default_guess\":\"Frame the response as non-persistent, including `Connection: close` for HTTP/1.1, and process no later request on that connection.\",\"witness\":{\"initial\":\"A persistent HTTP/1.1 client receives an early response while it is still sending the request body.\",\"events\":[\"The client reads the response headers.\",\"It decides whether another request may use the connection.\"],\"outcomes\":[\"An explicit close signal prevents reuse.\",\"Without a close signal, the client attempts reuse and its next request is discarded during the drain or fails on close.\"],\"observer\":\"The HTTP client sees either a deliberate non-persistent response or a failed subsequent request.\"}},{\"subject\":\"import upload number\",\"kind\":\"unowned_state\",\"text\":\"The import's confirmation\\nbinding: the kept upload's number and digest with the picks when the step\\nis shown, the ones the submitted form carries when it is confirmed\",\"question\":\"What is the upload's “number”, which model or module owns it, how is it generated and scoped, and where is it stored, given that M11 currently defines only an uploaded file and no upload number?\",\"options\":[\"A monotonically increasing generation within each owner session\",\"A fresh opaque upload identifier stored beside the file\",\"A process-wide sequence number\",\"The multipart part number\"],\"default_guess\":\"Add a session-local upload generation stored with M11's kept file and increment it on every accepted replacement, including replacement by identical bytes.\",\"witness\":{\"initial\":\"An owner session uploads file F and receives a confirmation step.\",\"events\":[\"The same session uploads the identical bytes again, replacing F as A16 requires.\",\"The owner submits the old confirmation form.\"],\"outcomes\":[\"A stored upload generation differs, so the old form is refused.\",\"Only the digest is compared; because the bytes are identical, the old form is accepted against the replacement upload.\"],\"observer\":\"The owner sees either a refusal requiring a new confirmation or a completed import.\"}},{\"subject\":\"import confirmation inputs\",\"kind\":\"incomplete_binding\",\"text\":\"the kept upload's number and digest with the picks when the step\\nis shown, the ones the submitted form carries when it is confirmed\",\"question\":\"Does the confirmation bind only upload number, digest and project picks, or also every display name, alias, Customer name, kind and tax-id choice that A16 says the shown mapping fixes?\",\"options\":[\"Bind number, digest, picks, names, aliases and all Customer values\",\"Bind only number, digest and project picks\",\"Bind a canonical digest of the complete mapping rather than individual form fields\"],\"default_guess\":\"Bind a canonical digest of the complete shown mapping, including the upload generation, file digest, picks, names, aliases and Customer values.\",\"witness\":{\"initial\":\"The confirmation step shows imported project name A and Customer kind `person`.\",\"events\":[\"Before submission, form fields are changed to project name B or Customer kind `company`.\",\"The otherwise valid confirmation value is submitted.\"],\"outcomes\":[\"The binding check refuses the altered submission because it differs from the shown mapping.\",\"The import accepts the altered values because only the file and picks were bound.\"],\"observer\":\"The owner and later readers see either the reviewed mapping or unreviewed imported values.\"}}]}",
+ "set_aside": []
+}

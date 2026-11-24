@@ -1,0 +1,198 @@
+{
+ "open_points": [
+  {
+   "subject": "data_provider",
+   "kind": "undecided_policy_value",
+   "text": "the bounds of a listener's staged close, how long and how many bytes it reads and drops after answering a request whose body it did not read to its end",
+   "question": "What exact positive values must LISTENER_CLOSE_DRAIN_SECONDS and LISTENER_CLOSE_DRAIN_MAX_BYTES have?",
+   "options": [
+    "A short drain such as 1 second and 65536 bytes",
+    "A longer drain with a larger byte allowance",
+    "Zero, closing immediately without draining"
+   ],
+   "default_guess": "Use 1 second and 65536 bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle",
+   "kind": "unclear_byte_measure",
+   "text": "what the client still sends read and dropped up to the data provider's `LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES`",
+   "question": "Which bytes count against LISTENER_CLOSE_DRAIN_MAX_BYTES: transport bytes, TLS-decoded HTTP wire bytes including chunk framing, or decoded body payload bytes?",
+   "options": [
+    "TLS-decoded HTTP wire bytes, including framing",
+    "Decoded body payload bytes only",
+    "Raw transport bytes, including TLS overhead"
+   ],
+   "default_guess": "Count TLS-decoded HTTP wire bytes, including chunk framing.",
+   "witness": {
+    "initial": "A chunked request remains unfinished when Registry answers, and the remaining 80 payload bytes plus chunk framing exceed a 100-byte drain bound although the payload alone does not.",
+    "events": [
+     "Registry sends the answer and begins the staged close.",
+     "The client sends the remaining chunked body."
+    ],
+    "outcomes": [
+     "Counting HTTP wire bytes reaches the bound and closes before the final chunk.",
+     "Counting payload bytes remains below the bound and drains through the final chunk."
+    ],
+    "observer": "The client sees whether its remaining transmission is cut off."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "instance_lifecycle",
+   "kind": "timeout_precedence",
+   "text": "what the client still sends read and dropped up to the data provider's `LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES`, then closed",
+   "question": "During a staged close, does LISTENER_READ_TIMEOUT_SECONDS still terminate an individual stalled read, or is LISTENER_CLOSE_DRAIN_SECONDS the sole time bound until the body ends or the byte bound is reached?",
+   "options": [
+    "The ordinary read timeout still applies, with the drain duration as an overall cap",
+    "Only the drain duration applies",
+    "Close at the earlier of the two absolute durations without resetting either on received bytes"
+   ],
+   "default_guess": "Keep the ordinary per-read timeout and also enforce the drain duration as an overall cap.",
+   "witness": {
+    "initial": "The read timeout is shorter than the close-drain duration, and a client pauses after Registry answers but before finishing the request body.",
+    "events": [
+     "Registry begins the staged close.",
+     "The client sends no byte for longer than the ordinary read timeout but less than the drain duration.",
+     "The client resumes sending."
+    ],
+    "outcomes": [
+     "The ordinary timeout applies and the connection is already closed.",
+     "Only the drain duration applies and Registry continues draining the resumed body."
+    ],
+    "observer": "The client observes whether the resumed send succeeds."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "data_provider",
+   "kind": "table_scope",
+   "text": "which audit action M09 has each accepted owner action write",
+   "question": "Is OWNER_AUDIT_ACTIONS a sparse table containing only M09 actions that actually write an entry after a state change, or a total table covering reads and accepted no-op owner actions as well; if total, how is “no audit entry” represented?",
+   "options": [
+    "Sparse rows only for owner actions that can produce an M09 entry",
+    "A total table with an explicit no-audit value",
+    "A total table in which every accepted owner action writes an entry"
+   ],
+   "default_guess": "Make it sparse and consult it only after A14 has established that an auditable state change occurred.",
+   "witness": {
+    "initial": "An archived project is archived again with the current revision, so A05 accepts the action unchanged and A14 requires no audit entry.",
+    "events": [
+     "The owner submits the repeated archive action.",
+     "operations determines that the accepted action changed nothing."
+    ],
+    "outcomes": [
+     "A sparse table has no applicable audit write and the log remains unchanged.",
+     "A literal total mapping for each accepted owner action supplies an audit action, implying an entry despite A14."
+    ],
+    "observer": "The owner reading the audit log sees whether a new entry exists."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "operations",
+   "kind": "type_contradiction",
+   "text": "appending the audit entry in the action's transaction when the action changed state, its action the row of the data provider's `OWNER_AUDIT_ACTIONS` for an owner action",
+   "question": "Must AuditEntry.action receive the row's AuditAction field, or the entire OwnerAuditAction row?",
+   "options": [
+    "Store row.audit_action in AuditEntry.action",
+    "Store the entire OwnerAuditAction row",
+    "Change M09's action field type to OwnerAuditAction"
+   ],
+   "default_guess": "Store the selected row's AuditAction value in AuditEntry.action.",
+   "witness": {
+    "initial": "The owner performs an accepted project correction that changes state.",
+    "events": [
+     "operations selects the corresponding OWNER_AUDIT_ACTIONS row.",
+     "operations constructs the M09 AuditEntry in the transaction."
+    ],
+    "outcomes": [
+     "The operations passage makes the entry's action the OwnerAuditAction row.",
+     "M09 and the row model make the entry's action the row's AuditAction value."
+    ],
+    "observer": "The audit reader and persistence schema see different types and serialized values."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "operations",
+   "kind": "ambiguous_lookup_key",
+   "text": "its action the row of the data provider's `OWNER_AUDIT_ACTIONS` for an owner action",
+   "question": "When OwnerAuditAction carries a CustomerTransition or ProjectErasure discriminator, is the row selected by OwnerAction alone or by the composite key of OwnerAction plus the applicable transition or erasure kind, and what uniqueness rule does the table enforce?",
+   "options": [
+    "Select by OwnerAction plus the applicable discriminator",
+    "Require a distinct OwnerAction for every transition and erasure kind, making OwnerAction alone unique",
+    "Allow several matching rows and choose by table order"
+   ],
+   "default_guess": "Use the composite key and require exactly one matching row for every auditable variant.",
+   "witness": {
+    "initial": "The owner confirms the project-erasure action and chooses deletion whole rather than anonymisation.",
+    "events": [
+     "operations receives the owner action and its ProjectErasure kind.",
+     "operations looks up OWNER_AUDIT_ACTIONS."
+    ],
+    "outcomes": [
+     "A lookup by OwnerAction alone selects one common audit action for both erasure kinds.",
+     "A composite lookup selects the audit action specifically representing deletion whole."
+    ],
+    "observer": "The owner reading the audit log sees which erasure the entry says occurred."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "operations",
+   "kind": "unowned_state",
+   "text": "The import's confirmation binding: the kept upload's number and digest with the picks when the step is shown, the ones the submitted form carries when it is confirmed",
+   "question": "What is the upload's “number,” which module owns and increments it, where is it stored, and how is it compared, given that M11 defines no upload number and A13 names only the file digest and picks in the import binding?",
+   "options": [
+    "Add a per-owner-session upload generation owned by owner_sessions and bind it with the digest and mapping inputs",
+    "Use identity of the in-memory upload object and do not carry a number in the form",
+    "Remove the number and use the digest alone"
+   ],
+   "default_guess": "Add a monotonically increasing upload generation to OwnerSession, increment it on every accepted upload including identical bytes, and bind and compare it with the digest and complete mapping inputs.",
+   "witness": {
+    "initial": "An owner uploads file X, is shown the confirmation step, and then uploads the identical bytes X again in the same session.",
+    "events": [
+     "The first upload receives a confirmation binding.",
+     "The identical second upload replaces it as A16 requires.",
+     "The owner submits the old confirmation form."
+    ],
+    "outcomes": [
+     "A bound upload generation differs, so the old confirmation is refused as A16 test 3 requires.",
+     "Digest-only binding cannot distinguish the replacement and may accept the old confirmation."
+    ],
+    "observer": "The owner sees whether the old confirmation is refused or imports the replacement."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "operations",
+   "kind": "incomplete_confirmation_binding",
+   "text": "the kept upload's number and digest with the picks when the step is shown, the ones the submitted form carries when it is confirmed",
+   "question": "Does the binding also cover every displayed and submitted display name, alias, Customer name, Customer kind and tax-id choice required by A16, and must a submission differing in any of them be refused rather than applied?",
+   "options": [
+    "Bind the upload generation, digest, picks, project names and aliases, and all Customer values",
+    "Bind only the upload number, digest and project identities selected as picks",
+    "Ignore submitted mapping values and always apply a server-side snapshot of what the step showed"
+   ],
+   "default_guess": "Bind every value A16 says the confirmed mapping applies and refuse any submitted difference.",
+   "witness": {
+    "initial": "The confirmation step shows a picked project with alias A and a Customer kind of company.",
+    "events": [
+     "Before submission, the form is altered to alias B or Customer kind person.",
+     "The confirmation value, upload number, digest and picked project identities remain unchanged.",
+     "The form is submitted."
+    ],
+    "outcomes": [
+     "Binding only the stated number, digest and picks accepts and may apply the altered values.",
+     "Binding the complete shown mapping refuses the submission and preserves A16's promise to apply what the mapping showed."
+    ],
+    "observer": "The owner sees either the shown mapping imported or different submitted values imported."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"data_provider\",\"kind\":\"undecided_policy_value\",\"text\":\"the bounds of a listener's staged close, how long and how many bytes it reads and drops after answering a request whose body it did not read to its end\",\"question\":\"What exact positive values must LISTENER_CLOSE_DRAIN_SECONDS and LISTENER_CLOSE_DRAIN_MAX_BYTES have?\",\"options\":[\"A short drain such as 1 second and 65536 bytes\",\"A longer drain with a larger byte allowance\",\"Zero, closing immediately without draining\"],\"default_guess\":\"Use 1 second and 65536 bytes.\"},{\"subject\":\"instance_lifecycle\",\"kind\":\"unclear_byte_measure\",\"text\":\"what the client still sends read and dropped up to the data provider's `LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES`\",\"question\":\"Which bytes count against LISTENER_CLOSE_DRAIN_MAX_BYTES: transport bytes, TLS-decoded HTTP wire bytes including chunk framing, or decoded body payload bytes?\",\"options\":[\"TLS-decoded HTTP wire bytes, including framing\",\"Decoded body payload bytes only\",\"Raw transport bytes, including TLS overhead\"],\"default_guess\":\"Count TLS-decoded HTTP wire bytes, including chunk framing.\",\"witness\":{\"initial\":\"A chunked request remains unfinished when Registry answers, and the remaining 80 payload bytes plus chunk framing exceed a 100-byte drain bound although the payload alone does not.\",\"events\":[\"Registry sends the answer and begins the staged close.\",\"The client sends the remaining chunked body.\"],\"outcomes\":[\"Counting HTTP wire bytes reaches the bound and closes before the final chunk.\",\"Counting payload bytes remains below the bound and drains through the final chunk.\"],\"observer\":\"The client sees whether its remaining transmission is cut off.\"}},{\"subject\":\"instance_lifecycle\",\"kind\":\"timeout_precedence\",\"text\":\"what the client still sends read and dropped up to the data provider's `LISTENER_CLOSE_DRAIN_SECONDS` and `LISTENER_CLOSE_DRAIN_MAX_BYTES`, then closed\",\"question\":\"During a staged close, does LISTENER_READ_TIMEOUT_SECONDS still terminate an individual stalled read, or is LISTENER_CLOSE_DRAIN_SECONDS the sole time bound until the body ends or the byte bound is reached?\",\"options\":[\"The ordinary read timeout still applies, with the drain duration as an overall cap\",\"Only the drain duration applies\",\"Close at the earlier of the two absolute durations without resetting either on received bytes\"],\"default_guess\":\"Keep the ordinary per-read timeout and also enforce the drain duration as an overall cap.\",\"witness\":{\"initial\":\"The read timeout is shorter than the close-drain duration, and a client pauses after Registry answers but before finishing the request body.\",\"events\":[\"Registry begins the staged close.\",\"The client sends no byte for longer than the ordinary read timeout but less than the drain duration.\",\"The client resumes sending.\"],\"outcomes\":[\"The ordinary timeout applies and the connection is already closed.\",\"Only the drain duration applies and Registry continues draining the resumed body.\"],\"observer\":\"The client observes whether the resumed send succeeds.\"}},{\"subject\":\"data_provider\",\"kind\":\"table_scope\",\"text\":\"which audit action M09 has each accepted owner action write\",\"question\":\"Is OWNER_AUDIT_ACTIONS a sparse table containing only M09 actions that actually write an entry after a state change, or a total table covering reads and accepted no-op owner actions as well; if total, how is “no audit entry” represented?\",\"options\":[\"Sparse rows only for owner actions that can produce an M09 entry\",\"A total table with an explicit no-audit value\",\"A total table in which every accepted owner action writes an entry\"],\"default_guess\":\"Make it sparse and consult it only after A14 has established that an auditable state change occurred.\",\"witness\":{\"initial\":\"An archived project is archived again with the current revision, so A05 accepts the action unchanged and A14 requires no audit entry.\",\"events\":[\"The owner submits the repeated archive action.\",\"operations determines that the accepted action changed nothing.\"],\"outcomes\":[\"A sparse table has no applicable audit write and the log remains unchanged.\",\"A literal total mapping for each accepted owner action supplies an audit action, implying an entry despite A14.\"],\"observer\":\"The owner reading the audit log sees whether a new entry exists.\"}},{\"subject\":\"operations\",\"kind\":\"type_contradiction\",\"text\":\"appending the audit entry in the action's transaction when the action changed state, its action the row of the data provider's `OWNER_AUDIT_ACTIONS` for an owner action\",\"question\":\"Must AuditEntry.action receive the row's AuditAction field, or the entire OwnerAuditAction row?\",\"options\":[\"Store row.audit_action in AuditEntry.action\",\"Store the entire OwnerAuditAction row\",\"Change M09's action field type to OwnerAuditAction\"],\"default_guess\":\"Store the selected row's AuditAction value in AuditEntry.action.\",\"witness\":{\"initial\":\"The owner performs an accepted project correction that changes state.\",\"events\":[\"operations selects the corresponding OWNER_AUDIT_ACTIONS row.\",\"operations constructs the M09 AuditEntry in the transaction.\"],\"outcomes\":[\"The operations passage makes the entry's action the OwnerAuditAction row.\",\"M09 and the row model make the entry's action the row's AuditAction value.\"],\"observer\":\"The audit reader and persistence schema see different types and serialized values.\"}},{\"subject\":\"operations\",\"kind\":\"ambiguous_lookup_key\",\"text\":\"its action the row of the data provider's `OWNER_AUDIT_ACTIONS` for an owner action\",\"question\":\"When OwnerAuditAction carries a CustomerTransition or ProjectErasure discriminator, is the row selected by OwnerAction alone or by the composite key of OwnerAction plus the applicable transition or erasure kind, and what uniqueness rule does the table enforce?\",\"options\":[\"Select by OwnerAction plus the applicable discriminator\",\"Require a distinct OwnerAction for every transition and erasure kind, making OwnerAction alone unique\",\"Allow several matching rows and choose by table order\"],\"default_guess\":\"Use the composite key and require exactly one matching row for every auditable variant.\",\"witness\":{\"initial\":\"The owner confirms the project-erasure action and chooses deletion whole rather than anonymisation.\",\"events\":[\"operations receives the owner action and its ProjectErasure kind.\",\"operations looks up OWNER_AUDIT_ACTIONS.\"],\"outcomes\":[\"A lookup by OwnerAction alone selects one common audit action for both erasure kinds.\",\"A composite lookup selects the audit action specifically representing deletion whole.\"],\"observer\":\"The owner reading the audit log sees which erasure the entry says occurred.\"}},{\"subject\":\"operations\",\"kind\":\"unowned_state\",\"text\":\"The import's confirmation binding: the kept upload's number and digest with the picks when the step is shown, the ones the submitted form carries when it is confirmed\",\"question\":\"What is the upload's “number,” which module owns and increments it, where is it stored, and how is it compared, given that M11 defines no upload number and A13 names only the file digest and picks in the import binding?\",\"options\":[\"Add a per-owner-session upload generation owned by owner_sessions and bind it with the digest and mapping inputs\",\"Use identity of the in-memory upload object and do not carry a number in the form\",\"Remove the number and use the digest alone\"],\"default_guess\":\"Add a monotonically increasing upload generation to OwnerSession, increment it on every accepted upload including identical bytes, and bind and compare it with the digest and complete mapping inputs.\",\"witness\":{\"initial\":\"An owner uploads file X, is shown the confirmation step, and then uploads the identical bytes X again in the same session.\",\"events\":[\"The first upload receives a confirmation binding.\",\"The identical second upload replaces it as A16 requires.\",\"The owner submits the old confirmation form.\"],\"outcomes\":[\"A bound upload generation differs, so the old confirmation is refused as A16 test 3 requires.\",\"Digest-only binding cannot distinguish the replacement and may accept the old confirmation.\"],\"observer\":\"The owner sees whether the old confirmation is refused or imports the replacement.\"}},{\"subject\":\"operations\",\"kind\":\"incomplete_confirmation_binding\",\"text\":\"the kept upload's number and digest with the picks when the step is shown, the ones the submitted form carries when it is confirmed\",\"question\":\"Does the binding also cover every displayed and submitted display name, alias, Customer name, Customer kind and tax-id choice required by A16, and must a submission differing in any of them be refused rather than applied?\",\"options\":[\"Bind the upload generation, digest, picks, project names and aliases, and all Customer values\",\"Bind only the upload number, digest and project identities selected as picks\",\"Ignore submitted mapping values and always apply a server-side snapshot of what the step showed\"],\"default_guess\":\"Bind every value A16 says the confirmed mapping applies and refuse any submitted difference.\",\"witness\":{\"initial\":\"The confirmation step shows a picked project with alias A and a Customer kind of company.\",\"events\":[\"Before submission, the form is altered to alias B or Customer kind person.\",\"The confirmation value, upload number, digest and picked project identities remain unchanged.\",\"The form is submitted.\"],\"outcomes\":[\"Binding only the stated number, digest and picks accepts and may apply the altered values.\",\"Binding the complete shown mapping refuses the submission and preserves A16's promise to apply what the mapping showed.\"],\"observer\":\"The owner sees either the shown mapping imported or different submitted values imported.\"}}]}",
+ "set_aside": []
+}
