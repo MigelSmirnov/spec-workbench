@@ -98,7 +98,8 @@ States 5 and 6.
 ## Revisions and times (R0-35, L16)
 
 - A Project and a Customer carry a revision, an ordinal starting at 1 that
-  accepted change of its own facts moves by one. A change names the revision it was made
+  accepted change of its own facts moves by one; an erasure, which leaves no
+  revision behind, is the one exception (below, A04 rule 1). A change names the revision it was made
   against; a stale one is refused and nothing changes. The object has no
   revision of its own (R0-45). The revision and the last-changed instant are
   one pair: the revision moves exactly when the last-changed instant moves,
