@@ -316,10 +316,11 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
    store under the store's name, and the next start makes a new one with
    one sequence at 0.
 
-10. Each start check that fails — a configuration item, a backup location that
-    cannot be written, an existing store failing its integrity check or of
-    another version, a new store that cannot be made — stops the start with no
-    listener opened and no request served.
+10. Each check made before the listeners are opened that fails — a
+    configuration item, a backup location that cannot be written, an existing
+    store failing its integrity check or of another version, a new store that
+    cannot be made — stops the start before any listener is opened, and no
+    request is served.
 
 - Witness, A17-1: the test evidence of `start_instance` [witness: note:start_instance].
 - Witness, A17-2: the test evidence of `load_configuration` [witness: note:load_configuration].
@@ -737,7 +738,8 @@ A12), concurrency (A01, A04, A12, A14, A17), injection_interpreted_input
 new tests show refusals and guarantees the rules already gave — an answer
 above the token's class refused whole, the owner's CSRF check answering
 before a stale revision, a session's end removing every fact of it, a stale
-owner end refused, every start check stopping the start before any listener
+owner end refused, every check made before the listeners stopping the start before any
+listener is opened
 — and no outcome changed.
 
 ### Consequence
