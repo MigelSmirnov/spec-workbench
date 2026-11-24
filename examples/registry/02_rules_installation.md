@@ -565,14 +565,17 @@ no stored value is ever evaluated or executed   -- A19-2
    place it shows one — an element's content, an attribute's
    value, a value of a link's query — shown as that text when the value
    holds `<`, `>`, `&`, `"` and `'`, the page holding no element and no
-   attribute made from it; every page forbids every script by its content
+   attribute made from it, and a value in a link's query, holding also `?`,
+   `#`, `/` and `=`, read back from the link as that one whole value, the
+   link's origin, path and other parameters unchanged; every page forbids every script by its content
    security policy. Every page is made by one renderer, so this shows it for
    every stored value, whoever wrote it and whichever way it came in, the
    import file's included.
    [witness: note:_render_owner_page]
 6. A19-2: a display name holding a quote, a semicolon, a comment mark and
    a statement of the store's query language is stored and read back exactly
-   as given, and every record that existed before is unchanged. Every
+   as given, and the store afterwards holds what it held before, unchanged,
+   and the records an accepted create writes, nothing else. Every
    value of a record reaches the store through the one statement backend
    the specification fixes, which fills value places only (rule 3), so this
    shows it for every value of a record given or imported.
