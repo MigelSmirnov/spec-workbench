@@ -120,7 +120,9 @@ States 5 and 6.
   pointer's status change records its own instant) (codex round-04 T2, T3).
 - A Customer's last-changed instant moves by: a correction of its contact,
   kind or fiscal data; restricting and lifting; ending and resuming the
-  relationship; erasure.
+  relationship. An erasure does not move it: it removes the revision and the
+  last-changed instant with every other fact but the identity, and records
+  the erased mark with its own instant (M04, A04 rule 1; owner, 2026-11-24).
 - A record the import brings in keeps the instants its source holds: a
   project's created, last-changed and archived instants, a room's added
   instant, a pointer's published and superseded instants. Its revision starts
