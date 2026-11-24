@@ -241,7 +241,7 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
         for item in required_test_items(tests[1]) if tests else []:
             for kind, name in WITNESS_RE.findall(item):
                 named = [i for i in invariant_ids(item) if i in ids] or ids
-                statements = [ITEM_RE.sub("", s, count=1).strip() for s in required_test_items(invariants[1])
+                statements = [ITEM_RE.sub("", s, count=1).strip() for s in invariant_statements(invariants[1])
                               if not named or set(invariant_ids(s)) & set(named)]
                 entry: dict[str, Any] = {"decision": key, "witness": f"{kind}:{name}",
                                          "invariants": named, "statements": statements,
@@ -572,6 +572,53 @@ def required_test_items(section: str) -> list[str]:
     if current:
         items.append("\n".join(current))
     return items
+
+
+FENCE_RE = re.compile(r"^\s{0,3}(```|~~~)")
+
+
+def invariant_statements(section: str) -> list[str]:
+    """The formal invariants of a Formal invariants section, one per statement.
+
+    Outside a fenced block they are the section's logical items
+    (`required_test_items`). Inside one — the usual form, a ```text block
+    with `-- <id>` after each statement — a line that carries an
+    invariant identifier ends a statement and the lines before it without
+    one belong to it, so a binding that names A17-1 is given A17-1 and not the
+    whole block. The fences themselves are not statements."""
+    statements: list[str] = []
+    prose: list[str] = []
+    fenced = False
+    current: list[str] = []
+
+    def close_prose() -> None:
+        if prose:
+            statements.extend(required_test_items("\n".join(prose)))
+            prose.clear()
+
+    for line in section.splitlines():
+        if FENCE_RE.match(line):
+            if fenced:
+                if current:
+                    statements.append("\n".join(current))
+                    current = []
+            else:
+                close_prose()
+            fenced = not fenced
+            continue
+        if not fenced:
+            prose.append(line)
+            continue
+        if not line.strip():
+            continue
+        current.append(line)
+        if invariant_ids(line):
+            statements.append("\n".join(current))
+            current = []
+    if current:
+        statements.append("\n".join(current))
+    close_prose()
+    return statements
 
 
 def required_tests(case: Path) -> dict[str, Any]:
