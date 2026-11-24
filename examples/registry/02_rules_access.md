@@ -48,9 +48,8 @@ highest_class(Cabinet Kernel) = business_confidential   -- A09-3
 3. A token not in the configuration is refused like a wrong one (R0-23).
 4. PresuPro calling 'publish an artifact pointer' is refused (R0-88).
 
-5. Kernel's permitted read whose answer would carry a personal-data value is
-   refused whole as above its class: no field of the answer is disclosed, and
-   a change it made is undone.
+5. An answer that would carry a class above the calling token's highest is
+   refused whole: no field of it is disclosed (rule 4).
 
 - Witness, A09-1: the test evidence of `perform_service_operation` [witness: note:perform_service_operation].
 - Witness, A09-1: for the rights table, the test evidence of `service_may_call` [witness: note:service_may_call].
@@ -196,9 +195,13 @@ accepted change of x other than its end => version(x)' = version(x) + 1   -- A12
 4. Granting a project and making it active in one action moves the version
    by one.
 
+5. The owner ending a session stating a stale access version is refused; the
+   session stays registered and unchanged.
+
 - Witness, A12-1, A12-2: for a grant, the test evidence of `grant_project` [witness: note:grant_project].
 - Witness, A12-1, A12-2: for an answer to a request, the test evidence of `answer_access_request` [witness: note:answer_access_request].
 - Witness, A12-2: for an erasure of a project, the test evidence of `drop_project_from_sessions` [witness: note:drop_project_from_sessions].
+- Witness, A12-1: for the owner's end of a session, the test evidence of `end_session` [witness: note:end_session].
 
 ### Consequence
 

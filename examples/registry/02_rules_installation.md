@@ -721,6 +721,25 @@ are made, encrypted, checked and kept as before; only how the daily time and
 the look interval are named changed, and no file, path, size, key or
 retention moved. No outcome changed.
 
+Performed again on 2026-11-24, after that day's changes reopened it (rule 2):
+every formal invariant of A01–A18, A21 and A22 was given an identifier and its
+Required tests a binding to the check that shows it; the formulas of A01-2,
+A05-1, A10-1 and A12-2 were restated as their normative rules already read —
+a repeat refused only at stages (1) to (4) of A04 rule 6 or, for a room or a
+pointer, on an archived project (A01 rule 3); a same-state transition being
+one that passed every check (A05 rules 1 and 4); registration checked for the
+token only and the set asked only for an operation on a project (A10 rule 1);
+a session's end making no next version (A12 rule 2) — and Required tests
+were added to A02, A03, A04, A05, A06, A09, A11, A12, A14 and A17. No
+normative rule changed. Reviewed under authorization (A04, A09, A10, A11,
+A12), concurrency (A01, A04, A12, A14, A17), injection_interpreted_input
+(A02), authentication_credential_abuse (A09, A17) and secrets (A14, A17): the
+new tests show refusals and guarantees the rules already gave — an answer
+above the token's class refused whole, the owner's CSRF check answering
+before a stale revision, a session's end removing every fact of it, a stale
+owner end refused, every start check stopping the start before any listener
+— and no outcome changed.
+
 ### Consequence
 
 Every category has an outcome resting on accepted decisions; the GDPR review
