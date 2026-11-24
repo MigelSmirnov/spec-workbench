@@ -88,24 +88,32 @@ security review of States 0–2.
    to (rule 2, A13 rule 6), which it builds once, from the kept bytes,
    inside the confirming transaction, as it must to write the records; it
    applies that mapping only when it is clean, and otherwise refuses the
-   whole import, and nothing changes (R0-50, R0-79). That mapping is the
-   one the step showed: the file and the picks are bound by their digest,
-   the names, aliases and Customer values with them, and every id
-   production gains between the step and the confirmation is one Registry
+   whole import, and nothing changes (R0-50, R0-79). The file and the
+   picks are bound by their digest, the names, aliases and Customer values
+   with them, so the mapping it builds is the one the step showed but for
+   the ids production gained in between; every such id is one Registry
    mints at random (Identity formats; M01, M03, M05), the import — the one
    path for an id from outside — being closed after its one success
-   (rule 8). So no confirmation finds a conflict — a project, room or
-   pointer id production holds — or a malformed record of the picks that
-   its step did not show, and what a test sees of this rule is that a
-   mapping showing one gives no step and changes nothing (Required tests 2
-   and 11). Restated on 2026-11-24, under the owner's direction of that
-   day (data-protection matrix, `sources/privacy_requirements_20261123.md`:
-   every measure names the test that confirms it), after the witness review
+   (rule 8). A minted id equal to one of the picks' is improbable, not
+   impossible: when it happens the mapping built in the confirming
+   transaction shows that conflict, the confirmation is refused whole and
+   nothing changes, and the step asked again shows the conflict. What a
+   test sees of this rule is that a mapping showing a conflict or a
+   malformed record gives no step and changes nothing (Required tests 2
+   and 11), and that the confirming transaction applies only a clean
+   mapping and refuses an unclean one (Required test 13). Restated on
+   2026-11-24, under the owner's direction of that day (data-protection
+   matrix, `sources/privacy_requirements_20261123.md`: every measure names
+   the test that confirms it), after the witness review
    (`tests/semantic/review/SUMMARY.md`, finding 1) found the former text,
-   "At confirmation Registry checks again", naming a second check that no
-   history reaches: the check is the building of the mapping the
-   confirmation applies, made once in its transaction, and the step shows
-   its result.
+   "At confirmation Registry checks again", naming a second check: the
+   check is the building of the mapping the confirmation applies, made once
+   in its transaction, and the step shows its result. Restated again on
+   2026-11-25, after the State 2 round-120 (T1) found that the text then
+   said no confirmation could find a conflict its step did not show, while
+   random minting makes such a conflict improbable, not impossible: the
+   claim is dropped, and the refusal of an unclean mapping in the
+   confirming transaction is what keeps the import whole.
 7. An accepted import stores every picked project with its rooms and pointers,
    the Customers it makes, the migration closure (M10) and its one audit entry
    (M09) in one transaction. The import has succeeded when that transaction
@@ -170,6 +178,17 @@ for P, import(f, P) not accepted, store unchanged   -- A16-3
     exactly one audit entry; a failure inside its transaction leaves none of
     them — no project, room, pointer, Customer, closure or entry.
    Shows A16-1. [witness: verification:registry_a16_accepted_import_stores_all_in_one_transaction]
+13. A confirmation whose mapping, built in the confirming transaction, is
+    not clean is refused whole and nothing changes: a test that makes
+    production hold one of the picks' ids after the step was shown — the
+    id Registry mints at random being the only way, which a test can
+    arrange only by replacing the random source — sees the refusal, the
+    store unchanged and the conflict on the step asked again (rule 6).
+    Through Registry's surfaces alone a minted id cannot be chosen, so the
+    refusal is checked on the code by the Factory — `confirm_import`
+    builds the mapping inside the confirming transaction and applies it
+    only when clean — and carried to Factory verification (2026-11-25,
+    round-120 T1).
 
 ### Consequence
 
@@ -302,7 +321,8 @@ for secrets s1 != s2 in config: value(s1) != value(s2)   -- A17-2
 for every secret s in config: utf8_bytes(value(s)) >= SECRET_MIN_BYTES   -- A17-3
 a start whose listener cannot be opened => it serves nothing, leaves no
 listener of it open, and the store holds the records it held before that
-start — none, for a store that start made new   -- A17-4
+start — for a store that start made new, no store, or, when its removal
+fails, an empty one holding no record but its audit sequence at 0   -- A17-4
 ```
 
 ### Required tests
@@ -381,7 +401,11 @@ bound to A17-1, which speaks of the configuration's checks, and that A17-2
 held two conditions no one test shows: A17-2 was `for secrets s1 != s2 in
 config: value(s1) != value(s2) and len >= SECRET_MIN_BYTES`; it is now the
 distinctness of rule 4 alone, the length of rule 3 is A17-3, and a failed
-listener (rule 2, last check) is A17-4, test 5's. The owner-only start's
+listener (rule 2, last check) is A17-4, test 5's. A17-4 restated on
+2026-11-25, after the State 2 round-120 (T13) found that its "none, for a
+store that start made new" denied the empty store rule 2 leaves when its
+removal fails, which holds its audit sequence at 0 (rule 5, M12): it now
+names that store. The owner-only start's
 missing service listener is test 1's. No normative rule changed. Test 6's
 start interrupted before the store's rename is shown only by its outcome,
 a file of the temporary name removed by the next start: the interruption
@@ -511,7 +535,15 @@ Factory verification.
    old the newest kept backup may be.
 7. The store, the backup location and the disks under them are encrypted and
    kept out of VM Agent's reach by the owner's administration of VM Platform
-   (R0-48; Explicit exclusions); Registry does not check the host.
+   (R0-48; Explicit exclusions); Registry does not check the host. What
+   Registry guarantees of a kept backup (A18-2) holds when it becomes kept,
+   by the check of rule 4; a kept file changed or damaged afterwards by the
+   host's storage is outside Registry, which does not check kept backups
+   again — the storage and its encryption are the host's administration
+   (data-protection matrix row D5). Decided on 2026-11-25 under the owner's
+   direction of 2026-11-24 (matrix row D5), after the State 2 round-120
+   (T23) asked whether A18-2 holds when a backup becomes kept or for as long
+   as it is kept; the owner may reverse it.
 8. Registry has no restore operation (R0-89). A store the owner puts in
    place of a lost one starts as any store (A17 rule 5) — by the release that
    made its backup, or by a later one after that release's own store
@@ -524,12 +556,14 @@ Factory verification.
 ### Formal invariants
 
 ```text
-after a run whose deletions succeeded: no kept backup made more than
-30 × 24 hours before its third step's cutoff instant exists   -- A18-1
+after a run whose deletions succeeded: no kept backup whose instant is
+earlier than its third step's cutoff (that step's start less
+30 × 24 hours) exists   -- A18-1
 after a run whose deletions succeeded: no backup that failed its check
 exists, kept or temporary   -- A18-3
-every kept backup is encrypted, consistent, checked, and records (instant,
-release, last sequence); no backup holds an agent session   -- A18-2
+every backup, when it becomes kept, is encrypted, consistent, checked, and
+records (instant, release, last sequence); no backup holds an agent
+session   -- A18-2
 ```
 
 ### Required tests
@@ -571,7 +605,12 @@ its continuation as part of A18-2: A18-1 was `after a run whose deletions
 succeeded: no backup older than 30 × 24 hours and no backup that failed its
 check exists`; the age is A18-1, and the failed check is A18-3, shown by
 tests 4 and 8; each formula is written whole, its identifier on its last
-line. No normative rule changed. The tests' clocks do not move between two
+line. No normative rule changed. Restated on 2026-11-25 after the State 2
+round-120: A18-1 compared a backup with a point 30 × 24 hours before the
+cutoff, itself already 30 × 24 hours before the step's start (T20); it now
+compares the backup's instant with the cutoff, as rule 4 does. A18-2 holds
+when a backup becomes kept, later damage by the host's storage being
+outside Registry (rule 7, T23). The tests' clocks do not move between two
 reads of one run, so an implementation taking a backup's instant later than
 the read that fixes its snapshot (rule 1) is not told apart; that remains
 carried to Factory verification.
@@ -923,6 +962,24 @@ files_artifacts (A07, A08, A16, A18, A19, A22) and concurrency (A01, A04,
 A07, A14, A16, A17, A18): no right, limit, class, check or answer moved — A10
 rule 3's path now names an input, never an id, which tells the agent less,
 not more — and no outcome changed.
+
+Performed again on 2026-11-25, after the State 2 round-120 reopened A02,
+A09, A13, A16, A17 and A18 (rule 2). A13 rule 1 now holds the owner
+session cookie to the owner interface's own host name, which the
+deployment gives it apart from every other HTTPS service of the host
+(decided under the owner's direction of 2026-11-24, matrix row P6); A18-2
+holds when a backup becomes kept, later damage by the host's storage
+outside Registry (matrix row D5); A16 rule 6 no longer claims that no
+confirmation finds a conflict its step did not show, and keeps the refusal
+of an unclean mapping in the confirming transaction; A02 rule 1 names the
+white space set; A17-4 names the empty store a failed removal leaves; A18-1
+compares with the cutoff as rule 4 does; A09 rule 4 and A13 test 10 name
+their tables and cookie values as imported constants. Reviewed under
+authentication_credential_abuse and browser_boundary (A13: the cookie
+reaches fewer services, not more), secrets (A13, A17, A18),
+injection_interpreted_input (A02, A16), files_artifacts (A16, A18) and concurrency
+(A16, A17, A18): no right, limit, class or answer moved, and no outcome
+changed.
 
 ### Consequence
 

@@ -28,12 +28,13 @@ here: what each service token and Kernel's agent authority may do and receive
    `personal_data` (R0-26). An answer that would carry a class above the
    token's highest is refused whole; Registry never answers part of it.
    The first release cannot give such an answer: no answer Cabinet Kernel
-   can reach carries a field of `PERSONAL_DATA_FIELDS`, and every other
-   service's highest class is `personal_data`, the highest. The check is
-   made on every answer all the same, and it is shown on a test release
-   whose class tables — `SERVICE_HIGHEST_CLASSES` and
-   `PERSONAL_DATA_FIELDS` — differ from the first release's in the one row a
-   test gives (Required tests 5 and 6). Restated on 2026-11-24, under the
+   can reach carries a field the imported `PERSONAL_DATA_FIELDS` constant
+   lists, and every other service's highest class is `personal_data`, the
+   highest. The check is made on every answer all the same, and it is shown
+   on a test release whose class tables — the imported
+   `SERVICE_HIGHEST_CLASSES` constant and the imported
+   `PERSONAL_DATA_FIELDS` constant (SPEC_STANDARD §15.3.1) — differ from the
+   first release's in the one row a test gives (Required tests 5 and 6). Restated on 2026-11-24, under the
    owner's direction of that day (data-protection matrix P3 and D3: the
    measure that keeps `personal_data` from the agent and its AI provider is
    confirmed by a test, `sources/privacy_requirements_20261123.md`).
@@ -66,8 +67,8 @@ highest_class(Cabinet Kernel) = business_confidential   -- A09-3
    no field of it is disclosed (rule 4).
    Shows A09-2. [witness: verification:registry_a09_answer_above_class_refused_whole]
 6. An answer to Cabinet Kernel carrying `business_confidential` is answered;
-   on a test release whose `PERSONAL_DATA_FIELDS` names a field of an answer
-   Kernel can reach, that answer is refused whole. Shows A09-3, A09-2.
+   on a test release whose imported `PERSONAL_DATA_FIELDS` constant names a
+   field of an answer Kernel can reach, that answer is refused whole. Shows A09-3, A09-2.
    [witness: verification:registry_a09_kernel_highest_class_business_confidential]
 7. Cabinet's 'read a customer's billing data', refused on the first release,
    is answered on a test release whose rights table adds it to Cabinet's row,
@@ -264,7 +265,20 @@ sees every change as a new version.
 1. The owner signs in with the owner credential (R0-30) and receives an owner
    session (M11), carried by a cookie that scripts cannot read, sent only over
    HTTPS when the interface is reached from another machine (R0-29), and only
-   to Registry's own origin.
+   to the owner interface's host name: the cookie is host-only, set without
+   `Domain`. A browser sends a host-only cookie to every port of its host
+   name, so the deployment gives the owner interface a host name of its
+   own, under which no other HTTPS service answers — on the home server not
+   the kernel workplace, the gateway or PresuPro — and no other service of
+   the same host receives the owner session cookie. Decided on 2026-11-25
+   under the owner's direction of 2026-11-24 (data-protection matrix row
+   P6: integrity and confidentiality of the session), after the State 2
+   round-120 (T28) found that a cookie cannot be held to one origin, its
+   port included, as this rule then said; the owner may reverse it. The
+   host name is a fact of the deployment, which Registry cannot check, as
+   the addresses are (A17 rule 1): providing it and keeping every other
+   HTTPS service of the host off it is a deployment step, carried to the
+   deployment's owner (the Factory's platform deployment).
 2. The session ends at the first of: 8 hours after sign-in; 30 minutes without
    an owner request; the owner's sign-out; the instance's restart (M11 is never
    durable). Every duration in this decision — the 8 hours, the 30, 15 and 10
@@ -328,8 +342,8 @@ sees every change as a new version.
 4. A refused sign-in answers the same whatever was wrong, and never echoes
    the credential. Sign-in is the one owner request made without a session:
    it is checked for the credential and the lockout only, carries no CSRF
-   value, and the session cookie it sets is sent only to Registry's origin
-   (rule 1).
+   value, and the session cookie it sets is sent only to the owner
+   interface's host name (rule 1).
 5. Every change in the owner interface carries the CSRF protection bound to
    its session (R0-29); one from another session or none is refused.
 6. An action that asks for confirmation (Identity formats) is submitted with a
@@ -369,8 +383,9 @@ sees every change as a new version.
    verification (owner's direction of 2026-11-24, data-protection matrix P6,
    D5). Likewise rule 1's HTTPS from another machine: a test reaches
    Registry on its own host only, and Required test 10 shows the cookie's
-   attributes that make a browser send it only over HTTPS and only to
-   Registry's origin.
+   attributes that make a browser send it only over HTTPS and only to the
+   host name it was set by; that no other HTTPS service answers under the
+   owner interface's host name is the deployment's (rule 1).
 
 ### Formal invariants
 
@@ -413,10 +428,11 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused   -- A13-2
    refused, a submission of its pending confirmation included; the next pass
    ends that session and no other.
    Shows A13-3, A13-6. [witness: verification:registry_a13_monotonic_clock_decides_validity]
-10. Signing in sets the session cookie `OWNER_SESSION_COOKIE_NAME` with the
-    attributes `OWNER_SESSION_COOKIE_ATTRIBUTES` and no other — `Secure`,
-    `HttpOnly`, `SameSite=Strict`, `Path=/` and no `Domain` — and a refused
-    sign-in sets none (rules 1, 4).
+10. Signing in sets the session cookie the imported
+    `OWNER_SESSION_COOKIE_NAME` constant names, with the attributes the
+    imported `OWNER_SESSION_COOKIE_ATTRIBUTES` constant lists and no other —
+    `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/` and no `Domain`
+    (SPEC_STANDARD §15.3.1) — and a refused sign-in sets none (rules 1, 4).
 11. The session's identity, its CSRF value and a shown confirmation value
     appear in no URL of a page the interface serves, in no diagnostic and in
     no stored row, the audit entries among them; the identity is not in a

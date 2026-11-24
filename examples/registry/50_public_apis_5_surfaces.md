@@ -275,8 +275,8 @@ form carrying it, so no secret is ever in a URL (R0-29).
 ### Observable effect
 
 On sign-in, the session cookie set: not readable by scripts, only to
-Registry's origin, and always HTTPS-only (A13 rule 1; owner, 2026-11-17), and
-never sent with a request another site started (`SameSite=Strict`; owner,
+the owner interface's own host name (A13 rule 1, 2026-11-25), always
+HTTPS-only (A13 rule 1; owner, 2026-11-17), and never sent with a request another site started (`SameSite=Strict`; owner,
 2026-11-24). Registry never expires or deletes the cookie: an ended session's
 cookie is refused at the session check and replaced by the next sign-in, so
 no answer, however late it arrives, can remove a newer session's cookie.

@@ -235,8 +235,8 @@ rule 7).
    and CSRF value from `capability:random_values.make_secret_value`, its
    sign-in reading, no pending confirmation, no uploaded file. Other open
    sessions stay. `module:owner_interface` sets the cookie — not readable by
-   scripts, sent only to Registry's origin, and only over HTTPS when the
-   interface is reached from another machine (A13 rule 1): Registry always
+   scripts, sent only to the owner interface's own host name, and only over
+   HTTPS when the interface is reached from another machine (A13 rule 1): Registry always
    marks it HTTPS-only (owner, 2026-11-17). Whether a browser on Registry's
    own machine sends such a cookie over plain HTTP to a loopback address is
    that browser's; where it does not, the owner reaches the interface

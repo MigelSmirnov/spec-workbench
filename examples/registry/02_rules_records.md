@@ -167,6 +167,17 @@ to Factory verification.
    and the action is refused as for a missing value: a project's display name
    and its object's address (R0-45), a Customer's name and kind (Primary
    actions), a room's name (R0-10), a session's access request text.
+   White space, here and wherever this specification reads a given value's
+   white space, is exactly the 25 code points of Unicode's `White_Space`
+   property: U+0009 to U+000D, U+0020, U+0085, U+00A0, U+1680, U+2000 to
+   U+200A, U+2028, U+2029, U+202F, U+205F and U+3000; no other character is
+   white space, whatever a language's own operation counts, and `strip(v)`
+   below removes these from both ends of `v`. Decided on 2026-11-25, after
+   the State 2 round-120 (T16) found that the set was left to the
+   implementation's language; the property's list is named whole so that it
+   does not move with a Unicode version. The set is one value of the
+   release; its home in the code, the data provider's constant the reading
+   code imports (SPEC_STANDARD §15.3.1), is State 6's to give.
 2. A value that is present is kept exactly as written; Registry trims and
    rewrites nothing (R0-68).
 3. An optional value given as an empty string or white space only is absent.
