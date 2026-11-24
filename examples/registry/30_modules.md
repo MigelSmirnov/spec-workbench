@@ -1073,7 +1073,8 @@ active (M06, R0-70) — and the pending request, replaced by the next (M08); the
 access version, moved once per accepted action that changes them, checked on
 the owner's actions (A12); A10's check of every agent-authority call — the
 session registered, the project in its set, the active project when none is
-named — and its one not-found answer for a refusal, inside the call's
+named; registering a session excepted, which is checked for Kernel's token
+only (A10 rule 1) — and its one not-found answer for a refusal, inside the call's
 transaction, so a revocation holds from the next call (A10 rules 1–6);
 removing a project from every session when it is erased (R0-61); the list of
 sessions in A06 rule 5's order and the session's access.
