@@ -176,8 +176,9 @@ to Factory verification.
    the State 2 round-120 (T16) found that the set was left to the
    implementation's language; the property's list is named whole so that it
    does not move with a Unicode version. The set is one value of the
-   release; its home in the code, the data provider's constant the reading
-   code imports (SPEC_STANDARD §15.3.1), is State 6's to give.
+   release, the imported `WHITE_SPACE_CODE_POINTS` constant, which the code
+   that reads a given value imports (SPEC_STANDARD §15.3.1); no other place
+   holds it.
 2. A value that is present is kept exactly as written; Registry trims and
    rewrites nothing (R0-68).
 3. An optional value given as an empty string or white space only is absent.

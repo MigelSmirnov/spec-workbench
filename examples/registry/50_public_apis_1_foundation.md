@@ -285,7 +285,8 @@ Pure; touches no record.
 ### Owner
 
 `module:given_values`. Read an optional value as given: blank or white space
-only is absent, anything else kept exactly as written (A02 rules 2, 3).
+only — the code points of the imported `WHITE_SPACE_CODE_POINTS` constant —
+is absent, anything else kept exactly as written (A02 rules 1-3).
 
 ### Callers
 
@@ -365,7 +366,8 @@ Pure; touches no record.
 
 ### Owner
 
-`module:given_values`. Read a required value: blank or white space only is
+`module:given_values`. Read a required value: blank or white space only —
+the code points of the imported `WHITE_SPACE_CODE_POINTS` constant — is
 missing, anything else kept exactly as written (A02 rules 1, 2).
 
 ### Callers

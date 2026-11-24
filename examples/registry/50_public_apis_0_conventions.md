@@ -146,7 +146,7 @@ second authority beside them. The values are the data closure's.
 | consumer | constants it imports from `data_provider` |
 |---|---|
 | `random_values` | `SECRET_MIN_BYTES` |
-| `given_values` | `REQUEST_ID_MAX_CHARACTERS`, `ALIAS_MAX_CHARACTERS`, `OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, `OBJECT_ROOMS_MIN` |
+| `given_values` | `REQUEST_ID_MAX_CHARACTERS`, `ALIAS_MAX_CHARACTERS`, `WHITE_SPACE_CODE_POINTS`, `OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, `OBJECT_ROOMS_MIN` |
 | `configuration` | `SERVICE_RIGHTS`, `SECRET_MIN_BYTES`, `LISTEN_PORT_MIN`, `LISTEN_PORT_MAX` |
 | `store` | `STORE_VERSION`, `STORE_TEMPORARY_SUFFIX` |
 | `audit_log` | `RELEASE_VERSION`, `CONTRACT_VERSION`, `REFUSAL_STAGE_VALUES` |

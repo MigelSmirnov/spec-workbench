@@ -422,6 +422,7 @@ CONFIRMATION_VALID_MINUTES
 SESSION_PASS_SECONDS
 REQUEST_ID_MAX_CHARACTERS
 ALIAS_MAX_CHARACTERS
+WHITE_SPACE_CODE_POINTS
 OBJECT_FLOOR_AREA_MIN_EXCLUSIVE
 OBJECT_ROOMS_MIN
 SECRET_MIN_BYTES
@@ -462,7 +463,8 @@ LISTENER_CLOSE_DRAIN_MAX_BYTES
 ### Owns
 
 A02: the one reading of a value a caller gives — a required value blank or
-white space only is missing, a present value is kept exactly as written, an
+white space only is missing, white space being the code points of the
+imported `WHITE_SPACE_CODE_POINTS` constant (A02 rule 1), a present value is kept exactly as written, an
 optional value blank is absent. A01 rule 1's check of a request id's form —
 printable text of at most 128 characters, not blank — and A01 rule 6's
 comparison of the facts of a create with a record's current facts, as A02
