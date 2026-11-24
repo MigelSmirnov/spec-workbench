@@ -1,0 +1,338 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 owner-session lifecycle",
+   "kind": "contradictory_end_time",
+   "text": "The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request; the owner's sign-out; the instance's restart (M11 is never durable).",
+   "question": "For a time limit, does the session and everything in it end exactly at the limit, or does it merely become invalid then and remain present until the next 60-second pass?",
+   "options": [
+    "It ends and drops its confirmation and upload exactly at the limit; the pass only removes an already-ended runtime object.",
+    "It becomes invalid at the limit but ends and drops its state only at the next pass, as the later sentence says."
+   ],
+   "default_guess": "Treat it as invalid at the limit and physically end and clear it at the next pass.",
+   "witness": {
+    "initial": "A session has a pending confirmation and an uploaded file and reaches its idle limit just after a cleanup pass.",
+    "events": [
+     "The idle limit is reached.",
+     "A runtime-state test inspects the session before the next pass."
+    ],
+    "outcomes": [
+     "The session and both pending values are already gone because it ended at the limit.",
+     "The session object and pending values remain until the next pass, although requests using it are refused."
+    ],
+    "observer": "The session-lifecycle test and any component inspecting runtime session state."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 monotonic-time representation",
+   "kind": "missing_time_representation",
+   "text": "its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock",
+   "question": "What representation and arithmetic semantics do monotonic readings use, including precision and overflow behavior?",
+   "options": [
+    "Integer nanoseconds in the clock's opaque monotonic epoch.",
+    "A duration-valued opaque clock reading whose type supports exact addition and ordering.",
+    "Floating-point seconds from an unspecified monotonic epoch."
+   ],
+   "default_guess": "Use opaque integer nanosecond readings and compare them without conversion to wall-clock datetimes.",
+   "witness": {
+    "initial": "A request arrives one microsecond before the idle limit.",
+    "events": [
+     "Registry represents the prior reading and adds 30 minutes.",
+     "Registry compares the arrival reading with the computed limit."
+    ],
+    "outcomes": [
+     "An exact integer representation admits the request as required.",
+     "A coarser or rounded representation may treat it as exactly at the limit and refuse it."
+    ],
+    "observer": "The owner and Required test 8."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 clock sampling by owner-session operations",
+   "kind": "missing_read_count",
+   "text": "Validity is checked when a request arrives (A04 rule 6, stage 1)",
+   "question": "How many monotonic readings does each admitted owner request take, and which reading is reused for validity, last-request renewal, confirmation creation or expiry, and sign-out ordering? The text gives one reading for a sign-in under the sign-in lock but does not give the corresponding rule for these session operations.",
+   "options": [
+    "Take exactly one arrival reading and reuse it for every time-dependent fact and comparison in that request.",
+    "Take one reading for admission and additional readings when updating last_request or creating/checking a confirmation.",
+    "Specify separate counts for ordinary requests, confirmation display, confirmation submission, sign-out and the cleanup pass."
+   ],
+   "default_guess": "Take one monotonic reading at admission and reuse it for all time-dependent work of that request.",
+   "witness": {
+    "initial": "A valid session is within a few clock ticks of its idle limit, and a request shows a confirmation step.",
+    "events": [
+     "The request takes an admission reading before the limit.",
+     "The clock advances past the limit before last_request and confirmation-shown times are written."
+    ],
+    "outcomes": [
+     "With one reading, admission, last_request and confirmation time all use the pre-limit instant.",
+     "With multiple readings, the request is admitted but records later instants, changing both its next idle expiry and the confirmation's expiry."
+    ],
+    "observer": "The owner on later requests and confirmation submission."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 accepted-import timestamp",
+   "kind": "missing_read_count",
+   "text": "An accepted import stores every picked project with its rooms and pointers, the Customers it makes, the migration closure (M10) and its one audit entry (M09) in one transaction.",
+   "question": "How many UTC wall-clock readings does an accepted import take, and must each new Customer's creation instant, the closure's success instant and the audit entry's instant be identical?",
+   "options": [
+    "Take one UTC reading for the operation and use it for every fresh instant in the transaction.",
+    "Take a separate reading for each record written.",
+    "Take one reading per record kind, allowing Customer, closure and audit instants to differ."
+   ],
+   "default_guess": "Take one UTC reading and reuse it throughout the transaction.",
+   "witness": {
+    "initial": "An import creates a Customer, a migration closure and an audit entry while the wall clock advances.",
+    "events": [
+     "The transaction begins.",
+     "Registry writes the Customer, closure and audit entry.",
+     "The owner reads the imported Customer and audit log."
+    ],
+    "outcomes": [
+     "All facts identify one import instant.",
+     "The facts carry slightly different instants and can sort as distinct moments."
+    ],
+    "observer": "The owner reading the records and audit log."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 confirmation after a same-byte re-upload",
+   "kind": "contradiction",
+   "text": "Confirming a mapping after another file was uploaded in the session is refused: the file it named is no longer kept — also when the new file has the same bytes.",
+   "question": "How can this refusal coexist with A13 rule 6, which binds an import confirmation by the file's digest and says inputs are bound when their digest equals it, and with A16 rule 2, which says the confirmation applies the file of that digest? Must upload identity or generation join the binding?",
+   "options": [
+    "A replacement upload always invalidates the prior confirmation, so the binding must include an upload generation or identity in addition to the digest.",
+    "Equal bytes and equal picks remain bound because their digest is equal, so the same-byte case must be accepted.",
+    "Uploading any file clears the pending confirmation immediately."
+   ],
+   "default_guess": "Invalidate the pending confirmation on every successful replacement upload, including one with equal bytes, and state that rule explicitly.",
+   "witness": {
+    "initial": "A session holds file F and a confirmation bound to digest(F) and its picks.",
+    "events": [
+     "The owner uploads F again with exactly the same bytes.",
+     "The owner submits the old confirmation with the same picks."
+    ],
+    "outcomes": [
+     "Required test 3 refuses it because the original uploaded file is no longer kept.",
+     "A13's digest-equality rule accepts it because the file and input digests are unchanged."
+    ],
+    "observer": "The owner submitting the confirmation."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 file-digest safety guarantee",
+   "kind": "missing_collision_outcome",
+   "text": "The confirmation applies the file of that digest, the picks, names, aliases and Customer values the mapping showed, nothing else",
+   "question": "What must happen if two different byte sequences have the same digest? State 2 must decide the required binding and refusal guarantee even if the digest algorithm and encoding are chosen later.",
+   "options": [
+    "The confirmation must be bound to the exact uploaded bytes; a digest collision must never allow another file to be applied.",
+    "Digest equality defines file identity, so colliding files are intentionally indistinguishable.",
+    "Registry must additionally bind an upload generation or a byte-for-byte verification result."
+   ],
+   "default_guess": "Require exact-byte binding and use both a collision-resistant digest and an upload generation.",
+   "witness": {
+    "initial": "File F1 was mapped and confirmed; a distinct F2 has the same digest and is now kept.",
+    "events": [
+     "The owner submits F1's confirmation while F2 is the session's upload.",
+     "Registry checks the digest and applies an import."
+    ],
+    "outcomes": [
+     "Registry refuses because the mapped bytes are no longer the kept bytes.",
+     "Registry accepts and imports F2 because digest equality is treated as identity."
+    ],
+    "observer": "The owner, whose imported records differ from the mapping that was confirmed."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 digest algorithm and representation",
+   "kind": "later_layer_choice",
+   "text": "The mapping names the file by its digest.",
+   "question": "Which digest algorithm, byte coverage and textual encoding define the digest carried by the mapping, confirmation, closure and audit entry?",
+   "options": [
+    "SHA-256 over the exact uploaded file-part bytes, encoded as lowercase hexadecimal.",
+    "SHA-512 over the exact uploaded bytes, encoded as hexadecimal or base64.",
+    "A versioned digest structure that records its algorithm and encoded result."
+   ],
+   "default_guess": "Use a versioned SHA-256 digest over the exact file-part bytes, encoded as lowercase hexadecimal.",
+   "decision_owner": "state6_exact_contracts",
+   "consequences": [
+    "An unversioned choice fixes persisted closure and audit values to one algorithm.",
+    "Different byte coverage can make the mapping and accepted file disagree.",
+    "Different encodings change equality, serialization and interoperability."
+   ],
+   "requirement": "The mapping names the file by its digest.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 import-result ordering",
+   "kind": "later_layer_choice",
+   "text": "The import answers once its transaction commits, listing for each Customer it made its v1 value and the `customer_ref` minted for it.",
+   "question": "What ordering, if any, may callers rely on for these Customer mappings?",
+   "options": [
+    "The order in which distinct v1 values first occur among the picked projects.",
+    "The owner's pick order, with each Customer emitted at its first picked project.",
+    "A deterministic sort by v1 value.",
+    "No meaningful order; expose a keyed mapping or declare the list unordered."
+   ],
+   "default_guess": "Use a deterministic sort by v1 value.",
+   "decision_owner": "state5",
+   "consequences": [
+    "A guaranteed order becomes part of the caller-visible contract.",
+    "An unordered result permits simpler implementations but callers must not use position to correlate Customers.",
+    "First-occurrence or pick ordering makes the result depend on file or interface ordering."
+   ],
+   "requirement": "The import answers once its transaction commits, listing for each Customer it made its v1 value and the `customer_ref` minted for it.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 atomicity-test mechanism",
+   "kind": "later_layer_choice",
+   "text": "a failure inside its transaction leaves none of them — no project, room, pointer, Customer, closure or entry.",
+   "question": "How will the required check force a failure late enough to demonstrate rollback of every listed write?",
+   "options": [
+    "Inject a failure after each write position, including immediately before commit.",
+    "Use a backend transaction double that fails at commit.",
+    "Use a real store constraint failure after all earlier record kinds have been staged."
+   ],
+   "default_guess": "Use deterministic fault injection at every write boundary plus commit failure.",
+   "decision_owner": "factory_checks",
+   "consequences": [
+    "Commit-only failure proves rollback at the final boundary but may miss writes performed outside the transaction.",
+    "Per-boundary injection gives stronger coverage but requires test hooks.",
+    "A real constraint failure is realistic but may not cover every ordering."
+   ],
+   "requirement": "a failure inside its transaction leaves none of them — no project, room, pointer, Customer, closure or entry.",
+   "unit": "?"
+  },
+  {
+   "subject": "A19-1 rendering of non-text stored values",
+   "kind": "undefined_text_conversion",
+   "text": "a value that is not text in the text it is shown as",
+   "question": "What exact text represents each non-text stored value before context-specific escaping?",
+   "options": [
+    "Use the canonical representation declared by each model or vocabulary.",
+    "Use one renderer-wide generic string conversion.",
+    "Let each page choose its own human-facing formatting for dates, numbers, booleans, identifiers and absent values."
+   ],
+   "default_guess": "Require one canonical presentation per model value type and escape that presentation for its output context.",
+   "witness": {
+    "initial": "A page shows the same UTC instant and ordinal revision in two places.",
+    "events": [
+     "One renderer formats the instant as ISO 8601 and the revision as decimal.",
+     "Another uses a localized date and a generic object/string conversion."
+    ],
+    "outcomes": [
+     "The owner sees stable canonical text.",
+     "The owner sees locale- or page-dependent text, although both implementations claim to show each value 'in the text it is shown as'."
+    ],
+    "observer": "The owner reading the page."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19-1 Required test 5 query-value guarantee",
+   "kind": "incomplete_invariant_test",
+   "text": "a value of a link's query — shown as that text when the value holds `<`, `>`, `&`, `\"` and `'`, the page holding no element and no attribute made from it",
+   "question": "For a value placed in a link query, must the test show that decoding the intended parameter returns the entire original value and that no additional parameter or URL component was created? The stated no-element/no-attribute assertion does not show that.",
+   "options": [
+    "Assert URL-component encoding and exact round-trip decoding into one intended query value.",
+    "Only assert HTML safety; additional query parameters are permitted.",
+    "Forbid stored values in link queries entirely."
+   ],
+   "default_guess": "Assert that the link has the intended origin, path and parameter set and that the one value decodes exactly to the stored text.",
+   "witness": {
+    "initial": "A stored value is `x&admin=true` and is used as one link-query value.",
+    "events": [
+     "The owner page renders the link.",
+     "The owner follows it."
+    ],
+    "outcomes": [
+     "Proper component encoding produces one parameter whose value is `x&admin=true`.",
+     "Raw interpolation produces two parameters, `value=x` and `admin=true`, while creating no new HTML element or attribute."
+    ],
+    "observer": "The destination handler and the owner following the link."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19-2 Required test 6 store effects",
+   "kind": "incomplete_invariant_test",
+   "text": "a display name holding a quote, a semicolon, a comment mark and a statement of the store's query language is stored and read back exactly as given, and every record that existed before is unchanged.",
+   "question": "Must the test also show that exactly the intended record was created or changed and that no additional record, command or store-side effect occurred?",
+   "options": [
+    "Assert the complete post-state: the intended change only, no extra records and no unintended effects.",
+    "Checking exact readback and unchanged pre-existing records is sufficient, even if extra records were added.",
+    "Use a non-creating operation so the whole store can be asserted byte-for-byte unchanged except for one named value."
+   ],
+   "default_guess": "Assert the complete expected post-state and absence of every unintended record or side effect.",
+   "witness": {
+    "initial": "The store contains one unrelated record, and the submitted display name contains query-language text that would add another record if interpreted.",
+    "events": [
+     "Registry performs the create.",
+     "The test reads back the intended display name and compares every record that existed before."
+    ],
+    "outcomes": [
+     "A value-bound implementation creates only the intended record.",
+     "An unsafe implementation creates the intended record plus an injected extra record; the submitted name still reads back exactly and every pre-existing record is unchanged."
+    ],
+    "observer": "A later store reader; the Required test as written would not distinguish the outcomes."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A19-2 statement-backend lowering",
+   "kind": "later_layer_choice",
+   "text": "How the store's backend lowers this is the backend's.",
+   "question": "Which backend mechanism ensures caller values can fill value positions only?",
+   "options": [
+    "Native prepared statements with bound parameters.",
+    "A query builder or ORM that emits bound parameters.",
+    "A backend-specific typed command API with no textual query construction exposed to generated modules."
+   ],
+   "default_guess": "Use native bound parameters behind a typed backend API.",
+   "decision_owner": "generation",
+   "consequences": [
+    "Prepared statements give a direct value/structure separation.",
+    "A query builder is acceptable only if every caller value remains a bound value.",
+    "A typed command API can make the invariant structural but adds backend surface."
+   ],
+   "requirement": "A value a caller gives only ever fills a value place of a query or command whose structure the release fixes; it never becomes an identifier, an operator or syntax.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 review of the changed A19 tests",
+   "kind": "unsupported_review_conclusion",
+   "text": "the new tests show the escaping and the value places the rules already required; no outcome changed.",
+   "question": "Does the security review remain complete only after A19 Required tests 5 and 6 are strengthened to distinguish query-structure injection and unintended additional store effects, or is the review intentionally accepting those untested outcomes?",
+   "options": [
+    "Strengthen the A19 tests and then retain the APPLICABLE outcomes unchanged.",
+    "Keep the tests and narrow the security claim so it no longer says they show the full escaping and value-place guarantees.",
+    "Reopen injection_interpreted_input and browser_boundary until the missing assertions are supplied."
+   ],
+   "default_guess": "Strengthen A19 tests 5 and 6, rerun the affected review categories, and retain the outcomes only if those checks pass.",
+   "witness": {
+    "initial": "A19 test 5 permits an extra query parameter, or test 6 permits an injected extra record, while every assertion currently stated still passes.",
+    "events": [
+     "The A21 security review consumes the passing A19 tests.",
+     "It records that the tests show escaping and value places."
+    ],
+    "outcomes": [
+     "The review is marked performed although an interpreted-input path remains compatible with the tests.",
+     "The review remains open until the tests exclude those paths."
+    ],
+    "observer": "The factory gate and the owner relying on the security-review outcome."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 owner-session lifecycle\",\"kind\":\"contradictory_end_time\",\"text\":\"The session ends at the first of: 8 hours after sign-in; 30 minutes without an owner request; the owner's sign-out; the instance's restart (M11 is never durable).\",\"question\":\"For a time limit, does the session and everything in it end exactly at the limit, or does it merely become invalid then and remain present until the next 60-second pass?\",\"options\":[\"It ends and drops its confirmation and upload exactly at the limit; the pass only removes an already-ended runtime object.\",\"It becomes invalid at the limit but ends and drops its state only at the next pass, as the later sentence says.\"],\"default_guess\":\"Treat it as invalid at the limit and physically end and clear it at the next pass.\",\"witness\":{\"initial\":\"A session has a pending confirmation and an uploaded file and reaches its idle limit just after a cleanup pass.\",\"events\":[\"The idle limit is reached.\",\"A runtime-state test inspects the session before the next pass.\"],\"outcomes\":[\"The session and both pending values are already gone because it ended at the limit.\",\"The session object and pending values remain until the next pass, although requests using it are refused.\"],\"observer\":\"The session-lifecycle test and any component inspecting runtime session state.\"}},{\"subject\":\"A13 monotonic-time representation\",\"kind\":\"missing_time_representation\",\"text\":\"its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock\",\"question\":\"What representation and arithmetic semantics do monotonic readings use, including precision and overflow behavior?\",\"options\":[\"Integer nanoseconds in the clock's opaque monotonic epoch.\",\"A duration-valued opaque clock reading whose type supports exact addition and ordering.\",\"Floating-point seconds from an unspecified monotonic epoch.\"],\"default_guess\":\"Use opaque integer nanosecond readings and compare them without conversion to wall-clock datetimes.\",\"witness\":{\"initial\":\"A request arrives one microsecond before the idle limit.\",\"events\":[\"Registry represents the prior reading and adds 30 minutes.\",\"Registry compares the arrival reading with the computed limit.\"],\"outcomes\":[\"An exact integer representation admits the request as required.\",\"A coarser or rounded representation may treat it as exactly at the limit and refuse it.\"],\"observer\":\"The owner and Required test 8.\"}},{\"subject\":\"A13 clock sampling by owner-session operations\",\"kind\":\"missing_read_count\",\"text\":\"Validity is checked when a request arrives (A04 rule 6, stage 1)\",\"question\":\"How many monotonic readings does each admitted owner request take, and which reading is reused for validity, last-request renewal, confirmation creation or expiry, and sign-out ordering? The text gives one reading for a sign-in under the sign-in lock but does not give the corresponding rule for these session operations.\",\"options\":[\"Take exactly one arrival reading and reuse it for every time-dependent fact and comparison in that request.\",\"Take one reading for admission and additional readings when updating last_request or creating/checking a confirmation.\",\"Specify separate counts for ordinary requests, confirmation display, confirmation submission, sign-out and the cleanup pass.\"],\"default_guess\":\"Take one monotonic reading at admission and reuse it for all time-dependent work of that request.\",\"witness\":{\"initial\":\"A valid session is within a few clock ticks of its idle limit, and a request shows a confirmation step.\",\"events\":[\"The request takes an admission reading before the limit.\",\"The clock advances past the limit before last_request and confirmation-shown times are written.\"],\"outcomes\":[\"With one reading, admission, last_request and confirmation time all use the pre-limit instant.\",\"With multiple readings, the request is admitted but records later instants, changing both its next idle expiry and the confirmation's expiry.\"],\"observer\":\"The owner on later requests and confirmation submission.\"}},{\"subject\":\"A16 accepted-import timestamp\",\"kind\":\"missing_read_count\",\"text\":\"An accepted import stores every picked project with its rooms and pointers, the Customers it makes, the migration closure (M10) and its one audit entry (M09) in one transaction.\",\"question\":\"How many UTC wall-clock readings does an accepted import take, and must each new Customer's creation instant, the closure's success instant and the audit entry's instant be identical?\",\"options\":[\"Take one UTC reading for the operation and use it for every fresh instant in the transaction.\",\"Take a separate reading for each record written.\",\"Take one reading per record kind, allowing Customer, closure and audit instants to differ.\"],\"default_guess\":\"Take one UTC reading and reuse it throughout the transaction.\",\"witness\":{\"initial\":\"An import creates a Customer, a migration closure and an audit entry while the wall clock advances.\",\"events\":[\"The transaction begins.\",\"Registry writes the Customer, closure and audit entry.\",\"The owner reads the imported Customer and audit log.\"],\"outcomes\":[\"All facts identify one import instant.\",\"The facts carry slightly different instants and can sort as distinct moments.\"],\"observer\":\"The owner reading the records and audit log.\"}},{\"subject\":\"A16 confirmation after a same-byte re-upload\",\"kind\":\"contradiction\",\"text\":\"Confirming a mapping after another file was uploaded in the session is refused: the file it named is no longer kept — also when the new file has the same bytes.\",\"question\":\"How can this refusal coexist with A13 rule 6, which binds an import confirmation by the file's digest and says inputs are bound when their digest equals it, and with A16 rule 2, which says the confirmation applies the file of that digest? Must upload identity or generation join the binding?\",\"options\":[\"A replacement upload always invalidates the prior confirmation, so the binding must include an upload generation or identity in addition to the digest.\",\"Equal bytes and equal picks remain bound because their digest is equal, so the same-byte case must be accepted.\",\"Uploading any file clears the pending confirmation immediately.\"],\"default_guess\":\"Invalidate the pending confirmation on every successful replacement upload, including one with equal bytes, and state that rule explicitly.\",\"witness\":{\"initial\":\"A session holds file F and a confirmation bound to digest(F) and its picks.\",\"events\":[\"The owner uploads F again with exactly the same bytes.\",\"The owner submits the old confirmation with the same picks.\"],\"outcomes\":[\"Required test 3 refuses it because the original uploaded file is no longer kept.\",\"A13's digest-equality rule accepts it because the file and input digests are unchanged.\"],\"observer\":\"The owner submitting the confirmation.\"}},{\"subject\":\"A16 file-digest safety guarantee\",\"kind\":\"missing_collision_outcome\",\"text\":\"The confirmation applies the file of that digest, the picks, names, aliases and Customer values the mapping showed, nothing else\",\"question\":\"What must happen if two different byte sequences have the same digest? State 2 must decide the required binding and refusal guarantee even if the digest algorithm and encoding are chosen later.\",\"options\":[\"The confirmation must be bound to the exact uploaded bytes; a digest collision must never allow another file to be applied.\",\"Digest equality defines file identity, so colliding files are intentionally indistinguishable.\",\"Registry must additionally bind an upload generation or a byte-for-byte verification result.\"],\"default_guess\":\"Require exact-byte binding and use both a collision-resistant digest and an upload generation.\",\"witness\":{\"initial\":\"File F1 was mapped and confirmed; a distinct F2 has the same digest and is now kept.\",\"events\":[\"The owner submits F1's confirmation while F2 is the session's upload.\",\"Registry checks the digest and applies an import.\"],\"outcomes\":[\"Registry refuses because the mapped bytes are no longer the kept bytes.\",\"Registry accepts and imports F2 because digest equality is treated as identity.\"],\"observer\":\"The owner, whose imported records differ from the mapping that was confirmed.\"}},{\"subject\":\"A16 digest algorithm and representation\",\"kind\":\"later_layer_choice\",\"text\":\"The mapping names the file by its digest.\",\"question\":\"Which digest algorithm, byte coverage and textual encoding define the digest carried by the mapping, confirmation, closure and audit entry?\",\"options\":[\"SHA-256 over the exact uploaded file-part bytes, encoded as lowercase hexadecimal.\",\"SHA-512 over the exact uploaded bytes, encoded as hexadecimal or base64.\",\"A versioned digest structure that records its algorithm and encoded result.\"],\"default_guess\":\"Use a versioned SHA-256 digest over the exact file-part bytes, encoded as lowercase hexadecimal.\",\"decision_owner\":\"state6_exact_contracts\",\"consequences\":[\"An unversioned choice fixes persisted closure and audit values to one algorithm.\",\"Different byte coverage can make the mapping and accepted file disagree.\",\"Different encodings change equality, serialization and interoperability.\"],\"requirement\":\"The mapping names the file by its digest.\"},{\"subject\":\"A16 import-result ordering\",\"kind\":\"later_layer_choice\",\"text\":\"The import answers once its transaction commits, listing for each Customer it made its v1 value and the `customer_ref` minted for it.\",\"question\":\"What ordering, if any, may callers rely on for these Customer mappings?\",\"options\":[\"The order in which distinct v1 values first occur among the picked projects.\",\"The owner's pick order, with each Customer emitted at its first picked project.\",\"A deterministic sort by v1 value.\",\"No meaningful order; expose a keyed mapping or declare the list unordered.\"],\"default_guess\":\"Use a deterministic sort by v1 value.\",\"decision_owner\":\"state5\",\"consequences\":[\"A guaranteed order becomes part of the caller-visible contract.\",\"An unordered result permits simpler implementations but callers must not use position to correlate Customers.\",\"First-occurrence or pick ordering makes the result depend on file or interface ordering.\"],\"requirement\":\"The import answers once its transaction commits, listing for each Customer it made its v1 value and the `customer_ref` minted for it.\"},{\"subject\":\"A16 atomicity-test mechanism\",\"kind\":\"later_layer_choice\",\"text\":\"a failure inside its transaction leaves none of them — no project, room, pointer, Customer, closure or entry.\",\"question\":\"How will the required check force a failure late enough to demonstrate rollback of every listed write?\",\"options\":[\"Inject a failure after each write position, including immediately before commit.\",\"Use a backend transaction double that fails at commit.\",\"Use a real store constraint failure after all earlier record kinds have been staged.\"],\"default_guess\":\"Use deterministic fault injection at every write boundary plus commit failure.\",\"decision_owner\":\"factory_checks\",\"consequences\":[\"Commit-only failure proves rollback at the final boundary but may miss writes performed outside the transaction.\",\"Per-boundary injection gives stronger coverage but requires test hooks.\",\"A real constraint failure is realistic but may not cover every ordering.\"],\"requirement\":\"a failure inside its transaction leaves none of them — no project, room, pointer, Customer, closure or entry.\"},{\"subject\":\"A19-1 rendering of non-text stored values\",\"kind\":\"undefined_text_conversion\",\"text\":\"a value that is not text in the text it is shown as\",\"question\":\"What exact text represents each non-text stored value before context-specific escaping?\",\"options\":[\"Use the canonical representation declared by each model or vocabulary.\",\"Use one renderer-wide generic string conversion.\",\"Let each page choose its own human-facing formatting for dates, numbers, booleans, identifiers and absent values.\"],\"default_guess\":\"Require one canonical presentation per model value type and escape that presentation for its output context.\",\"witness\":{\"initial\":\"A page shows the same UTC instant and ordinal revision in two places.\",\"events\":[\"One renderer formats the instant as ISO 8601 and the revision as decimal.\",\"Another uses a localized date and a generic object/string conversion.\"],\"outcomes\":[\"The owner sees stable canonical text.\",\"The owner sees locale- or page-dependent text, although both implementations claim to show each value 'in the text it is shown as'.\"],\"observer\":\"The owner reading the page.\"}},{\"subject\":\"A19-1 Required test 5 query-value guarantee\",\"kind\":\"incomplete_invariant_test\",\"text\":\"a value of a link's query — shown as that text when the value holds `<`, `>`, `&`, `\\\"` and `'`, the page holding no element and no attribute made from it\",\"question\":\"For a value placed in a link query, must the test show that decoding the intended parameter returns the entire original value and that no additional parameter or URL component was created? The stated no-element/no-attribute assertion does not show that.\",\"options\":[\"Assert URL-component encoding and exact round-trip decoding into one intended query value.\",\"Only assert HTML safety; additional query parameters are permitted.\",\"Forbid stored values in link queries entirely.\"],\"default_guess\":\"Assert that the link has the intended origin, path and parameter set and that the one value decodes exactly to the stored text.\",\"witness\":{\"initial\":\"A stored value is `x&admin=true` and is used as one link-query value.\",\"events\":[\"The owner page renders the link.\",\"The owner follows it.\"],\"outcomes\":[\"Proper component encoding produces one parameter whose value is `x&admin=true`.\",\"Raw interpolation produces two parameters, `value=x` and `admin=true`, while creating no new HTML element or attribute.\"],\"observer\":\"The destination handler and the owner following the link.\"}},{\"subject\":\"A19-2 Required test 6 store effects\",\"kind\":\"incomplete_invariant_test\",\"text\":\"a display name holding a quote, a semicolon, a comment mark and a statement of the store's query language is stored and read back exactly as given, and every record that existed before is unchanged.\",\"question\":\"Must the test also show that exactly the intended record was created or changed and that no additional record, command or store-side effect occurred?\",\"options\":[\"Assert the complete post-state: the intended change only, no extra records and no unintended effects.\",\"Checking exact readback and unchanged pre-existing records is sufficient, even if extra records were added.\",\"Use a non-creating operation so the whole store can be asserted byte-for-byte unchanged except for one named value.\"],\"default_guess\":\"Assert the complete expected post-state and absence of every unintended record or side effect.\",\"witness\":{\"initial\":\"The store contains one unrelated record, and the submitted display name contains query-language text that would add another record if interpreted.\",\"events\":[\"Registry performs the create.\",\"The test reads back the intended display name and compares every record that existed before.\"],\"outcomes\":[\"A value-bound implementation creates only the intended record.\",\"An unsafe implementation creates the intended record plus an injected extra record; the submitted name still reads back exactly and every pre-existing record is unchanged.\"],\"observer\":\"A later store reader; the Required test as written would not distinguish the outcomes.\"}},{\"subject\":\"A19-2 statement-backend lowering\",\"kind\":\"later_layer_choice\",\"text\":\"How the store's backend lowers this is the backend's.\",\"question\":\"Which backend mechanism ensures caller values can fill value positions only?\",\"options\":[\"Native prepared statements with bound parameters.\",\"A query builder or ORM that emits bound parameters.\",\"A backend-specific typed command API with no textual query construction exposed to generated modules.\"],\"default_guess\":\"Use native bound parameters behind a typed backend API.\",\"decision_owner\":\"generation\",\"consequences\":[\"Prepared statements give a direct value/structure separation.\",\"A query builder is acceptable only if every caller value remains a bound value.\",\"A typed command API can make the invariant structural but adds backend surface.\"],\"requirement\":\"A value a caller gives only ever fills a value place of a query or command whose structure the release fixes; it never becomes an identifier, an operator or syntax.\"},{\"subject\":\"A21 review of the changed A19 tests\",\"kind\":\"unsupported_review_conclusion\",\"text\":\"the new tests show the escaping and the value places the rules already required; no outcome changed.\",\"question\":\"Does the security review remain complete only after A19 Required tests 5 and 6 are strengthened to distinguish query-structure injection and unintended additional store effects, or is the review intentionally accepting those untested outcomes?\",\"options\":[\"Strengthen the A19 tests and then retain the APPLICABLE outcomes unchanged.\",\"Keep the tests and narrow the security claim so it no longer says they show the full escaping and value-place guarantees.\",\"Reopen injection_interpreted_input and browser_boundary until the missing assertions are supplied.\"],\"default_guess\":\"Strengthen A19 tests 5 and 6, rerun the affected review categories, and retain the outcomes only if those checks pass.\",\"witness\":{\"initial\":\"A19 test 5 permits an extra query parameter, or test 6 permits an injected extra record, while every assertion currently stated still passes.\",\"events\":[\"The A21 security review consumes the passing A19 tests.\",\"It records that the tests show escaping and value places.\"],\"outcomes\":[\"The review is marked performed although an interpreted-input path remains compatible with the tests.\",\"The review remains open until the tests exclude those paths.\"],\"observer\":\"The factory gate and the owner relying on the security-review outcome.\"}}]}",
+ "set_aside": []
+}

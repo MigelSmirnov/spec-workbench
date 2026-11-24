@@ -1,0 +1,241 @@
+{
+ "open_points": [
+  {
+   "unit": "A13",
+   "subject": "owner-session monotonic instants",
+   "kind": "missing_representation",
+   "text": "its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock",
+   "question": "What representation and comparison arithmetic must be used for monotonic readings held in an owner session?",
+   "options": [
+    "integer monotonic ticks with a declared unit and range",
+    "a monotonic-duration value supplied by the clock backend",
+    "an implementation-native numeric reading whose unit and precision are unspecified"
+   ],
+   "default_guess": "Use an opaque monotonic-duration value from `clock`, with duration addition and strict comparisons performed without conversion to UTC.",
+   "witness": {
+    "initial": "A valid owner session is one microsecond short of its 30-minute idle limit.",
+    "events": [
+     "The process clock supplies a reading whose native resolution or numeric unit is not specified.",
+     "Registry converts or compares that reading to the 30-minute constant."
+    ],
+    "outcomes": [
+     "A representation preserving microseconds admits the request.",
+     "A coarser or differently converted representation refuses the request at the boundary."
+    ],
+    "observer": "the owner making the request"
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "time readings per owner-session operation",
+   "kind": "missing_read_count",
+   "text": "Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).",
+   "question": "For sign-in, request admission, confirmation creation or submission, sign-out, and the 60-second session pass, how many monotonic and wall-clock readings does one operation take, and which facts and comparisons share each reading?",
+   "options": [
+    "one monotonic reading per operation, shared by all of that operation's session comparisons and writes, plus one wall-clock reading only when it records a durable instant",
+    "separate readings for each comparison and each written fact",
+    "a separately stated reading rule for each operation"
+   ],
+   "default_guess": "Take one monotonic reading at the operation's decision point and reuse it for every session comparison and runtime instant that operation changes; take one UTC reading for all durable instants written by one transaction.",
+   "witness": {
+    "initial": "A request begins immediately before the idle limit, and its confirmation step is created immediately after the limit would be reached by a second clock read.",
+    "events": [
+     "The owner submits a request that both refreshes the session and creates a pending confirmation.",
+     "Registry checks validity and records the request and confirmation times."
+    ],
+    "outcomes": [
+     "With one shared reading, the request is admitted and both runtime instants use the pre-limit reading.",
+     "With multiple readings, the session check may pass while the confirmation time or another comparison uses a post-limit reading."
+    ],
+    "observer": "the owner and a later confirmation submission"
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "lockout boundary required test",
+   "kind": "ambiguous_time_origin",
+   "text": "The sixth sign-in within 15 minutes after five refusals is refused with the right credential, and accepted 15 minutes later.",
+   "question": "Is “15 minutes later” measured from the fifth refusal that started the lockout, from the refused sixth attempt, or from another stated instant?",
+   "options": [
+    "exactly 15 minutes after the fifth refusal",
+    "exactly 15 minutes after the sixth attempt",
+    "15 minutes after whichever attempt the test harness most recently made"
+   ],
+   "default_guess": "Measure from the fifth refusal, because rule 3 says that refusal starts the lockout and later attempts do not extend it.",
+   "witness": {
+    "initial": "Five wrong credentials are refused at 12:00 and the right credential is attempted at 12:14.",
+    "events": [
+     "The fifth refusal starts the lockout at 12:00.",
+     "The sixth attempt is refused at 12:14.",
+     "The owner retries at 12:15 and at 12:29."
+    ],
+    "outcomes": [
+     "If measured from the fifth refusal, the 12:15 attempt is accepted.",
+     "If measured from the sixth attempt, acceptance waits until 12:29."
+    ],
+    "observer": "the owner signing in"
+   }
+  },
+  {
+   "unit": "A13",
+   "subject": "clock delivery contract",
+   "kind": "later_layer_choice",
+   "text": "Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).",
+   "question": "What exact module contract delivers `clock` to each operation that reads time?",
+   "options": [
+    "a datetime or monotonic reading parameter on each mutating operation",
+    "a clock port supplied through the owning object's constructor",
+    "a declared authority module imported by consumers"
+   ],
+   "default_guess": "Use a clock port supplied through construction so tests can replace both readings together.",
+   "decision_owner": "state6_exact_contracts",
+   "consequences": [
+    "A per-call parameter makes every reading explicit but enlarges operation signatures.",
+    "Constructor injection centralizes the authority and supports replacement in tests.",
+    "An authority module minimizes signatures but creates a shared dependency that State 7 notes must name correctly."
+   ],
+   "requirement": "Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8)."
+  },
+  {
+   "unit": "A16",
+   "subject": "import file digest",
+   "kind": "missing_digest_definition",
+   "text": "The mapping names the file by its digest.",
+   "question": "What bytes or logical content are digested, which digest algorithm is required, and what representation is stored and compared?",
+   "options": [
+    "digest the exact uploaded file-part bytes with a named cryptographic algorithm and canonical encoding",
+    "parse the file and digest a canonical serialization of its logical records",
+    "leave the algorithm, input normalization and representation to generation"
+   ],
+   "default_guess": "Digest the exact file-part bytes with SHA-256 and store and compare a fixed lowercase hexadecimal encoding.",
+   "witness": {
+    "initial": "A session holds file A and a confirmation bound to its digest; file B has different bytes but equivalent parsed records, or collides under a weak or implementation-chosen digest.",
+    "events": [
+     "The owner is shown the mapping for file A.",
+     "The confirmation is submitted while Registry resolves the kept file by the unspecified digest rule."
+    ],
+    "outcomes": [
+     "A raw-byte cryptographic digest binds the confirmation only to file A's exact bytes.",
+     "A canonical-content or weak digest can treat file B as having the same identity and apply bytes the owner was not shown."
+    ],
+    "observer": "the owner confirming the import"
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "accepted import timestamps",
+   "kind": "missing_read_count",
+   "text": "A Customer the import makes is created at the import's instant with revision 1.",
+   "question": "Does one accepted import take one UTC wall-clock reading shared by every new Customer, the migration closure and its audit entry, or may those records carry different readings taken during the transaction?",
+   "options": [
+    "one UTC reading shared by all facts written by the import transaction",
+    "one reading per record",
+    "separate readings for customer creation, closure success and audit change"
+   ],
+   "default_guess": "Take one UTC reading after admission and reuse it throughout the transaction.",
+   "witness": {
+    "initial": "An accepted import spans a UTC clock tick or a backward wall-clock adjustment.",
+    "events": [
+     "Registry creates several Customers.",
+     "Registry writes the migration closure and the one audit entry in the same transaction."
+    ],
+    "outcomes": [
+     "One reading gives every imported Customer, the closure and the audit entry one import instant.",
+     "Several readings give them different or non-monotonic instants despite one accepted transaction."
+    ],
+    "observer": "the owner reading the imported Customers and audit log"
+   }
+  },
+  {
+   "unit": "A16",
+   "subject": "migration export format",
+   "kind": "later_layer_choice",
+   "text": "A file that cannot be read as the format States 5 and 6 declare, that holds two project records with one id, or a project record whose id or status is missing or cannot be read, is refused whole at upload, before anything is picked.",
+   "question": "What exact file structure, field representation and decoding rules define a readable migration export?",
+   "options": [
+    "one versioned JSON document with arrays of each record kind",
+    "newline-delimited versioned records",
+    "a versioned archive containing separate files per record kind"
+   ],
+   "default_guess": "Use one versioned JSON document with explicit schemas and unambiguous UTC and identifier encodings.",
+   "decision_owner": "state5_and_state6",
+   "consequences": [
+    "A single document simplifies whole-file validation but may require holding the parsed structure in memory.",
+    "Line-delimited records support streaming but require explicit ordering and cross-record validation rules.",
+    "An archive separates record kinds but adds entry-name, duplication and archive-safety decisions."
+   ],
+   "requirement": "Registry checks what the picks bring in — each picked project with the rooms and pointers that name it and the v1 value it names — and nothing else of the file;"
+  },
+  {
+   "unit": "A19",
+   "subject": "non-text stored values rendered in the owner interface",
+   "kind": "missing_text_representation",
+   "text": "a value that is not text in the text it is shown as",
+   "question": "What exact textual representation must the owner interface show for each non-text stored type, including identifiers, booleans or marks, ordinals, dates, UTC instants, absent values and byte digests?",
+   "options": [
+    "a canonical representation declared per domain type",
+    "the language or template engine's default string conversion",
+    "localized display text chosen by each page"
+   ],
+   "default_guess": "Declare one canonical representation per domain type, using model vocabulary names, decimal ordinals, ISO 8601 UTC instants, ISO dates and a fixed digest encoding.",
+   "witness": {
+    "initial": "An audit entry contains a UTC instant and an ordinal sequence number, and a Customer contains an absent fiscal value.",
+    "events": [
+     "The owner opens two pages that show those stored non-text values.",
+     "Each page converts the values to text."
+    ],
+    "outcomes": [
+     "Canonical per-type rendering shows the same stable text on both pages.",
+     "Default or localized conversion can show different time zones, boolean words, absent-value markers or number formatting."
+    ],
+    "observer": "the owner viewing the pages"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A13\",\"subject\":\"owner-session monotonic instants\",\"kind\":\"missing_representation\",\"text\":\"its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock\",\"question\":\"What representation and comparison arithmetic must be used for monotonic readings held in an owner session?\",\"options\":[\"integer monotonic ticks with a declared unit and range\",\"a monotonic-duration value supplied by the clock backend\",\"an implementation-native numeric reading whose unit and precision are unspecified\"],\"default_guess\":\"Use an opaque monotonic-duration value from `clock`, with duration addition and strict comparisons performed without conversion to UTC.\",\"witness\":{\"initial\":\"A valid owner session is one microsecond short of its 30-minute idle limit.\",\"events\":[\"The process clock supplies a reading whose native resolution or numeric unit is not specified.\",\"Registry converts or compares that reading to the 30-minute constant.\"],\"outcomes\":[\"A representation preserving microseconds admits the request.\",\"A coarser or differently converted representation refuses the request at the boundary.\"],\"observer\":\"the owner making the request\"}},{\"unit\":\"A13\",\"subject\":\"time readings per owner-session operation\",\"kind\":\"missing_read_count\",\"text\":\"Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).\",\"question\":\"For sign-in, request admission, confirmation creation or submission, sign-out, and the 60-second session pass, how many monotonic and wall-clock readings does one operation take, and which facts and comparisons share each reading?\",\"options\":[\"one monotonic reading per operation, shared by all of that operation's session comparisons and writes, plus one wall-clock reading only when it records a durable instant\",\"separate readings for each comparison and each written fact\",\"a separately stated reading rule for each operation\"],\"default_guess\":\"Take one monotonic reading at the operation's decision point and reuse it for every session comparison and runtime instant that operation changes; take one UTC reading for all durable instants written by one transaction.\",\"witness\":{\"initial\":\"A request begins immediately before the idle limit, and its confirmation step is created immediately after the limit would be reached by a second clock read.\",\"events\":[\"The owner submits a request that both refreshes the session and creates a pending confirmation.\",\"Registry checks validity and records the request and confirmation times.\"],\"outcomes\":[\"With one shared reading, the request is admitted and both runtime instants use the pre-limit reading.\",\"With multiple readings, the session check may pass while the confirmation time or another comparison uses a post-limit reading.\"],\"observer\":\"the owner and a later confirmation submission\"}},{\"unit\":\"A13\",\"subject\":\"lockout boundary required test\",\"kind\":\"ambiguous_time_origin\",\"text\":\"The sixth sign-in within 15 minutes after five refusals is refused with the right credential, and accepted 15 minutes later.\",\"question\":\"Is “15 minutes later” measured from the fifth refusal that started the lockout, from the refused sixth attempt, or from another stated instant?\",\"options\":[\"exactly 15 minutes after the fifth refusal\",\"exactly 15 minutes after the sixth attempt\",\"15 minutes after whichever attempt the test harness most recently made\"],\"default_guess\":\"Measure from the fifth refusal, because rule 3 says that refusal starts the lockout and later attempts do not extend it.\",\"witness\":{\"initial\":\"Five wrong credentials are refused at 12:00 and the right credential is attempted at 12:14.\",\"events\":[\"The fifth refusal starts the lockout at 12:00.\",\"The sixth attempt is refused at 12:14.\",\"The owner retries at 12:15 and at 12:29.\"],\"outcomes\":[\"If measured from the fifth refusal, the 12:15 attempt is accepted.\",\"If measured from the sixth attempt, acceptance waits until 12:29.\"],\"observer\":\"the owner signing in\"}},{\"unit\":\"A13\",\"subject\":\"clock delivery contract\",\"kind\":\"later_layer_choice\",\"text\":\"Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).\",\"question\":\"What exact module contract delivers `clock` to each operation that reads time?\",\"options\":[\"a datetime or monotonic reading parameter on each mutating operation\",\"a clock port supplied through the owning object's constructor\",\"a declared authority module imported by consumers\"],\"default_guess\":\"Use a clock port supplied through construction so tests can replace both readings together.\",\"decision_owner\":\"state6_exact_contracts\",\"consequences\":[\"A per-call parameter makes every reading explicit but enlarges operation signatures.\",\"Constructor injection centralizes the authority and supports replacement in tests.\",\"An authority module minimizes signatures but creates a shared dependency that State 7 notes must name correctly.\"],\"requirement\":\"Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).\"},{\"unit\":\"A16\",\"subject\":\"import file digest\",\"kind\":\"missing_digest_definition\",\"text\":\"The mapping names the file by its digest.\",\"question\":\"What bytes or logical content are digested, which digest algorithm is required, and what representation is stored and compared?\",\"options\":[\"digest the exact uploaded file-part bytes with a named cryptographic algorithm and canonical encoding\",\"parse the file and digest a canonical serialization of its logical records\",\"leave the algorithm, input normalization and representation to generation\"],\"default_guess\":\"Digest the exact file-part bytes with SHA-256 and store and compare a fixed lowercase hexadecimal encoding.\",\"witness\":{\"initial\":\"A session holds file A and a confirmation bound to its digest; file B has different bytes but equivalent parsed records, or collides under a weak or implementation-chosen digest.\",\"events\":[\"The owner is shown the mapping for file A.\",\"The confirmation is submitted while Registry resolves the kept file by the unspecified digest rule.\"],\"outcomes\":[\"A raw-byte cryptographic digest binds the confirmation only to file A's exact bytes.\",\"A canonical-content or weak digest can treat file B as having the same identity and apply bytes the owner was not shown.\"],\"observer\":\"the owner confirming the import\"}},{\"unit\":\"A16\",\"subject\":\"accepted import timestamps\",\"kind\":\"missing_read_count\",\"text\":\"A Customer the import makes is created at the import's instant with revision 1.\",\"question\":\"Does one accepted import take one UTC wall-clock reading shared by every new Customer, the migration closure and its audit entry, or may those records carry different readings taken during the transaction?\",\"options\":[\"one UTC reading shared by all facts written by the import transaction\",\"one reading per record\",\"separate readings for customer creation, closure success and audit change\"],\"default_guess\":\"Take one UTC reading after admission and reuse it throughout the transaction.\",\"witness\":{\"initial\":\"An accepted import spans a UTC clock tick or a backward wall-clock adjustment.\",\"events\":[\"Registry creates several Customers.\",\"Registry writes the migration closure and the one audit entry in the same transaction.\"],\"outcomes\":[\"One reading gives every imported Customer, the closure and the audit entry one import instant.\",\"Several readings give them different or non-monotonic instants despite one accepted transaction.\"],\"observer\":\"the owner reading the imported Customers and audit log\"}},{\"unit\":\"A16\",\"subject\":\"migration export format\",\"kind\":\"later_layer_choice\",\"text\":\"A file that cannot be read as the format States 5 and 6 declare, that holds two project records with one id, or a project record whose id or status is missing or cannot be read, is refused whole at upload, before anything is picked.\",\"question\":\"What exact file structure, field representation and decoding rules define a readable migration export?\",\"options\":[\"one versioned JSON document with arrays of each record kind\",\"newline-delimited versioned records\",\"a versioned archive containing separate files per record kind\"],\"default_guess\":\"Use one versioned JSON document with explicit schemas and unambiguous UTC and identifier encodings.\",\"decision_owner\":\"state5_and_state6\",\"consequences\":[\"A single document simplifies whole-file validation but may require holding the parsed structure in memory.\",\"Line-delimited records support streaming but require explicit ordering and cross-record validation rules.\",\"An archive separates record kinds but adds entry-name, duplication and archive-safety decisions.\"],\"requirement\":\"Registry checks what the picks bring in — each picked project with the rooms and pointers that name it and the v1 value it names — and nothing else of the file;\"},{\"unit\":\"A19\",\"subject\":\"non-text stored values rendered in the owner interface\",\"kind\":\"missing_text_representation\",\"text\":\"a value that is not text in the text it is shown as\",\"question\":\"What exact textual representation must the owner interface show for each non-text stored type, including identifiers, booleans or marks, ordinals, dates, UTC instants, absent values and byte digests?\",\"options\":[\"a canonical representation declared per domain type\",\"the language or template engine's default string conversion\",\"localized display text chosen by each page\"],\"default_guess\":\"Declare one canonical representation per domain type, using model vocabulary names, decimal ordinals, ISO 8601 UTC instants, ISO dates and a fixed digest encoding.\",\"witness\":{\"initial\":\"An audit entry contains a UTC instant and an ordinal sequence number, and a Customer contains an absent fiscal value.\",\"events\":[\"The owner opens two pages that show those stored non-text values.\",\"Each page converts the values to text.\"],\"outcomes\":[\"Canonical per-type rendering shows the same stable text on both pages.\",\"Default or localized conversion can show different time zones, boolean words, absent-value markers or number formatting.\"],\"observer\":\"the owner viewing the pages\"}},{\"unit\":\"A19\",\"subject\":\"store command lowering\",\"kind\":\"later_layer_choice\",\"text\":\"How the store's backend lowers this is the backend's.\",\"question\":\"Which backend mechanism ensures caller values fill only value places and never alter command structure?\",\"options\":[\"native prepared statements with bound parameters\",\"a typed query builder that emits bound parameters\",\"a backend API whose command and value channels are structurally separate\"],\"default_guess\":\"Use native bound parameters through the single statement backend and prohibit interpolation in generated store commands.\",\"decision_owner\":\"generation\",\"consequences\":[\"Prepared statements give a direct structural separation but must cover every command path.\",\"A typed builder can enforce the rule compositionally but its escaping and identifier APIs must be constrained.\",\"A custom separated API can centralize enforcement but adds code whose correctness factory checks must establish.\"],\"requirement\":\"A value a caller gives only ever fills a value place of a query or command whose structure the release fixes; it never becomes an identifier, an operator or syntax.\"},{\"unit\":\"A19\",\"subject\":\"script prohibition in owner pages\",\"kind\":\"later_layer_choice\",\"text\":\"The owner interface sends no script of its own (R0-29) and forbids the browser to run any, by its content security policy.\",\"question\":\"What exact response policy and page-generation constraints enforce the no-script guarantee?\",\"options\":[\"a `Content-Security-Policy` response header with `script-src 'none'` on every owner page\",\"the equivalent CSP delivered in HTML plus a generator prohibition on script-bearing markup\",\"a shared response wrapper that applies an equivalent stricter policy to all owner-interface responses\"],\"default_guess\":\"Apply a response-header CSP containing `script-src 'none'` through the shared owner-page response path and generate no script-bearing elements or event-handler attributes.\",\"decision_owner\":\"generation\",\"consequences\":[\"A response header is applied before HTML parsing and can be checked uniformly.\",\"An HTML-delivered policy depends on correct placement and still requires markup restrictions.\",\"A shared wrapper reduces omissions but factory checks must establish that every owner page uses it.\"],\"requirement\":\"The owner interface sends no script of its own (R0-29) and forbids the browser to run any, by its content security policy.\"}]}",
+ "set_aside": [
+  {
+   "unit": "A19",
+   "subject": "store command lowering",
+   "kind": "later_layer_choice",
+   "text": "How the store's backend lowers this is the backend's.",
+   "question": "Which backend mechanism ensures caller values fill only value places and never alter command structure?",
+   "options": [
+    "native prepared statements with bound parameters",
+    "a typed query builder that emits bound parameters",
+    "a backend API whose command and value channels are structurally separate"
+   ],
+   "default_guess": "Use native bound parameters through the single statement backend and prohibit interpolation in generated store commands.",
+   "decision_owner": "generation",
+   "consequences": [
+    "Prepared statements give a direct structural separation but must cover every command path.",
+    "A typed builder can enforce the rule compositionally but its escaping and identifier APIs must be constrained.",
+    "A custom separated API can centralize enforcement but adds code whose correctness factory checks must establish."
+   ],
+   "requirement": "A value a caller gives only ever fills a value place of a query or command whose structure the release fixes; it never becomes an identifier, an operator or syntax.",
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  },
+  {
+   "unit": "A19",
+   "subject": "script prohibition in owner pages",
+   "kind": "later_layer_choice",
+   "text": "The owner interface sends no script of its own (R0-29) and forbids the browser to run any, by its content security policy.",
+   "question": "What exact response policy and page-generation constraints enforce the no-script guarantee?",
+   "options": [
+    "a `Content-Security-Policy` response header with `script-src 'none'` on every owner page",
+    "the equivalent CSP delivered in HTML plus a generator prohibition on script-bearing markup",
+    "a shared response wrapper that applies an equivalent stricter policy to all owner-interface responses"
+   ],
+   "default_guess": "Apply a response-header CSP containing `script-src 'none'` through the shared owner-page response path and generate no script-bearing elements or event-handler attributes.",
+   "decision_owner": "generation",
+   "consequences": [
+    "A response header is applied before HTML parsing and can be checked uniformly.",
+    "An HTML-delivered policy depends on correct placement and still requires markup restrictions.",
+    "A shared wrapper reduces omissions but factory checks must establish that every owner page uses it."
+   ],
+   "requirement": "The owner interface sends no script of its own (R0-29) and forbids the browser to run any, by its content security policy.",
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  }
+ ]
+}
