@@ -30,10 +30,10 @@ an entry (round 28 P1) — and how the audit log is protected (R0-37).
 ### Formal invariants
 
 ```text
-entry e exists <=> accepted action a in M09.actions, with changed(a) or a an
+entry e exists <=> accepted action a in M09.actions, with changed(a) or a an   -- A14-1
                    erasure of old entries, and e written in the transaction
                    of a
-e.outcome = accepted
+e.outcome = accepted   -- A14-2
 ```
 
 ### Required tests
@@ -44,6 +44,9 @@ e.outcome = accepted
 3. A failure while storing a correction leaves neither the change nor its
    entry.
 4. Kernel reading the agent projection leaves the log unchanged.
+
+- Witness, A14-1: the test evidence of `OwnerActionStep.run` [witness: note:OwnerActionStep.run].
+- Witness, A14-2: the test evidence of `append_audit_entry` [witness: note:append_audit_entry].
 
 ### Consequence
 
@@ -83,9 +86,9 @@ outcome but `accepted`.
 ### Formal invariants
 
 ```text
-for entries e1 written before e2: e1.sequence < e2.sequence
-erase(d) accepted => no entry with instant < start_of(d) remains
-erase(d) accepted => its erasure entry e has e.instant >= start_of(d)
+for entries e1 written before e2: e1.sequence < e2.sequence   -- A15-1
+erase(d) accepted => no entry with instant < start_of(d) remains   -- A15-2
+erase(d) accepted => its erasure entry e has e.instant >= start_of(d)   -- A15-3
 ```
 
 ### Required tests
@@ -107,6 +110,10 @@ erase(d) accepted => its erasure entry e has e.instant >= start_of(d)
    committed first holds the lower.
 7. A change whose transaction fails writes no entry and leaves the audit
    sequence as it was; the next accepted change takes the number after it.
+
+- Witness, A15-1: the test evidence of `append_audit_entry` [witness: note:append_audit_entry].
+- Witness, A15-2: the test evidence of `erase_audit_entries_before` [witness: note:erase_audit_entries_before].
+- Witness, A15-2, A15-3: for the erasure action with its own entry, the test evidence of `OwnerActionStep.run` [witness: note:OwnerActionStep.run].
 
 ### Consequence
 

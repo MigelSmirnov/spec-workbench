@@ -106,11 +106,11 @@ security review of States 0–2.
 ### Formal invariants
 
 ```text
-import(file f, picks P) accepted =>
+import(file f, picks P) accepted =>   -- A16-1
   stored(P with rooms, pointers) and stored(new customers of P)
   and closure.file_digest = digest(f) and one AuditEntry, in one transaction
-exists closure => import refused
-conflict at confirmation => store unchanged
+exists closure => import refused   -- A16-2
+conflict at confirmation => store unchanged   -- A16-3
 ```
 
 ### Required tests
@@ -139,6 +139,9 @@ conflict at confirmation => store unchanged
     pointers, the Customers it made, one closure holding the file's digest and
     exactly one audit entry; a failure inside its transaction leaves none of
     them — no project, room, pointer, Customer, closure or entry.
+
+- Witness, A16-1: the test evidence of `OwnerActionStep.run` [witness: note:OwnerActionStep.run].
+- Witness, A16-2, A16-3: the test evidence of `confirm_import` [witness: note:confirm_import].
 
 ### Consequence
 
@@ -266,8 +269,8 @@ closure is the one proof of success.
 ### Formal invariants
 
 ```text
-serving => checks_passed(config)
-for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYTES
+serving => checks_passed(config)   -- A17-1
+for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYTES   -- A17-2
 ```
 
 ### Required tests
@@ -312,6 +315,9 @@ for secrets s1 != s2 in config: value(s1) != value(s2) and len >= SECRET_MIN_BYT
    other record; a start interrupted before the store's rename leaves no
    store under the store's name, and the next start makes a new one with
    one sequence at 0.
+
+- Witness, A17-1: the test evidence of `start_instance` [witness: note:start_instance].
+- Witness, A17-2: the test evidence of `load_configuration` [witness: note:load_configuration].
 
 ### Consequence
 
@@ -454,9 +460,9 @@ secret cannot be shared between holders.
 ### Formal invariants
 
 ```text
-after a run whose deletions succeeded: no backup older than 30 × 24 hours and no
+after a run whose deletions succeeded: no backup older than 30 × 24 hours and no   -- A18-1
   backup that failed its check exists
-every kept backup is encrypted, consistent, checked, and records
+every kept backup is encrypted, consistent, checked, and records   -- A18-2
   (instant, release, last sequence); no backup holds an agent session
 ```
 
@@ -479,6 +485,9 @@ every kept backup is encrypted, consistent, checked, and records
 5. A store restored from a backup holds no agent session.
 6. A 03:00 missed while Registry was stopped makes no backup at the next
    start; the next one is made at the following 03:00.
+
+- Witness, A18-1, A18-2: the test evidence of `run_daily_backup_if_due` [witness: note:run_daily_backup_if_due].
+- Witness, A18-2: for the agent sessions a backup leaves out, the test evidence of `copy_store_snapshot` [witness: note:copy_store_snapshot].
 
 ### Consequence
 
@@ -615,8 +624,8 @@ What runs is what was verified.
 ### Formal invariants
 
 ```text
-for each category c: outcome(c) in {APPLICABLE, NOT_APPLICABLE}
-APPLICABLE c => references(c) are decisions of States 0-2
+for each category c: outcome(c) in {APPLICABLE, NOT_APPLICABLE}   -- A21-1
+APPLICABLE c => references(c) are decisions of States 0-2   -- A21-2
 ```
 
 ### Required tests
@@ -628,6 +637,8 @@ APPLICABLE c => references(c) are decisions of States 0-2
    least one reference, and every reference is an accepted decision of
    States 0–2 that exists in this text; every NOT_APPLICABLE category gives
    its rationale. `tools/design_lint.py --state 2` shows it.
+
+- Witness, A21-1, A21-2: the security-review check of `tools/design_lint.py --state 2`, which the State 2 gate of the authoring sequence runs [witness: workbench:state2_rules_decisions].
 
 ### Security review
 

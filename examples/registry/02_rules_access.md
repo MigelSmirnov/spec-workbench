@@ -35,9 +35,9 @@ here: what each service token and Kernel's agent authority may do and receive
 ### Formal invariants
 
 ```text
-call(op) with token of service s accepted => op in rights(s)
-class(answer(op)) <= highest_class(s)
-highest_class(Cabinet Kernel) = business_confidential
+call(op) with token of service s accepted => op in rights(s)   -- A09-1
+class(answer(op)) <= highest_class(s)   -- A09-2
+highest_class(Cabinet Kernel) = business_confidential   -- A09-3
 ```
 
 ### Required tests
@@ -47,6 +47,11 @@ highest_class(Cabinet Kernel) = business_confidential
    `context` is refused.
 3. A token not in the configuration is refused like a wrong one (R0-23).
 4. PresuPro calling 'publish an artifact pointer' is refused (R0-88).
+
+- Witness, A09-1: the test evidence of `perform_service_operation` [witness: note:perform_service_operation].
+- Witness, A09-1: for the rights table, the test evidence of `service_may_call` [witness: note:service_may_call].
+- Witness, A09-2: the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
+- Witness, A09-3: the test evidence of `highest_class_of_service` [witness: note:highest_class_of_service].
 
 ### Consequence
 
@@ -80,9 +85,9 @@ manifest record derives from it (R0-78).
 ### Formal invariants
 
 ```text
-agent_call(session x, project p) accepted =>
+agent_call(session x, project p) accepted =>   -- A10-1
   token = Kernel and registered(x) and p in granted(x)
-answer(p not in granted(x)) = answer(p does not exist)
+answer(p not in granted(x)) = answer(p does not exist)   -- A10-2
 ```
 
 ### Required tests
@@ -93,6 +98,9 @@ answer(p not in granted(x)) = answer(p does not exist)
 3. A call naming no project, with no active project, is refused.
 4. 'Add a room' on an archived project of the set is refused.
 5. Kernel registers a new session id and is accepted.
+
+- Witness, A10-1, A10-2: the test evidence of `check_agent_call` [witness: note:check_agent_call].
+- Witness, A10-1: for the Kernel token, the test evidence of `perform_service_operation` [witness: note:perform_service_operation].
 
 ### Consequence
 
@@ -126,8 +134,8 @@ the agent that a project exists.
 ### Formal invariants
 
 ```text
-end(x) accepted => not registered(x) and no record of x remains
-register(x) after end(x) => granted(x) = {} and active(x) = none
+end(x) accepted => not registered(x) and no record of x remains   -- A11-1
+register(x) after end(x) => granted(x) = {} and active(x) = none   -- A11-2
 ```
 
 ### Required tests
@@ -135,6 +143,9 @@ register(x) after end(x) => granted(x) = {} and active(x) = none
 1. After Kernel ends a session, reading its access is refused.
 2. Registering the ended identity again answers a session with no project.
 3. The owner ends a session; its next agent-authority call is refused.
+
+- Witness, A11-1: the test evidence of `end_session` [witness: note:end_session].
+- Witness, A11-2: the test evidence of `register_session` [witness: note:register_session].
 
 ### Consequence
 
@@ -164,8 +175,8 @@ Registry holds only living sessions; a stale session cannot keep a grant.
 ### Formal invariants
 
 ```text
-owner_action(x, stated v) with v != version(x) => refused, x unchanged
-accepted change of x => version(x)' = version(x) + 1
+owner_action(x, stated v) with v != version(x) => refused, x unchanged   -- A12-1
+accepted change of x => version(x)' = version(x) + 1   -- A12-2
 ```
 
 ### Required tests
@@ -176,6 +187,10 @@ accepted change of x => version(x)' = version(x) + 1
 3. Granting a project already granted leaves the version.
 4. Granting a project and making it active in one action moves the version
    by one.
+
+- Witness, A12-1, A12-2: for a grant, the test evidence of `grant_project` [witness: note:grant_project].
+- Witness, A12-1, A12-2: for an answer to a request, the test evidence of `answer_access_request` [witness: note:answer_access_request].
+- Witness, A12-2: for an erasure of a project, the test evidence of `drop_project_from_sessions` [witness: note:drop_project_from_sessions].
 
 ### Consequence
 
@@ -289,10 +304,10 @@ sees every change as a new version.
 ### Formal invariants
 
 ```text
-owner_session s valid at t <=> t < s.began + 8h and
+owner_session s valid at t <=> t < s.began + 8h and   -- A13-1
                                 t < s.last_request + 30min and
                                 not signed_out(s) and no restart since s.began
-refused_sign_ins(last 15min) >= 5 => sign_in refused
+refused_sign_ins(last 15min) >= 5 => sign_in refused   -- A13-2
 ```
 
 ### Required tests
@@ -315,6 +330,9 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused
    minutes, counted by the monotonic reading, makes its next request
    refused; the session is ended, with its confirmation and upload, at the
    next pass.
+
+- Witness, A13-1: the test evidence of `admit_owner_request` [witness: note:admit_owner_request].
+- Witness, A13-2: the test evidence of `sign_in_owner` [witness: note:sign_in_owner].
 
 ### Consequence
 

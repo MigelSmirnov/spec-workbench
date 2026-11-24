@@ -36,11 +36,11 @@ commits, and two concurrent publishes of one type answer 500.
 
 ```text
 for each project p and type t:
-  count(pointer of p, t with status published) <= 1
-  versions of p, t are 1..n without gaps or repeats
+  count(pointer of p, t with status published) <= 1   -- A07-1
+  versions of p, t are 1..n without gaps or repeats   -- A07-2
 publish(p, t) accepted:
-  new.version = max(version of p, t) + 1 (or 1)
-  previous published of p, t becomes superseded in the same transaction
+  new.version = max(version of p, t) + 1 (or 1)   -- A07-3
+  previous published of p, t becomes superseded in the same transaction   -- A07-4
 ```
 
 ### Required tests
@@ -58,6 +58,9 @@ publish(p, t) accepted:
    pointer before it is superseded, or is refused because it was superseded;
    never both.
 5. Publishing on an archived project is refused.
+
+- Witness, A07-1, A07-2, A07-3, A07-4: the test evidence of `publish_pointer` [witness: note:publish_pointer].
+- Witness, A07-1: for a withdrawal, the test evidence of `withdraw_pointer` [witness: note:withdraw_pointer].
 
 ### Consequence
 
@@ -86,9 +89,9 @@ L07's partial state and internal error are gone; the history is gap-free.
 ### Formal invariants
 
 ```text
-publish or withdraw accepted => caller in {Kernel for a session s with
+publish or withdraw accepted => caller in {Kernel for a session s with   -- A08-1
                                 project in granted(s), owner}
-pointer.owner_service = owner_service(pointer.type)
+pointer.owner_service = owner_service(pointer.type)   -- A08-2
 ```
 
 ### Required tests
@@ -100,6 +103,10 @@ pointer.owner_service = owner_service(pointer.type)
    answered as not found (A10).
 4. The owner withdraws a pointer Kernel published; the withdrawal records the
    owner.
+
+- Witness, A08-1: for a service's rights, the test evidence of `perform_service_operation` [witness: note:perform_service_operation].
+- Witness, A08-1: for Kernel and its session, the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
+- Witness, A08-2: the test evidence of `publish_pointer` [witness: note:publish_pointer].
 
 ### Consequence
 
@@ -136,9 +143,9 @@ R0-88.
 ### Formal invariants
 
 ```text
-declared_types(first release) = {estimate -> PresuPro}
-pointers are never removed or rewritten by a vocabulary change
-publish(t) or latest(t) with t not declared => unknown type
+declared_types(first release) = {estimate -> PresuPro}   -- A22-1
+pointers are never removed or rewritten by a vocabulary change   -- A22-2
+publish(t) or latest(t) with t not declared => unknown type   -- A22-3
 ```
 
 ### Required tests
@@ -148,6 +155,11 @@ publish(t) or latest(t) with t not declared => unknown type
    artifacts' with their statuses.
 3. 'Read the latest artifact of a type' for a removed type is refused as an
    unknown type, not answered as none published.
+
+- Witness, A22-1: the test evidence of `_owner_service_of_type` [witness: note:_owner_service_of_type].
+- Witness, A22-2: the test evidence of `list_pointers` [witness: note:list_pointers].
+- Witness, A22-3: for a read, the test evidence of `latest_pointer_of_type` [witness: note:latest_pointer_of_type].
+- Witness, A22-3: for a publish, the test evidence of `publish_pointer` [witness: note:publish_pointer].
 
 ### Consequence
 

@@ -73,14 +73,14 @@ each create once.
 ### Formal invariants
 
 ```text
-for each model m in {Project, Customer}, and per project for m in
+for each model m in {Project, Customer}, and per project for m in   -- A01-1
 {Room, ArtifactPointer}:
   for records r1 != r2 of m with r1.request_id and r2.request_id present:
     r1.request_id != r2.request_id
 create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
-  rights fail or project archived => refused, store unchanged
-  f = current_facts(r)  => answer r, store unchanged
-  f != current_facts(r) => refused, store unchanged
+  rights fail or project archived => refused, store unchanged   -- A01-2
+  f = current_facts(r)  => answer r, store unchanged   -- A01-3
+  f != current_facts(r) => refused, store unchanged   -- A01-4
 ```
 
 ### Required tests
@@ -111,6 +111,12 @@ create(m, request_id = k, facts = f) where existing r of m has r.request_id = k:
     other answers it. With different facts, or another publisher, the second
     is refused as a conflict. The same request id for rooms of two different
     projects makes two rooms.
+
+- Witness, A01-1, A01-3, A01-4: for projects, the test evidence of `create_project` [witness: note:create_project].
+- Witness, A01-1, A01-3, A01-4: for Customers, the test evidence of `record_customer` [witness: note:record_customer].
+- Witness, A01-1, A01-2, A01-3, A01-4: for rooms, the test evidence of `add_room` [witness: note:add_room].
+- Witness, A01-1, A01-2, A01-3, A01-4: for pointers, the test evidence of `publish_pointer` [witness: note:publish_pointer].
+- Witness, A01-2: for a repeat whose rights or session set fail, the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
 
 ### Consequence
 
@@ -160,13 +166,13 @@ merges records because they look alike (R0-34).
 ### Formal invariants
 
 ```text
-missing(v) <=> v is absent or strip(v) = ""
-for every stored required value v: not missing(v)
-stored(v) = given(v) whenever not missing(v)
-for every stored object: rooms absent or (rooms is a whole number and rooms >= OBJECT_ROOMS_MIN)
+missing(v) <=> v is absent or strip(v) = ""   -- A02-1
+for every stored required value v: not missing(v)   -- A02-2
+stored(v) = given(v) whenever not missing(v)   -- A02-3
+for every stored object: rooms absent or (rooms is a whole number and rooms >= OBJECT_ROOMS_MIN)   -- A02-4
                          area absent or area > OBJECT_FLOOR_AREA_MIN_EXCLUSIVE
                          floor absent or floor is a whole number
-for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS
+for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS   -- A02-5
 ```
 
 ### Required tests
@@ -183,6 +189,10 @@ for every stored alias a: a absent or code_points(a) <= ALIAS_MAX_CHARACTERS
    1 and 7 are stored. A floor of -1 is stored; 1.5 is refused. A floor area
    of 0.01 is stored as given; one of 0 or -3 is refused; a project with no
    characteristic at all is stored without one.
+
+- Witness, A02-1: the test evidence of `read_required_text` [witness: note:read_required_text].
+- Witness, A02-4, A02-5: the test evidence of `check_value_forms` [witness: note:check_value_forms].
+- Witness, A02-2, A02-3, A02-4, A02-5: for projects, the test evidence of `create_project` [witness: note:create_project].
 
 ### Consequence
 
@@ -212,9 +222,9 @@ store.
 
 ```text
 after correct(p, facts f) accepted:
-  editable(p) = f
-  non_editable(p) = non_editable(p before)
-  f = editable(p before) => p = p before
+  editable(p) = f   -- A03-1
+  non_editable(p) = non_editable(p before)   -- A03-2
+  f = editable(p before) => p = p before   -- A03-3
 ```
 
 ### Required tests
@@ -223,6 +233,8 @@ after correct(p, facts f) accepted:
 2. A correction equal to the stored card leaves the revision where it was.
 3. A correction keeping a customer that has since been restricted is accepted;
    one newly naming a restricted customer is refused.
+
+- Witness, A03-1, A03-2, A03-3: the test evidence of `correct_project` [witness: note:correct_project].
 
 ### Consequence
 
@@ -284,15 +296,15 @@ card it showed, and what the owner emptied is cleared.
 ### Formal invariants
 
 ```text
-answer(a) = first failing check of a in the order (1)..(6), else its effect
+answer(a) = first failing check of a in the order (1)..(6), else its effect   -- A04-1
 for action a on record r in {Project, Customer} that may move r.revision:
-  a.stated_revision != r.revision => refused, r unchanged
-  accepted and changed(r) and r keeps a revision
+  a.stated_revision != r.revision => refused, r unchanged   -- A04-2
+  accepted and changed(r) and r keeps a revision   -- A04-3
                           => r.revision' = r.revision + 1
                              and r.last_changed' = now
-  accepted erasure, anonymisation or deletion => r has no revision after
-  r has no revision and a.stated_revision present => refused as stale
-  accepted and not changed(r) => r.revision' = r.revision
+  accepted erasure, anonymisation or deletion => r has no revision after   -- A04-4
+  r has no revision and a.stated_revision present => refused as stale   -- A04-5
+  accepted and not changed(r) => r.revision' = r.revision   -- A04-6
 ```
 
 ### Required tests
@@ -313,6 +325,12 @@ for action a on record r in {Project, Customer} that may move r.revision:
    refused as stale, not as erased.
 8. Restricting a Customer that has a revision, stating none, is refused as
    stale, not as a missing value.
+
+- Witness, A04-1: for the stages of a service call, the test evidence of `ServiceCallStep.run` [witness: note:ServiceCallStep.run].
+- Witness, A04-1, A04-2, A04-3, A04-6: for projects, the test evidence of `correct_project` [witness: note:correct_project].
+- Witness, A04-3, A04-6: for archiving, the test evidence of `archive_project` [witness: note:archive_project].
+- Witness, A04-2, A04-3, A04-5, A04-6: for Customers, the test evidence of `mark_customer` [witness: note:mark_customer].
+- Witness, A04-4, A04-5: for an erasure, the test evidence of `erase_customer_contact` [witness: note:erase_customer_contact].
 
 ### Consequence
 
@@ -346,7 +364,7 @@ the revision of the card it rendered, and none for a card that shows none
 ### Formal invariants
 
 ```text
-transition t to state s on record r with state(r) = s:
+transition t to state s on record r with state(r) = s:   -- A05-1
   accepted, r unchanged, no AuditEntry, no confirmation id
 ```
 
@@ -359,6 +377,10 @@ transition t to state s on record r with state(r) = s:
 4. Withdrawing a withdrawn pointer is refused.
 5. Granting again a granted project that has since been archived is refused,
    and the project stays in the set (R0-46, R0-70).
+
+- Witness, A05-1: for a Customer's marks, the test evidence of `mark_customer` [witness: note:mark_customer].
+- Witness, A05-1: for a session's grant, the test evidence of `grant_project` [witness: note:grant_project].
+- Witness, A05-1: for the audit entry and confirmation id, the test evidence of `OwnerActionStep.run` [witness: note:OwnerActionStep.run].
 
 ### Consequence
 
@@ -390,7 +412,7 @@ The audit log holds changes only (R0-58), and a retried transition is safe.
 ### Formal invariants
 
 ```text
-every list answer is totally ordered by its key; equal keys never occur
+every list answer is totally ordered by its key; equal keys never occur   -- A06-1
 because each key ends in an identity or a sequence number
 ```
 
@@ -400,6 +422,12 @@ because each key ends in an identity or a sequence number
 2. An erased Customer lists after every Customer that is not erased.
 3. Artifacts of one type list version 3, 2, 1.
 4. A project card lists its rooms in the order of 'list rooms'.
+
+- Witness, A06-1: for projects, the test evidence of `list_projects` [witness: note:list_projects].
+- Witness, A06-1: for rooms, the test evidence of `list_rooms` [witness: note:list_rooms].
+- Witness, A06-1: for a project card's rooms, the test evidence of `read_project_card` [witness: note:read_project_card].
+- Witness, A06-1: for Customers, the test evidence of `list_customers` [witness: note:list_customers].
+- Witness, A06-1: for artifacts, the test evidence of `list_pointers` [witness: note:list_pointers].
 
 ### Consequence
 
