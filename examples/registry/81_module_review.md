@@ -388,6 +388,18 @@ Re-read and re-hashed: `configuration` and `owner_interface` for these
 notes; `operations` for the State 5 text of `7c0f17b1`; `service_api` and
 `instance_lifecycle`, whose packets show the changed neighbouring notes.
 
+## 2026-11-25: every walk of the owner request follows the path rule
+
+On `81f355dd` (run `20261125_212255`) the generated reader read the fields
+by the new rule. It then checked what it read against the submitted fields
+with a walk of its own from `OwnerRequest`'s root. That walk put `values`
+into the path again, so every form was refused as unreadable. No note asks
+for such a check; the generator added it. The SCHEMA_CONSTRAINT note now
+says that every walk of an `OwnerRequest` by these paths, such a check
+included, names its fields by the same rule. The note was prepared while the
+neighbour re-ran Route B on the same spec, and it is exported only if the
+defect returns. `owner_interface` was re-hashed.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
