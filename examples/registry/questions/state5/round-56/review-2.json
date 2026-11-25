@@ -1,0 +1,110 @@
+{
+ "open_points": [
+  {
+   "subject": "public_op:owner_sessions.show_confirmation_step / public_op:owner_sessions.take_confirmation",
+   "kind": "missing_boundary_contract",
+   "text": "the action, its target, the revision or access version it states or that it states none, and the digest of its inputs.",
+   "question": "Who computes the submission digest, and what public obligation guarantees that the digest supplied by `operations` is the digest of exactly the submitted inputs under the same rules `show_confirmation_step` used?",
+   "options": [
+    "Have `take_confirmation` receive the submitted inputs and let `owner_sessions` compute and compare both digests.",
+    "Add an `owner_sessions` operation that computes the binding digest for both showing and taking confirmation.",
+    "Keep digest computation in `operations` and state the shared digest contract on both operations."
+   ],
+   "default_guess": "Have `take_confirmation` receive the submitted inputs so the module that owns confirmation binding also owns digest computation.",
+   "witness": {
+    "initial": "A pending confirmation was shown for inputs A.",
+    "events": [
+     "The owner submits the same confirmation value with different inputs B.",
+     "`operations` supplies the digest argument to `owner_sessions.take_confirmation`.",
+     "`owner_sessions` compares only the supplied digest with its pending digest."
+    ],
+    "outcomes": [
+     "An implementation that trusts the caller-supplied digest accepts the binding when `operations` supplies the pending digest.",
+     "An implementation that independently binds the submitted inputs refuses it as `confirmation_bound_elsewhere` and uses the confirmation up."
+    ],
+    "observer": "The owner sees either the action continue or a confirmation refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "public_op:owner_sessions.show_confirmation_step input ordering",
+   "kind": "ambiguous_equality",
+   "text": "bound to the action, its target, what the step showed and the digest of its inputs in a fixed order",
+   "question": "Does “in a fixed order” fix only the order of named fields while preserving the order of every input list, or may it canonicalize a list by sorting it? The accepted test requires the same list in another order to be different.",
+   "options": [
+    "Use a fixed field order and preserve every submitted list's order.",
+    "Canonicalize unordered keyed collections but preserve the order of lists.",
+    "Sort every collection before digesting it."
+   ],
+   "default_guess": "Use a fixed field order, canonicalize only explicitly keyed collections, and preserve every list's submitted order.",
+   "witness": {
+    "initial": "An import confirmation step was shown with picks [P1, P2].",
+    "events": [
+     "The owner submits the pending confirmation value with picks [P2, P1] and otherwise identical values.",
+     "`owner_sessions` checks the submitted binding."
+    ],
+    "outcomes": [
+     "An implementation that sorts picks before digesting treats the submission as bound.",
+     "An implementation that preserves list order refuses it as `confirmation_bound_elsewhere` and uses the value up."
+    ],
+    "observer": "The owner sees either import processing continue or a confirmation refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "confirmation binding serialization",
+   "kind": "later_layer_choice",
+   "text": "the inputs are kept as their digest, this operation's way of binding them, never as values",
+   "question": "What canonical, typed encoding and digest construction must generation use so field boundaries, absent values, variants, ordered lists and keyed collections cannot be interpreted differently?",
+   "decision_owner": "State 7",
+   "options": [
+    "Use a domain-separated canonical binary encoding with explicit type, presence, length and collection-order markers before hashing.",
+    "Use canonical JSON with fixed field names, explicit nulls and preserved array order before hashing.",
+    "Define a dedicated canonical encoder for each confirmed action."
+   ],
+   "consequences": [
+    "A canonical binary encoding is unambiguous but needs a shared encoder and compatibility tests.",
+    "Canonical JSON is easier to inspect but requires exact rules for numbers, Unicode, key ordering and absent versus null.",
+    "Per-action encoders make semantics explicit but duplicate machinery and can drift between showing and submission."
+   ],
+   "requirement": "a submission whose action, target, version or inputs differ from those shown is not bound",
+   "default_guess": "Use one domain-separated canonical typed encoder shared by showing and checking confirmation; preserve list order and distinguish absent values from present values.",
+   "unit": "?"
+  },
+  {
+   "subject": "PendingConfirmation digest collision semantics",
+   "kind": "incompatible_guarantees",
+   "text": "a submission whose action, target, version or inputs differ from those shown is not bound (A13 rule 6, test 12) — the inputs are kept as their digest, this operation's way of binding them, never as values",
+   "question": "Is rejection of every differing input an absolute guarantee, or does digest equality define binding despite the possibility of two different inputs having the same finite digest? State 2 must resolve this before a digest-only implementation can satisfy the promise.",
+   "decision_owner": "State 2",
+   "options": [
+    "Define binding by equality of a specified cryptographic digest and explicitly accept collision risk.",
+    "Require absolute semantic mismatch detection and retain enough collision-free information to compare the shown and submitted inputs.",
+    "Keep only a digest normally, but retain or derive additional collision-disambiguating information that is not the input values."
+   ],
+   "consequences": [
+    "Digest-defined equality preserves digest-only storage but weakens the literal guarantee for a collision.",
+    "Absolute comparison preserves the mismatch guarantee but conflicts with keeping only a finite digest unless the retained representation is injective.",
+    "Additional disambiguation may reduce collision risk but needs a precise rule for what may be retained without retaining the values."
+   ],
+   "requirement": "A pending confirmation shown for one action, target, version and inputs is refused, and used up, when the submission carrying its value changes any one of them: another action, another target, another version or none, another value of any input, or the same list in another order",
+   "default_guess": "Define a domain-separated cryptographic digest as the operational equality rule and explicitly state the computational collision assumption.",
+   "witness": {
+    "initial": "A pending confirmation stores only digest D for shown inputs A.",
+    "events": [
+     "A submission carries the pending confirmation value and different inputs B whose canonical digest is also D.",
+     "`owner_sessions` must decide whether the submission is bound without retaining A."
+    ],
+    "outcomes": [
+     "Following digest equality, the submission is treated as bound.",
+     "Following the absolute mismatch rule, the submission must be refused and the confirmation used up."
+    ],
+    "observer": "The owner sees either the changed action proceed or `confirmation_bound_elsewhere`."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"public_op:owner_sessions.show_confirmation_step / public_op:owner_sessions.take_confirmation\",\"kind\":\"missing_boundary_contract\",\"text\":\"the action, its target, the revision or access version it states or that it states none, and the digest of its inputs.\",\"question\":\"Who computes the submission digest, and what public obligation guarantees that the digest supplied by `operations` is the digest of exactly the submitted inputs under the same rules `show_confirmation_step` used?\",\"options\":[\"Have `take_confirmation` receive the submitted inputs and let `owner_sessions` compute and compare both digests.\",\"Add an `owner_sessions` operation that computes the binding digest for both showing and taking confirmation.\",\"Keep digest computation in `operations` and state the shared digest contract on both operations.\"],\"default_guess\":\"Have `take_confirmation` receive the submitted inputs so the module that owns confirmation binding also owns digest computation.\",\"witness\":{\"initial\":\"A pending confirmation was shown for inputs A.\",\"events\":[\"The owner submits the same confirmation value with different inputs B.\",\"`operations` supplies the digest argument to `owner_sessions.take_confirmation`.\",\"`owner_sessions` compares only the supplied digest with its pending digest.\"],\"outcomes\":[\"An implementation that trusts the caller-supplied digest accepts the binding when `operations` supplies the pending digest.\",\"An implementation that independently binds the submitted inputs refuses it as `confirmation_bound_elsewhere` and uses the confirmation up.\"],\"observer\":\"The owner sees either the action continue or a confirmation refusal.\"}},{\"subject\":\"public_op:owner_sessions.show_confirmation_step input ordering\",\"kind\":\"ambiguous_equality\",\"text\":\"bound to the action, its target, what the step showed and the digest of its inputs in a fixed order\",\"question\":\"Does “in a fixed order” fix only the order of named fields while preserving the order of every input list, or may it canonicalize a list by sorting it? The accepted test requires the same list in another order to be different.\",\"options\":[\"Use a fixed field order and preserve every submitted list's order.\",\"Canonicalize unordered keyed collections but preserve the order of lists.\",\"Sort every collection before digesting it.\"],\"default_guess\":\"Use a fixed field order, canonicalize only explicitly keyed collections, and preserve every list's submitted order.\",\"witness\":{\"initial\":\"An import confirmation step was shown with picks [P1, P2].\",\"events\":[\"The owner submits the pending confirmation value with picks [P2, P1] and otherwise identical values.\",\"`owner_sessions` checks the submitted binding.\"],\"outcomes\":[\"An implementation that sorts picks before digesting treats the submission as bound.\",\"An implementation that preserves list order refuses it as `confirmation_bound_elsewhere` and uses the value up.\"],\"observer\":\"The owner sees either import processing continue or a confirmation refusal.\"}},{\"subject\":\"confirmation binding serialization\",\"kind\":\"later_layer_choice\",\"text\":\"the inputs are kept as their digest, this operation's way of binding them, never as values\",\"question\":\"What canonical, typed encoding and digest construction must generation use so field boundaries, absent values, variants, ordered lists and keyed collections cannot be interpreted differently?\",\"decision_owner\":\"State 7\",\"options\":[\"Use a domain-separated canonical binary encoding with explicit type, presence, length and collection-order markers before hashing.\",\"Use canonical JSON with fixed field names, explicit nulls and preserved array order before hashing.\",\"Define a dedicated canonical encoder for each confirmed action.\"],\"consequences\":[\"A canonical binary encoding is unambiguous but needs a shared encoder and compatibility tests.\",\"Canonical JSON is easier to inspect but requires exact rules for numbers, Unicode, key ordering and absent versus null.\",\"Per-action encoders make semantics explicit but duplicate machinery and can drift between showing and submission.\"],\"requirement\":\"a submission whose action, target, version or inputs differ from those shown is not bound\",\"default_guess\":\"Use one domain-separated canonical typed encoder shared by showing and checking confirmation; preserve list order and distinguish absent values from present values.\"},{\"subject\":\"PendingConfirmation digest collision semantics\",\"kind\":\"incompatible_guarantees\",\"text\":\"a submission whose action, target, version or inputs differ from those shown is not bound (A13 rule 6, test 12) — the inputs are kept as their digest, this operation's way of binding them, never as values\",\"question\":\"Is rejection of every differing input an absolute guarantee, or does digest equality define binding despite the possibility of two different inputs having the same finite digest? State 2 must resolve this before a digest-only implementation can satisfy the promise.\",\"decision_owner\":\"State 2\",\"options\":[\"Define binding by equality of a specified cryptographic digest and explicitly accept collision risk.\",\"Require absolute semantic mismatch detection and retain enough collision-free information to compare the shown and submitted inputs.\",\"Keep only a digest normally, but retain or derive additional collision-disambiguating information that is not the input values.\"],\"consequences\":[\"Digest-defined equality preserves digest-only storage but weakens the literal guarantee for a collision.\",\"Absolute comparison preserves the mismatch guarantee but conflicts with keeping only a finite digest unless the retained representation is injective.\",\"Additional disambiguation may reduce collision risk but needs a precise rule for what may be retained without retaining the values.\"],\"requirement\":\"A pending confirmation shown for one action, target, version and inputs is refused, and used up, when the submission carrying its value changes any one of them: another action, another target, another version or none, another value of any input, or the same list in another order\",\"default_guess\":\"Define a domain-separated cryptographic digest as the operational equality rule and explicitly state the computational collision assumption.\",\"witness\":{\"initial\":\"A pending confirmation stores only digest D for shown inputs A.\",\"events\":[\"A submission carries the pending confirmation value and different inputs B whose canonical digest is also D.\",\"`owner_sessions` must decide whether the submission is bound without retaining A.\"],\"outcomes\":[\"Following digest equality, the submission is treated as bound.\",\"Following the absolute mismatch rule, the submission must be refused and the confirmation used up.\"],\"observer\":\"The owner sees either the changed action proceed or `confirmation_bound_elsewhere`.\"}}]}",
+ "set_aside": []
+}
