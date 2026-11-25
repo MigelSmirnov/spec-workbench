@@ -1523,19 +1523,15 @@ None.
 
 ### Meaning
 
-A row of the owner form table: one field an owner page writes into a form
-or a query, and the owner interface reads back (owner, 2026-11-25). The row
-gives the field's name, its path in the owner request or its values, with a
-tuple's position marked; which of the two it fills; and how its text is
-read: as text, as an integer, as true or false, or as an enumeration
-member's value. A field no row names is not read. The table holds the names
-so that the page and the reader cannot name a field differently (Route B
-runs of 2026-11-25).
+A row of the owner form table: one field of the owner's pages — what the
+owner types or picks in a form — as the owner interface names it on the page
+and reads it back (owner, 2026-11-25): its name, whether it belongs to the
+owner's request itself or to the values the owner gives, and how its text is
+read: as text, as a whole number, as yes or no, or as one of a closed list.
+One row per field.
 
-Facts: the field's name, which holds its path and the mark of each tuple
-position in it, so that two rows of different paths are different rows; what
-it fills; how its text is read. No two rows share a name: the name alone
-picks a row, and a table in which two rows share one is not a release.
+Facts: the field's name; whether it belongs to the request or to its values;
+how its text is read.
 
 ### Identity
 
@@ -1548,7 +1544,7 @@ Continuity: none; changed only with a new release.
 
 ### Source of truth
 
-The release: the data provider's `OWNER_FORM_FIELDS`.
+The release: the owner form table the data provider holds.
 
 ### Lifecycle candidate
 
