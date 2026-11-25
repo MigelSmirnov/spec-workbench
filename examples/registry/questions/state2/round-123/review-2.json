@@ -1,0 +1,162 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 owner-session and confirmation monotonic time",
+   "kind": "missing_time_representation",
+   "text": "its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock",
+   "question": "What is the representation, unit and precision of a monotonic reading, and what arithmetic and comparison semantics apply to it?",
+   "options": [
+    "An integer count of monotonic nanoseconds with exact integer arithmetic",
+    "An integer count of monotonic microseconds with exact integer arithmetic",
+    "An opaque monotonic-instant type supporting duration addition and ordering"
+   ],
+   "default_guess": "Use an opaque monotonic-instant type with exact duration addition and ordering; do not expose or serialize it.",
+   "witness": {
+    "initial": "A pending confirmation is one representable tick short of its 10-minute limit.",
+    "events": [
+     "The owner submits the confirmation at a physical instant between two adjacent representable monotonic values.",
+     "Registry compares the stored shown reading with its current reading."
+    ],
+    "outcomes": [
+     "With coarse or rounded readings, less than 10 minutes appears to have passed and the submission proceeds.",
+     "With finer or differently rounded readings, 10 minutes has passed and the submission is refused and the pending value cleared."
+    ],
+    "observer": "The owner sees acceptance versus an expired-confirmation refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-request clock readings",
+   "kind": "missing_read_count",
+   "text": "Validity is checked when a request arrives (A04 rule 6, stage 1)",
+   "question": "Does one owner request take exactly one monotonic reading at arrival and use it for the session limits, confirmation expiry and the new last-request instant, or may those decisions take separate readings?",
+   "options": [
+    "Take one monotonic reading for the request and reuse it for every time-based decision and update",
+    "Take separate readings for session admission, confirmation expiry and last-request update",
+    "Specify one reading for admission and a separate reading only for recording completion-related state"
+   ],
+   "default_guess": "Take one monotonic reading at arrival and reuse it for all time-based checks and the last-request update.",
+   "witness": {
+    "initial": "The owner session remains within its limits, while its pending confirmation reaches the 10-minute boundary during request processing.",
+    "events": [
+     "The owner submits the pending confirmation just before its limit.",
+     "Registry admits the session and then checks confirmation expiry."
+    ],
+    "outcomes": [
+     "A single arrival reading treats the confirmation as still valid.",
+     "A later second reading treats it as expired, refuses the submission and clears it."
+    ],
+    "observer": "The owner sees the confirmed action accepted or refused."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A16 confirmation binding to an uploaded file",
+   "kind": "contradictory_binding",
+   "text": "The file and the picks are bound by their digest, the names, aliases and Customer values with them",
+   "question": "Is an import confirmation bound to the particular upload occurrence, including M21's upload number, or only to the uploaded bytes' digest and the other displayed inputs?",
+   "options": [
+    "Bind the confirmation to the upload number as well as the digest and displayed inputs, so every replacement invalidates it",
+    "Bind only to digest and displayed inputs, so replacing the file with identical bytes does not invalidate it",
+    "Treat replacement as invalidating every pending import confirmation independently of the bound-input digest"
+   ],
+   "default_guess": "Bind the confirmation to M21's upload number as well as the digest and displayed inputs, preserving Required test 3.",
+   "witness": {
+    "initial": "An owner session holds upload number 1 with bytes B and a pending confirmation for its clean mapping.",
+    "events": [
+     "The owner uploads the identical bytes B again, producing upload number 2.",
+     "The owner submits the earlier confirmation with otherwise unchanged picks, names, aliases and Customer values."
+    ],
+    "outcomes": [
+     "Digest-only binding accepts the confirmation because the kept file and all bound values have the same digest.",
+     "Upload-occurrence binding refuses it because the confirmation named upload number 1, which is no longer kept."
+    ],
+    "observer": "The owner sees an accepted import versus a refusal; the store either gains the imported records or remains unchanged."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M21 upload-number generation",
+   "kind": "later_layer_choice",
+   "text": "its upload number within the session, so that an upload of the same bytes is still another upload and a confirmation step binds the upload it showed",
+   "question": "How is the upload occurrence represented and generated once State 2 explicitly requires it in confirmation binding?",
+   "options": [
+    "A session-local monotonically increasing integer",
+    "A fresh opaque random identifier for each accepted upload",
+    "An internal generation token advanced on every accepted replacement"
+   ],
+   "default_guess": "Use a session-local monotonically increasing integer, compared only for equality.",
+   "decision_owner": "generation",
+   "consequences": [
+    "A counter needs an initial value and overflow policy but is simple and deterministic.",
+    "A random identifier needs collision handling and another random-source use.",
+    "An internal generation token avoids public serialization but must still be represented in M21 and the pending confirmation."
+   ],
+   "requirement": "Confirming a mapping after another file was uploaded in the session is refused: the file it named is no longer kept — also when the new file has the same bytes.",
+   "unit": "?"
+  },
+  {
+   "subject": "M25 PersonalDataField row identifiers",
+   "kind": "later_layer_choice",
+   "text": "Facts: the answer's name; the field's name.",
+   "question": "What exact answer and field identifiers populate PERSONAL_DATA_FIELDS, including identifiers for nested and collection fields?",
+   "options": [
+    "Use the exact public contract answer and field names declared in State 6",
+    "Use model-and-field identifiers independent of public serialization",
+    "Use paths through each public answer, including collection and nested-field segments"
+   ],
+   "default_guess": "Use exact paths through the public answer schemas declared in State 6.",
+   "decision_owner": "6",
+   "consequences": [
+    "Public-schema paths make the class check directly cover serialized answers but couple the table to contract shape.",
+    "Model-field identifiers are reusable but require an unprovided mapping from answer fields to model facts.",
+    "Flat field names are ambiguous when answers reuse names or nest values."
+   ],
+   "requirement": "An answer that would carry a class above the token's highest is refused whole; Registry never answers part of it.",
+   "unit": "?"
+  },
+  {
+   "subject": "M26 refusal-code vocabulary",
+   "kind": "later_layer_choice",
+   "text": "`not_found` 404, `internal_error` 500, every other code 422, as v1 answered (L14; owner, 2026-11-24). One row per refusal code.",
+   "question": "What is the closed set of refusal codes for which REFUSAL_HTTP_STATUSES must contain one row?",
+   "options": [
+    "Declare one refusal code for each semantically distinct failure guaranteed by State 2",
+    "Reuse the complete v1 refusal-code vocabulary, removing only failures the new product cannot produce",
+    "Define the refusal-code vocabulary with the public failure contracts and then require a status row for every member"
+   ],
+   "default_guess": "Define the closed refusal-code vocabulary in the public failure contracts and require total coverage by REFUSAL_HTTP_STATUSES.",
+   "decision_owner": "5",
+   "consequences": [
+    "Fine-grained codes expose more distinctions and require more stable contract obligations.",
+    "Reusing v1 may retain irrelevant codes or fail to name new refusals.",
+    "Contract-driven enumeration keeps the table total but State 5 must resolve which State 2 refusals intentionally share a code."
+   ],
+   "requirement": "A row of the refusal status table: the HTTP status a refusal code is answered with on the service API and the owner interface — `not_found` 404, `internal_error` 500, every other code 422, as v1 answered (L14; owner, 2026-11-24). One row per refusal code.",
+   "unit": "?"
+  },
+  {
+   "subject": "M27 owner-interface paths",
+   "kind": "later_layer_choice",
+   "text": "its method — `GET` for a read, `POST` for every other action — and path, whether it is a change, whose form carries the CSRF value (State 2 A13 rule 2), and whether it touches an uploaded file (A16 rule 2). One row per owner action.",
+   "question": "What exact path is assigned to every owner action, and how are path parameters represented in OWNER_ACTIONS?",
+   "options": [
+    "One literal path template per owner action with identifiers as path parameters",
+    "Collection and item routes with identifiers supplied in forms or queries",
+    "Action-specific POST endpoints, while reads use resource-oriented GET paths"
+   ],
+   "default_guess": "Use one explicit path template per owner action, with stable named path parameters and no personal value in a URL.",
+   "decision_owner": "5",
+   "consequences": [
+    "Path parameters make target identity visible in URLs and must respect the prohibition on personal values there.",
+    "Form parameters keep targets out of paths but change routing and failure handling.",
+    "Action-specific endpoints are explicit but produce a larger route table."
+   ],
+   "requirement": "No personal value appears in a URL.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 owner-session and confirmation monotonic time\",\"kind\":\"missing_time_representation\",\"text\":\"its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock\",\"question\":\"What is the representation, unit and precision of a monotonic reading, and what arithmetic and comparison semantics apply to it?\",\"options\":[\"An integer count of monotonic nanoseconds with exact integer arithmetic\",\"An integer count of monotonic microseconds with exact integer arithmetic\",\"An opaque monotonic-instant type supporting duration addition and ordering\"],\"default_guess\":\"Use an opaque monotonic-instant type with exact duration addition and ordering; do not expose or serialize it.\",\"witness\":{\"initial\":\"A pending confirmation is one representable tick short of its 10-minute limit.\",\"events\":[\"The owner submits the confirmation at a physical instant between two adjacent representable monotonic values.\",\"Registry compares the stored shown reading with its current reading.\"],\"outcomes\":[\"With coarse or rounded readings, less than 10 minutes appears to have passed and the submission proceeds.\",\"With finer or differently rounded readings, 10 minutes has passed and the submission is refused and the pending value cleared.\"],\"observer\":\"The owner sees acceptance versus an expired-confirmation refusal.\"}},{\"subject\":\"A13 owner-request clock readings\",\"kind\":\"missing_read_count\",\"text\":\"Validity is checked when a request arrives (A04 rule 6, stage 1)\",\"question\":\"Does one owner request take exactly one monotonic reading at arrival and use it for the session limits, confirmation expiry and the new last-request instant, or may those decisions take separate readings?\",\"options\":[\"Take one monotonic reading for the request and reuse it for every time-based decision and update\",\"Take separate readings for session admission, confirmation expiry and last-request update\",\"Specify one reading for admission and a separate reading only for recording completion-related state\"],\"default_guess\":\"Take one monotonic reading at arrival and reuse it for all time-based checks and the last-request update.\",\"witness\":{\"initial\":\"The owner session remains within its limits, while its pending confirmation reaches the 10-minute boundary during request processing.\",\"events\":[\"The owner submits the pending confirmation just before its limit.\",\"Registry admits the session and then checks confirmation expiry.\"],\"outcomes\":[\"A single arrival reading treats the confirmation as still valid.\",\"A later second reading treats it as expired, refuses the submission and clears it.\"],\"observer\":\"The owner sees the confirmed action accepted or refused.\"}},{\"subject\":\"A16 confirmation binding to an uploaded file\",\"kind\":\"contradictory_binding\",\"text\":\"The file and the picks are bound by their digest, the names, aliases and Customer values with them\",\"question\":\"Is an import confirmation bound to the particular upload occurrence, including M21's upload number, or only to the uploaded bytes' digest and the other displayed inputs?\",\"options\":[\"Bind the confirmation to the upload number as well as the digest and displayed inputs, so every replacement invalidates it\",\"Bind only to digest and displayed inputs, so replacing the file with identical bytes does not invalidate it\",\"Treat replacement as invalidating every pending import confirmation independently of the bound-input digest\"],\"default_guess\":\"Bind the confirmation to M21's upload number as well as the digest and displayed inputs, preserving Required test 3.\",\"witness\":{\"initial\":\"An owner session holds upload number 1 with bytes B and a pending confirmation for its clean mapping.\",\"events\":[\"The owner uploads the identical bytes B again, producing upload number 2.\",\"The owner submits the earlier confirmation with otherwise unchanged picks, names, aliases and Customer values.\"],\"outcomes\":[\"Digest-only binding accepts the confirmation because the kept file and all bound values have the same digest.\",\"Upload-occurrence binding refuses it because the confirmation named upload number 1, which is no longer kept.\"],\"observer\":\"The owner sees an accepted import versus a refusal; the store either gains the imported records or remains unchanged.\"}},{\"subject\":\"M21 upload-number generation\",\"kind\":\"later_layer_choice\",\"text\":\"its upload number within the session, so that an upload of the same bytes is still another upload and a confirmation step binds the upload it showed\",\"question\":\"How is the upload occurrence represented and generated once State 2 explicitly requires it in confirmation binding?\",\"options\":[\"A session-local monotonically increasing integer\",\"A fresh opaque random identifier for each accepted upload\",\"An internal generation token advanced on every accepted replacement\"],\"default_guess\":\"Use a session-local monotonically increasing integer, compared only for equality.\",\"decision_owner\":\"generation\",\"consequences\":[\"A counter needs an initial value and overflow policy but is simple and deterministic.\",\"A random identifier needs collision handling and another random-source use.\",\"An internal generation token avoids public serialization but must still be represented in M21 and the pending confirmation.\"],\"requirement\":\"Confirming a mapping after another file was uploaded in the session is refused: the file it named is no longer kept — also when the new file has the same bytes.\"},{\"subject\":\"M25 PersonalDataField row identifiers\",\"kind\":\"later_layer_choice\",\"text\":\"Facts: the answer's name; the field's name.\",\"question\":\"What exact answer and field identifiers populate PERSONAL_DATA_FIELDS, including identifiers for nested and collection fields?\",\"options\":[\"Use the exact public contract answer and field names declared in State 6\",\"Use model-and-field identifiers independent of public serialization\",\"Use paths through each public answer, including collection and nested-field segments\"],\"default_guess\":\"Use exact paths through the public answer schemas declared in State 6.\",\"decision_owner\":\"6\",\"consequences\":[\"Public-schema paths make the class check directly cover serialized answers but couple the table to contract shape.\",\"Model-field identifiers are reusable but require an unprovided mapping from answer fields to model facts.\",\"Flat field names are ambiguous when answers reuse names or nest values.\"],\"requirement\":\"An answer that would carry a class above the token's highest is refused whole; Registry never answers part of it.\"},{\"subject\":\"M26 refusal-code vocabulary\",\"kind\":\"later_layer_choice\",\"text\":\"`not_found` 404, `internal_error` 500, every other code 422, as v1 answered (L14; owner, 2026-11-24). One row per refusal code.\",\"question\":\"What is the closed set of refusal codes for which REFUSAL_HTTP_STATUSES must contain one row?\",\"options\":[\"Declare one refusal code for each semantically distinct failure guaranteed by State 2\",\"Reuse the complete v1 refusal-code vocabulary, removing only failures the new product cannot produce\",\"Define the refusal-code vocabulary with the public failure contracts and then require a status row for every member\"],\"default_guess\":\"Define the closed refusal-code vocabulary in the public failure contracts and require total coverage by REFUSAL_HTTP_STATUSES.\",\"decision_owner\":\"5\",\"consequences\":[\"Fine-grained codes expose more distinctions and require more stable contract obligations.\",\"Reusing v1 may retain irrelevant codes or fail to name new refusals.\",\"Contract-driven enumeration keeps the table total but State 5 must resolve which State 2 refusals intentionally share a code.\"],\"requirement\":\"A row of the refusal status table: the HTTP status a refusal code is answered with on the service API and the owner interface — `not_found` 404, `internal_error` 500, every other code 422, as v1 answered (L14; owner, 2026-11-24). One row per refusal code.\"},{\"subject\":\"M27 owner-interface paths\",\"kind\":\"later_layer_choice\",\"text\":\"its method — `GET` for a read, `POST` for every other action — and path, whether it is a change, whose form carries the CSRF value (State 2 A13 rule 2), and whether it touches an uploaded file (A16 rule 2). One row per owner action.\",\"question\":\"What exact path is assigned to every owner action, and how are path parameters represented in OWNER_ACTIONS?\",\"options\":[\"One literal path template per owner action with identifiers as path parameters\",\"Collection and item routes with identifiers supplied in forms or queries\",\"Action-specific POST endpoints, while reads use resource-oriented GET paths\"],\"default_guess\":\"Use one explicit path template per owner action, with stable named path parameters and no personal value in a URL.\",\"decision_owner\":\"5\",\"consequences\":[\"Path parameters make target identity visible in URLs and must respect the prohibition on personal values there.\",\"Form parameters keep targets out of paths but change routing and failure handling.\",\"Action-specific endpoints are explicit but produce a larger route table.\"],\"requirement\":\"No personal value appears in a URL.\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,204 @@
+{
+ "open_points": [
+  {
+   "subject": "M21 UploadedFile and A13/A16 confirmation binding",
+   "kind": "contradictory_binding",
+   "text": "and its upload number within the session, so that an upload of the same bytes is still another upload and a confirmation step binds the upload it showed",
+   "question": "Does an import confirmation bind the upload number as well as the file digest? A13 rule 6 and A16 rule 2 describe the binding as the file digest and picks, but M21 and A16 Required test 3 require a same-bytes re-upload to invalidate the earlier confirmation.",
+   "options": [
+    "Bind both the file digest and upload number; a same-bytes re-upload invalidates the confirmation.",
+    "Bind only the digest; a same-bytes re-upload remains indistinguishable and the earlier confirmation may apply.",
+    "Replace the upload number with another per-upload opaque generation and bind that generation with the digest."
+   ],
+   "default_guess": "Bind both the digest and the per-session upload number.",
+   "witness": {
+    "initial": "Owner session S holds upload number 1 with bytes B, digest D, and a pending confirmation for that upload.",
+    "events": [
+     "The owner uploads B again in S, producing upload number 2 with the same digest D.",
+     "The owner submits the confirmation shown for upload number 1."
+    ],
+    "outcomes": [
+     "Digest-only reading: the submission matches D and may apply upload number 2.",
+     "Upload-identity reading: the submission is refused because upload number 1 is no longer kept."
+    ],
+    "observer": "The owner sees acceptance versus refusal, and the store may receive the import only in the first outcome."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M21 UploadedFile upload number",
+   "kind": "later_layer_choice",
+   "text": "its upload number within the session",
+   "question": "How is the distinct per-upload value produced and represented while preserving the rule that even another upload of the same bytes replaces the prior upload?",
+   "decision_owner": "generation",
+   "options": [
+    "A monotonically increasing per-session integer.",
+    "A fresh opaque random value for every accepted upload.",
+    "An internal generation token whose concrete representation is hidden from public contracts."
+   ],
+   "consequences": [
+    "Requires initialization, increment and overflow behavior.",
+    "Requires randomness and collision handling but no counter lifecycle.",
+    "Keeps the representation private while still requiring equality and freshness semantics in generated code."
+   ],
+   "requirement": "Confirming a mapping after another file was uploaded in the session is refused: the file it named is no longer kept — also when the new file has the same bytes.",
+   "default_guess": "Use an internal monotonically increasing per-session integer and include it in the confirmation binding.",
+   "unit": "?"
+  },
+  {
+   "subject": "M10, M14, M18, M20 and M21 digest semantics",
+   "kind": "missing_safety_decision",
+   "text": "the inputs it is bound to, by their digest",
+   "question": "What guarantee must a digest provide when it identifies an accepted import, distinguishes an uploaded file, or binds confirmation inputs: must distinct byte strings or input tuples always be treated as distinct, or is cryptographic collision resistance only an operational assumption? The texts also do not decide the canonical encoding of the ordered input tuple before hashing.",
+   "options": [
+    "Require a specified canonical encoding and collision-resistant digest, treating a collision as outside the guarantee.",
+    "Require exact-value comparison in addition to a digest so distinct inputs can never satisfy the binding merely through a collision.",
+    "Accept digest equality as identity without any stated collision guarantee or canonical encoding."
+   ],
+   "default_guess": "Specify canonical length-delimited encoding and a named collision-resistant digest, and state that collision resistance is the security assumption.",
+   "witness": {
+    "initial": "Two different import input tuples can be encoded or hashed to the same stored digest under one admissible implementation.",
+    "events": [
+     "Registry shows a confirmation for the first tuple.",
+     "The owner submits the same confirmation with the second tuple."
+    ],
+    "outcomes": [
+     "Digest equality is sufficient, so the second tuple is accepted as bound.",
+     "The binding requires distinct tuples to remain distinct, so the second tuple is refused."
+    ],
+    "observer": "The owner and the resulting imported records see which tuple was applied."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M13 PrincipalPublisher representation",
+   "kind": "later_layer_choice",
+   "text": "Facts: the principal (M07).",
+   "question": "How must the later model or contract prevent the `service` form allowed by M07 from being represented as a PrincipalPublisher, while permitting only the owner and Kernel-for-session forms stated by M13?",
+   "decision_owner": "state6_exact_contracts",
+   "options": [
+    "Define PrincipalPublisher as a narrowed union containing only owner and agent-via-Kernel principals.",
+    "Reuse the full ActingPrincipal model and add a validation constraint excluding service principals.",
+    "Represent publisher variants directly without nesting M07."
+   ],
+   "consequences": [
+    "Makes the invalid service form unrepresentable.",
+    "Reuses M07 but requires every construction and decoding boundary to enforce the constraint.",
+    "Duplicates some principal structure but can encode the allowed publisher forms directly."
+   ],
+   "requirement": "The publisher of a pointer published in Registry (M05): the acting principal (M07) that published it — Kernel for the agent naming its session, or the owner (R0-88).",
+   "default_guess": "Use a narrowed discriminated union that cannot represent a service principal.",
+   "unit": "?"
+  },
+  {
+   "subject": "M25 PersonalDataField rows",
+   "kind": "later_layer_choice",
+   "text": "Facts: the answer's name; the field's name.",
+   "question": "Which exact generated answer and field identifiers populate `PERSONAL_DATA_FIELDS` once State 6 fixes the answer schemas, including nested fields and fields reused by several answers?",
+   "decision_owner": "state6_exact_contracts",
+   "options": [
+    "List every concrete answer-schema path separately.",
+    "List reusable model-field identities and derive affected answer paths.",
+    "Use top-level answer and field names only, with an explicit rule for nested values."
+   ],
+   "consequences": [
+    "Directly matches runtime answers but duplicates entries.",
+    "Reduces duplication but requires derivation from model use to answer paths.",
+    "Keeps rows simple but needs an unambiguous nesting rule to avoid missing personal data."
+   ],
+   "requirement": "An answer that would carry a class above the token's highest is refused whole; Registry never answers part of it.",
+   "default_guess": "List every concrete answer-schema field path after State 6 fixes the schemas.",
+   "unit": "?"
+  },
+  {
+   "subject": "M26 RefusalHttpStatus coverage",
+   "kind": "later_layer_choice",
+   "text": "One row per refusal code.",
+   "question": "What is the closed refusal-code vocabulary for which `REFUSAL_HTTP_STATUSES` must contain exactly one row? The supplied texts name several codes but never give the exhaustive set.",
+   "decision_owner": "state6_exact_contracts",
+   "options": [
+    "State 6 declares a closed refusal-code enumeration and requires one table row for every member.",
+    "Derive the set mechanically from every operation's declared failures.",
+    "Allow an open refusal-code string space and use a default 422 row for codes not explicitly listed."
+   ],
+   "consequences": [
+    "Makes completeness statically checkable.",
+    "Avoids a second list but requires complete operation contracts before the table can be validated.",
+    "Permits later codes silently and weakens the claim that there is one row per code."
+   ],
+   "requirement": "A row of the refusal status table: the HTTP status a refusal code is answered with on the service API and the owner interface — `not_found` 404, `internal_error` 500, every other code 422, as v1 answered (L14; owner, 2026-11-24). One row per refusal code.",
+   "default_guess": "Declare a closed refusal-code enumeration in State 6 and require total table coverage.",
+   "unit": "?"
+  },
+  {
+   "subject": "M27 OwnerActionRoute rows",
+   "kind": "later_layer_choice",
+   "text": "Facts: the owner action; its method; its path; whether it is a change; whether it touches an uploaded file.",
+   "question": "What is the exhaustive owner-action vocabulary, and what exact method and path does each row of `OWNER_ACTIONS` use?",
+   "decision_owner": "state6_exact_contracts",
+   "options": [
+    "Declare one route row for every owner operation, including sign-in, sign-out, mapping and confirmation-step requests.",
+    "Separate page/read routes from submitted action routes, allowing an operation to have more than one route row.",
+    "Use route families with path parameters and derive concrete rows."
+   ],
+   "consequences": [
+    "Simple total table but may conflate showing a form with submitting it.",
+    "Models the server-rendered interface accurately but conflicts with a literal one-row-per-owner-action interpretation unless that text changes.",
+    "Reduces repetition but requires deterministic expansion and collision checks."
+   ],
+   "requirement": "Every change carries CSRF protection and is validated on the server; a change made against an older revision is refused (R0-35).",
+   "default_guess": "Separate display/read routes from submitted actions and declare every concrete route in State 6.",
+   "unit": "?"
+  },
+  {
+   "subject": "M28 OwnerAuditAction rows",
+   "kind": "later_layer_choice",
+   "text": "Facts: the owner action; the customer mark's transition, where the action has one; the project erasure's kind, where the action has one; the audit action it writes.",
+   "question": "How are the State 2 semantic actions and transition variants represented as exact keys and audit-action members in `OWNER_AUDIT_ACTIONS`?",
+   "decision_owner": "state6_exact_contracts",
+   "options": [
+    "One explicit row for every action/transition/erasure-kind combination.",
+    "One row per owner action whose value is a nested transition-to-audit-action table.",
+    "Generate the table from the owner-action and audit-action enumerations plus declarative mapping metadata."
+   ],
+   "consequences": [
+    "Most explicit and easiest to validate for total coverage.",
+    "More compact but introduces nested table structure.",
+    "Avoids handwritten duplication but requires generation and completeness checks."
+   ],
+   "requirement": "An entry is written by an accepted action that changes state and that M09 lists, in the same transaction as the change: if the change is not stored, neither is the entry, and the reverse.",
+   "default_guess": "Use one explicit row per action and applicable variant, checked for total coverage.",
+   "unit": "?"
+  },
+  {
+   "subject": "A09 service rights source",
+   "kind": "standard_violation",
+   "text": "Every service token names one service; Registry knows from its own release which operations that service may call and the highest disclosure class it may receive (R0-26, R0-27). The configuration holds the tokens, not their rights (R0-20, R0-23).",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name the rights policy as the imported `SERVICE_RIGHTS` constant and the class policy as the imported `SERVICE_HIGHEST_CLASSES` constant wherever generated code reads those release tables.",
+   "unit": "?"
+  },
+  {
+   "subject": "A22 artifact vocabulary source",
+   "kind": "standard_violation",
+   "text": "The declared types are part of the specification and of the release; a running instance reads them from its release, never from its configuration or its store (R0-33).",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "The passage must name the artifact vocabulary as the imported `ARTIFACT_TYPE_OWNERS` constant that generated code reads.",
+   "unit": "?"
+  },
+  {
+   "subject": "A14 owner-action audit mapping",
+   "kind": "standard_violation",
+   "text": "An entry is written by an accepted action that changes state and that M09 lists, in the same transaction as the change: if the change is not stored, neither is the entry, and the reverse.",
+   "rule": "Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.",
+   "section": "15.3.1",
+   "question": "Because M28 now makes this runtime mapping the data provider's `OWNER_AUDIT_ACTIONS` table, the passage must name it as the imported `OWNER_AUDIT_ACTIONS` constant while preserving the stated audit guarantee.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M21 UploadedFile and A13/A16 confirmation binding\",\"kind\":\"contradictory_binding\",\"text\":\"and its upload number within the session, so that an upload of the same bytes is still another upload and a confirmation step binds the upload it showed\",\"question\":\"Does an import confirmation bind the upload number as well as the file digest? A13 rule 6 and A16 rule 2 describe the binding as the file digest and picks, but M21 and A16 Required test 3 require a same-bytes re-upload to invalidate the earlier confirmation.\",\"options\":[\"Bind both the file digest and upload number; a same-bytes re-upload invalidates the confirmation.\",\"Bind only the digest; a same-bytes re-upload remains indistinguishable and the earlier confirmation may apply.\",\"Replace the upload number with another per-upload opaque generation and bind that generation with the digest.\"],\"default_guess\":\"Bind both the digest and the per-session upload number.\",\"witness\":{\"initial\":\"Owner session S holds upload number 1 with bytes B, digest D, and a pending confirmation for that upload.\",\"events\":[\"The owner uploads B again in S, producing upload number 2 with the same digest D.\",\"The owner submits the confirmation shown for upload number 1.\"],\"outcomes\":[\"Digest-only reading: the submission matches D and may apply upload number 2.\",\"Upload-identity reading: the submission is refused because upload number 1 is no longer kept.\"],\"observer\":\"The owner sees acceptance versus refusal, and the store may receive the import only in the first outcome.\"}},{\"subject\":\"M21 UploadedFile upload number\",\"kind\":\"later_layer_choice\",\"text\":\"its upload number within the session\",\"question\":\"How is the distinct per-upload value produced and represented while preserving the rule that even another upload of the same bytes replaces the prior upload?\",\"decision_owner\":\"generation\",\"options\":[\"A monotonically increasing per-session integer.\",\"A fresh opaque random value for every accepted upload.\",\"An internal generation token whose concrete representation is hidden from public contracts.\"],\"consequences\":[\"Requires initialization, increment and overflow behavior.\",\"Requires randomness and collision handling but no counter lifecycle.\",\"Keeps the representation private while still requiring equality and freshness semantics in generated code.\"],\"requirement\":\"Confirming a mapping after another file was uploaded in the session is refused: the file it named is no longer kept — also when the new file has the same bytes.\",\"default_guess\":\"Use an internal monotonically increasing per-session integer and include it in the confirmation binding.\"},{\"subject\":\"M10, M14, M18, M20 and M21 digest semantics\",\"kind\":\"missing_safety_decision\",\"text\":\"the inputs it is bound to, by their digest\",\"question\":\"What guarantee must a digest provide when it identifies an accepted import, distinguishes an uploaded file, or binds confirmation inputs: must distinct byte strings or input tuples always be treated as distinct, or is cryptographic collision resistance only an operational assumption? The texts also do not decide the canonical encoding of the ordered input tuple before hashing.\",\"options\":[\"Require a specified canonical encoding and collision-resistant digest, treating a collision as outside the guarantee.\",\"Require exact-value comparison in addition to a digest so distinct inputs can never satisfy the binding merely through a collision.\",\"Accept digest equality as identity without any stated collision guarantee or canonical encoding.\"],\"default_guess\":\"Specify canonical length-delimited encoding and a named collision-resistant digest, and state that collision resistance is the security assumption.\",\"witness\":{\"initial\":\"Two different import input tuples can be encoded or hashed to the same stored digest under one admissible implementation.\",\"events\":[\"Registry shows a confirmation for the first tuple.\",\"The owner submits the same confirmation with the second tuple.\"],\"outcomes\":[\"Digest equality is sufficient, so the second tuple is accepted as bound.\",\"The binding requires distinct tuples to remain distinct, so the second tuple is refused.\"],\"observer\":\"The owner and the resulting imported records see which tuple was applied.\"}},{\"subject\":\"M13 PrincipalPublisher representation\",\"kind\":\"later_layer_choice\",\"text\":\"Facts: the principal (M07).\",\"question\":\"How must the later model or contract prevent the `service` form allowed by M07 from being represented as a PrincipalPublisher, while permitting only the owner and Kernel-for-session forms stated by M13?\",\"decision_owner\":\"state6_exact_contracts\",\"options\":[\"Define PrincipalPublisher as a narrowed union containing only owner and agent-via-Kernel principals.\",\"Reuse the full ActingPrincipal model and add a validation constraint excluding service principals.\",\"Represent publisher variants directly without nesting M07.\"],\"consequences\":[\"Makes the invalid service form unrepresentable.\",\"Reuses M07 but requires every construction and decoding boundary to enforce the constraint.\",\"Duplicates some principal structure but can encode the allowed publisher forms directly.\"],\"requirement\":\"The publisher of a pointer published in Registry (M05): the acting principal (M07) that published it — Kernel for the agent naming its session, or the owner (R0-88).\",\"default_guess\":\"Use a narrowed discriminated union that cannot represent a service principal.\"},{\"subject\":\"M25 PersonalDataField rows\",\"kind\":\"later_layer_choice\",\"text\":\"Facts: the answer's name; the field's name.\",\"question\":\"Which exact generated answer and field identifiers populate `PERSONAL_DATA_FIELDS` once State 6 fixes the answer schemas, including nested fields and fields reused by several answers?\",\"decision_owner\":\"state6_exact_contracts\",\"options\":[\"List every concrete answer-schema path separately.\",\"List reusable model-field identities and derive affected answer paths.\",\"Use top-level answer and field names only, with an explicit rule for nested values.\"],\"consequences\":[\"Directly matches runtime answers but duplicates entries.\",\"Reduces duplication but requires derivation from model use to answer paths.\",\"Keeps rows simple but needs an unambiguous nesting rule to avoid missing personal data.\"],\"requirement\":\"An answer that would carry a class above the token's highest is refused whole; Registry never answers part of it.\",\"default_guess\":\"List every concrete answer-schema field path after State 6 fixes the schemas.\"},{\"subject\":\"M26 RefusalHttpStatus coverage\",\"kind\":\"later_layer_choice\",\"text\":\"One row per refusal code.\",\"question\":\"What is the closed refusal-code vocabulary for which `REFUSAL_HTTP_STATUSES` must contain exactly one row? The supplied texts name several codes but never give the exhaustive set.\",\"decision_owner\":\"state6_exact_contracts\",\"options\":[\"State 6 declares a closed refusal-code enumeration and requires one table row for every member.\",\"Derive the set mechanically from every operation's declared failures.\",\"Allow an open refusal-code string space and use a default 422 row for codes not explicitly listed.\"],\"consequences\":[\"Makes completeness statically checkable.\",\"Avoids a second list but requires complete operation contracts before the table can be validated.\",\"Permits later codes silently and weakens the claim that there is one row per code.\"],\"requirement\":\"A row of the refusal status table: the HTTP status a refusal code is answered with on the service API and the owner interface — `not_found` 404, `internal_error` 500, every other code 422, as v1 answered (L14; owner, 2026-11-24). One row per refusal code.\",\"default_guess\":\"Declare a closed refusal-code enumeration in State 6 and require total table coverage.\"},{\"subject\":\"M27 OwnerActionRoute rows\",\"kind\":\"later_layer_choice\",\"text\":\"Facts: the owner action; its method; its path; whether it is a change; whether it touches an uploaded file.\",\"question\":\"What is the exhaustive owner-action vocabulary, and what exact method and path does each row of `OWNER_ACTIONS` use?\",\"decision_owner\":\"state6_exact_contracts\",\"options\":[\"Declare one route row for every owner operation, including sign-in, sign-out, mapping and confirmation-step requests.\",\"Separate page/read routes from submitted action routes, allowing an operation to have more than one route row.\",\"Use route families with path parameters and derive concrete rows.\"],\"consequences\":[\"Simple total table but may conflate showing a form with submitting it.\",\"Models the server-rendered interface accurately but conflicts with a literal one-row-per-owner-action interpretation unless that text changes.\",\"Reduces repetition but requires deterministic expansion and collision checks.\"],\"requirement\":\"Every change carries CSRF protection and is validated on the server; a change made against an older revision is refused (R0-35).\",\"default_guess\":\"Separate display/read routes from submitted actions and declare every concrete route in State 6.\"},{\"subject\":\"M28 OwnerAuditAction rows\",\"kind\":\"later_layer_choice\",\"text\":\"Facts: the owner action; the customer mark's transition, where the action has one; the project erasure's kind, where the action has one; the audit action it writes.\",\"question\":\"How are the State 2 semantic actions and transition variants represented as exact keys and audit-action members in `OWNER_AUDIT_ACTIONS`?\",\"decision_owner\":\"state6_exact_contracts\",\"options\":[\"One explicit row for every action/transition/erasure-kind combination.\",\"One row per owner action whose value is a nested transition-to-audit-action table.\",\"Generate the table from the owner-action and audit-action enumerations plus declarative mapping metadata.\"],\"consequences\":[\"Most explicit and easiest to validate for total coverage.\",\"More compact but introduces nested table structure.\",\"Avoids handwritten duplication but requires generation and completeness checks.\"],\"requirement\":\"An entry is written by an accepted action that changes state and that M09 lists, in the same transaction as the change: if the change is not stored, neither is the entry, and the reverse.\",\"default_guess\":\"Use one explicit row per action and applicable variant, checked for total coverage.\"},{\"subject\":\"A09 service rights source\",\"kind\":\"standard_violation\",\"text\":\"Every service token names one service; Registry knows from its own release which operations that service may call and the highest disclosure class it may receive (R0-26, R0-27). The configuration holds the tokens, not their rights (R0-20, R0-23).\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the rights policy as the imported `SERVICE_RIGHTS` constant and the class policy as the imported `SERVICE_HIGHEST_CLASSES` constant wherever generated code reads those release tables.\"},{\"subject\":\"A22 artifact vocabulary source\",\"kind\":\"standard_violation\",\"text\":\"The declared types are part of the specification and of the release; a running instance reads them from its release, never from its configuration or its store (R0-33).\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"The passage must name the artifact vocabulary as the imported `ARTIFACT_TYPE_OWNERS` constant that generated code reads.\"},{\"subject\":\"A14 owner-action audit mapping\",\"kind\":\"standard_violation\",\"text\":\"An entry is written by an accepted action that changes state and that M09 lists, in the same transaction as the change: if the change is not stored, neither is the entry, and the reverse.\",\"rule\":\"Таблица выше — исчерпывающий список путей значения, и у каждого из них своя форма: перечисление называется адресом, константа поставщика — `the imported X constant`, настройка — полем объекта настроек.\",\"section\":\"15.3.1\",\"question\":\"Because M28 now makes this runtime mapping the data provider's `OWNER_AUDIT_ACTIONS` table, the passage must name it as the imported `OWNER_AUDIT_ACTIONS` constant while preserving the stated audit guarantee.\"}]}",
+ "set_aside": []
+}
