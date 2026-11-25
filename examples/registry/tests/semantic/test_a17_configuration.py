@@ -74,10 +74,10 @@ VARIABLE = {
     "backup_key": "REGISTRY_BACKUP_KEY",
     "owner_credential": "REGISTRY_OWNER_CREDENTIAL",
     "owner_listen": "REGISTRY_OWNER_LISTEN",
-    "token_presupro": "REGISTRY_TOKEN_PRESUPRO",
-    "token_client_portal": "REGISTRY_TOKEN_CLIENT_PORTAL",
-    "token_cabinet": "REGISTRY_TOKEN_CABINET",
-    "token_cabinet_kernel": "REGISTRY_TOKEN_CABINET_KERNEL",
+    "token_presupro": "REGISTRY_CREDENTIAL_PRESUPRO",
+    "token_client_portal": "REGISTRY_CREDENTIAL_CLIENT_PORTAL",
+    "token_cabinet": "REGISTRY_CREDENTIAL_CABINET",
+    "token_cabinet_kernel": "REGISTRY_CREDENTIAL_CABINET_KERNEL",
     "service_listen": "REGISTRY_SERVICE_LISTEN",
 }
 
@@ -457,8 +457,8 @@ def test_unknown_variables_ignored_misspelt_item_missing(semantic_runtime, tmp_p
     assert not _accepts(full["owner_listen"])
 
     # Three tokens and the fourth misspelt: stops naming that token.
-    three = {k: v for k, v in environment.items() if k != "REGISTRY_TOKEN_CABINET"}
-    three["REGISTRY_TOKEN_CABINE"] = full["token_cabinet"]
+    three = {k: v for k, v in environment.items() if k != "REGISTRY_CREDENTIAL_CABINET"}
+    three["REGISTRY_CREDENTIAL_CABINE"] = full["token_cabinet"]
     rt.configure_environment(three)
     diagnostic = rt.start()
     assert diagnostic is not None and _names(diagnostic, "token_cabinet"), diagnostic
@@ -470,7 +470,7 @@ def test_unknown_variables_ignored_misspelt_item_missing(semantic_runtime, tmp_p
         for k, v in environment.items()
         if k not in {VARIABLE[i] for i in TOKEN_ITEMS} | {"REGISTRY_SERVICE_LISTEN"}
     }
-    owner_only["REGISTRY_TOKEN_PRESUPROO"] = full["token_presupro"]
+    owner_only["REGISTRY_CREDENTIAL_PRESUPROO"] = full["token_presupro"]
     rt.configure_environment(owner_only)
     assert rt.start() is None
     assert _accepts(full["owner_listen"])
