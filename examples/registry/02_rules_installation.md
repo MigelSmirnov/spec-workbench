@@ -735,16 +735,27 @@ Proposed by the security review and accepted by the owner on 2026-10-31.
 5. Rules 1–4 are kept by the release process and its installation, which
    Registry does not manage (00_product.md, Explicit exclusions): they make
    the release, name its dependencies and install them, and Registry's own
-   code reads none of it (owner, 2026-11-24). This decision therefore
-   declares no formal invariant of Registry: no note of a module and no
-   check of Registry's code can show what the installation does, and one
-   claimed here would be a false witness.
+   code reads none of it (owner, 2026-11-24). For rules 1–4 this decision
+   therefore declares no formal invariant of Registry: no note of a module
+   and no check of Registry's code can show what the installation does, and
+   one claimed here would be a false witness.
+6. A release runs on Linux and on no other host, no version named, and its
+   Python is CPython 3.12 (owner, 2026-11-25). Another system, or a Linux or
+   file system on which a call Registry's rules rely on — opening a file
+   without following a link, binding a listening socket, renaming, flushing
+   — does not act as Linux documents it, is unsupported: Registry neither
+   tests for it nor defines what it does there. Unlike rules 1–4, this rule
+   binds Registry's own code: it uses the host's facilities as Linux
+   documents them and tests for the presence of none.
 
 ### Formal invariants
 
-None: kept by the release process and its installation outside Registry
-(rule 5) — the running dependencies are the release's (name, version,
-digest), which no note or check of Registry's code can show.
+None: kept outside Registry's checks — rules 1–4 and rule 6's host and
+Python by the release process and its installation (rule 5), and rule 6's
+"tests for the presence of none" by the Factory's static gate on every
+generated module, which rejects any probe of an attribute — so the running
+dependencies are the release's (name, version, digest) and the host is
+Linux, which no note or check of Registry's code can show.
 
 ### Required tests
 
