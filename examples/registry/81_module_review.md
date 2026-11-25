@@ -427,6 +427,28 @@ The own-name rule now excludes `action` (from the route), `target` and
 reader, and each break was a gap or a contradiction in these two notes.
 `owner_interface` was re-hashed.
 
+## 2026-11-25: unknown field names and tuples of any length
+
+On `7f4071bb` (run `20261125_220855`) the reader read POST correctly. Two
+new failures came from this sample's own additions:
+
+- It refused a request that carried any field it did not expect. A GET's
+  `target` was one such field, so every read by target came back empty.
+  VALIDATION_ERROR now says its causes are the only causes: a field no path
+  names is left unread, and the target's query parameter never makes a
+  request unreadable.
+- It read `tuple[ImportPick, ...]` with two elements as a fixed pair, so the
+  second element's type became `Ellipsis` and every import mapping failed
+  (`ValueError` inside the transaction, answered `transaction_failed`;
+  reproduced on a scratch copy of the run's code). SCHEMA_CONSTRAINT now
+  says that every tuple of these models is of any length and all its
+  elements are of the tuple's one item type.
+
+Five samples in a row have each broken this one hand-written form reader in
+a new place. State 6's naming rule exists only as prose in `60_contracts.md`,
+which the generator does not see; the notes restate it. Making it a
+structure the notes can reference is put to the owner.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
