@@ -1,0 +1,231 @@
+{
+ "open_points": [
+  {
+   "unit": "A20",
+   "subject": "supported Linux behavior",
+   "kind": "undefined guarantee",
+   "text": "Another system, or a Linux or file system on which a call Registry's rules rely on — opening a file without following a link, binding a listening socket, renaming, flushing — does not act as Linux documents it, is unsupported: Registry neither tests for it nor defines what it does there.",
+   "question": "Which Linux documentation and exact observable semantics define the supported behavior for each relied-on facility, and are the four named facilities exhaustive or only examples?",
+   "options": [
+    "Treat the documented semantics of a named Linux version and supported file-system set as the guarantee.",
+    "Define operation-level guarantees such as no link following, exclusive binding, atomic replacement and durable flushing without tying them to one Linux version.",
+    "Treat any behavior supplied by any Linux kernel and file system as supported unless a call fails."
+   ],
+   "default_guess": "Define the required operation-level guarantees and declare all other host behavior unsupported.",
+   "witness": {
+    "initial": "Registry runs on CPython 3.12 on Linux, using a mounted file system whose rename and flush guarantees differ from the implementer's assumed local file system.",
+    "events": [
+     "Registry replaces and flushes a security-sensitive file.",
+     "The host reports success but provides weaker crash-durability semantics than one implementer reads into “as Linux documents it”."
+    ],
+    "outcomes": [
+     "The operation is within the supported guarantee and must survive a crash.",
+     "That file system is unsupported, so Registry defines no post-crash result."
+    ],
+    "observer": "the owner restoring or reading the file after a crash"
+   }
+  },
+  {
+   "unit": "A20",
+   "subject": "runtime feature probes",
+   "kind": "vague prohibition",
+   "text": "it uses the host's facilities as Linux documents them and tests for the presence of none.",
+   "question": "What exactly counts as testing for the presence of a host facility: only explicit capability detection, version and platform checks, or also ordinary attribute access, error handling and verification of an operation's result?",
+   "options": [
+    "Forbid only capability, platform and version detection while permitting direct use and normal error handling.",
+    "Forbid every reflective attribute-presence test such as hasattr or getattr with a fallback.",
+    "Forbid every access to a host-facility attribute, including direct use such as os.O_NOFOLLOW."
+   ],
+   "default_guess": "Forbid platform, version and capability branching, including reflective fallback checks, but allow direct use and required result/error checks.",
+   "witness": {
+    "initial": "A generated module must open a file without following a symbolic link.",
+    "events": [
+     "The module directly reads os.O_NOFOLLOW and passes it to the open call.",
+     "The Factory applies the phrase “any probe of an attribute”."
+    ],
+    "outcomes": [
+     "Direct access is ordinary use of the assumed Linux facility, so the module is admitted.",
+     "Every attribute access is a probe, so the module is rejected."
+    ],
+    "observer": "the Factory and the release builder"
+   }
+  },
+  {
+   "unit": "A20",
+   "subject": "rule 6 formal invariant",
+   "kind": "missing invariant",
+   "text": "None: kept outside Registry's checks — rules 1–4 and rule 6's host and Python by the release process and its installation (rule 5), and rule 6's \"tests for the presence of none\" by the Factory's static gate on every generated module, which rejects any probe of an attribute",
+   "question": "Is the absence of host or capability probes a formal invariant of Registry's generated code, and if so what Required tests item must show it; otherwise, why does the text assign it to a rejecting Factory gate while declaring no formal invariant?",
+   "options": [
+    "Declare a formal invariant prohibiting a precisely defined set of probes and add a Required tests item describing what must be shown.",
+    "Make host and Python entirely external release assumptions, remove the generated-code gate claim and keep no Registry invariant.",
+    "Keep a code constraint but state that it is not a formal invariant and identify the other State 2 category and required evidence that owns it."
+   ],
+   "default_guess": "Declare a narrowly defined no-capability-probing formal invariant and add a Required tests item for it.",
+   "witness": {
+    "initial": "A generated module contains a platform or feature check before using a Linux facility.",
+    "events": [
+     "The State 2 reviewer applies the Formal invariants heading, which says “None”.",
+     "The Factory applies the prose claiming a static gate rejects the check."
+    ],
+    "outcomes": [
+     "There is no invariant or required test that can reject the module.",
+     "The Factory must reject the module as violating rule 6."
+    ],
+    "observer": "the Factory gate and the module author"
+   }
+  },
+  {
+   "unit": "A20",
+   "subject": "release host and interpreter tests",
+   "kind": "missing required test",
+   "text": "A release runs on Linux and on no other host, no version named, and its Python is CPython 3.12",
+   "question": "What must the Required tests show to establish that the release uses Linux and CPython 3.12, rather than merely showing that whatever Python version and base image the release lists are exact and digest-fixed?",
+   "options": [
+    "Show explicitly that the selected interpreter is CPython 3.12 and the selected runtime host/base is Linux.",
+    "Treat Linux and CPython 3.12 as externally inspected release metadata with no required test.",
+    "Rely on digest pinning alone, even though it can pin CPython 3.11 or a non-Linux image exactly."
+   ],
+   "default_guess": "Add release-process tests that assert CPython 3.12 and a Linux runtime in addition to exact versions and digests.",
+   "witness": {
+    "initial": "A release manifest exactly pins CPython 3.11 and every distribution and base-image digest.",
+    "events": [
+     "The release-process tests perform Required tests 1–4.",
+     "No test asserts the value CPython 3.12."
+    ],
+    "outcomes": [
+     "All listed Required tests pass, so the release is accepted.",
+     "Rule 6 makes the release invalid because its interpreter is not CPython 3.12."
+    ],
+    "observer": "the release gate and the operator installing the release"
+   }
+  },
+  {
+   "unit": "A20",
+   "subject": "meaning of “runs on Linux and on no other host”",
+   "kind": "refusal ambiguity",
+   "text": "A release runs on Linux and on no other host, no version named",
+   "question": "Does “on no other host” require installation or startup to refuse a non-Linux host, or does it only declare such execution unsupported with no required refusal?",
+   "options": [
+    "The release or installer must refuse installation or startup on a non-Linux host.",
+    "No refusal is required; execution outside Linux has wholly undefined results.",
+    "The release artifact is made available only to a Linux deployment, so attempting it elsewhere is outside every specified history."
+   ],
+   "default_guess": "Treat non-Linux execution as outside support without adding a Registry runtime probe, but require the release process to admit the artifact only for Linux deployment.",
+   "witness": {
+    "initial": "The release artifact is copied to a host that can run CPython 3.12 but is not Linux.",
+    "events": [
+     "The operator starts Registry.",
+     "Registry performs no platform-presence test, as rule 6 also requires."
+    ],
+    "outcomes": [
+     "Installation or startup is required to fail because the release runs on no other host.",
+     "Registry may start and behave arbitrarily because the host is unsupported and no refusal is defined."
+    ],
+    "observer": "the operator starting Registry"
+   }
+  },
+  {
+   "unit": "A21",
+   "subject": "security review after the A20 amendment",
+   "kind": "stale required result",
+   "text": "A change to a decision a category names reopens this review.",
+   "question": "What is the recorded outcome of the reopened dependencies review after the 2026-11-25 change to A20, and may State 2 close before that review is performed?",
+   "options": [
+    "Perform and record the reopened review before State 2 closes.",
+    "Declare that the A20 amendment does not change the dependencies category and record that reviewed conclusion.",
+    "Treat the 2026-11-24 A20 review as sufficient despite the later amendment."
+   ],
+   "default_guess": "Reopen dependencies, review the Linux and CPython additions, and record the result before closure.",
+   "witness": {
+    "initial": "A21's dependencies category references A20, and A20 is changed on 2026-11-25.",
+    "events": [
+     "A21 rule 2 reopens the review.",
+     "The text contains only the earlier 2026-11-24 A20 review, before rule 6 existed."
+    ],
+    "outcomes": [
+     "State 2 remains open until the amended A20 is reviewed.",
+     "The existing “Security review: PERFORMED” is treated as covering the amendment and State 2 closes."
+    ],
+    "observer": "the State 2 gate and the security reviewer"
+   }
+  },
+  {
+   "unit": "A21",
+   "subject": "security categories affected by A20 rule 6",
+   "kind": "review scope undecided",
+   "text": "- dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies",
+   "question": "Does the amended A20 affect only dependencies, or must the review also reconsider files_artifacts and concurrency because it now supplies assumptions for no-link file opening, renaming, flushing and exclusive listener binding?",
+   "options": [
+    "Review only dependencies because it is the only category currently naming A20.",
+    "Add A20 to and reopen files_artifacts and concurrency as well as dependencies.",
+    "Review every category whose guarantees rely on any of the listed Linux facilities, whether or not it previously named A20."
+   ],
+   "default_guess": "Review dependencies, files_artifacts and concurrency, then update their references or explain why A20 is not needed by each.",
+   "witness": {
+    "initial": "A file replacement and listener startup rely on the host semantics newly stated in A20 rule 6.",
+    "events": [
+     "The security reviewer follows A21's existing reference list.",
+     "One reviewer considers only the dependencies category; another follows the substantive effects of no-link opening, exclusive binding, rename and flush."
+    ],
+    "outcomes": [
+     "Only the dependencies outcome is reconsidered.",
+     "The files_artifacts and concurrency outcomes are also reopened and may acquire A20 as a reference."
+    ],
+    "observer": "the security reviewer and the State 2 closure gate"
+   }
+  },
+  {
+   "unit": "A20",
+   "subject": "choice of Linux primitives",
+   "kind": "later_layer_choice",
+   "text": "it uses the host's facilities as Linux documents them",
+   "question": "Which Linux primitives and flags will generated code use to satisfy each owning rule that relies on no-link opening, exclusive listener binding, renaming or flushing?",
+   "decision_owner": "generation",
+   "options": [
+    "Use direct Linux/Python primitives selected separately for each owning rule.",
+    "Use a shared generated host-adapter abstraction around those primitives.",
+    "Use a supporting library whose fixed release exposes the required Linux behavior."
+   ],
+   "consequences": [
+    "Direct primitives minimize abstraction but repeat subtle flag and error-handling choices.",
+    "A shared adapter centralizes behavior but creates an additional internal dependency and boundary.",
+    "A library reduces bespoke code but its exact behavior and dependency become part of the fixed release."
+   ],
+   "requirement": "it uses the host's facilities as Linux documents them and tests for the presence of none.",
+   "default_guess": "Use direct, explicit Linux primitives or a small internal adapter without capability fallbacks."
+  },
+  {
+   "unit": "A20",
+   "subject": "static detection of forbidden probes",
+   "kind": "later_layer_choice",
+   "text": "the Factory's static gate on every generated module, which rejects any probe of an attribute",
+   "question": "Once State 2 defines the prohibited source constructs and applicable modules, how will the Factory detect them?",
+   "decision_owner": "factory_checks",
+   "options": [
+    "AST inspection for the prohibited calls and branching forms.",
+    "A type-aware static analysis that resolves aliases and wrappers.",
+    "A source-pattern lint supplemented by focused adversarial fixtures."
+   ],
+   "consequences": [
+    "AST inspection is deterministic but needs explicit handling of aliases and helper wrappers.",
+    "Type-aware analysis has broader semantic coverage but is more complex and tool-dependent.",
+    "Pattern linting is simple but risks false positives and easy evasion."
+   ],
+   "requirement": "the Factory's static gate on every generated module, which rejects any probe of an attribute",
+   "default_guess": "Use an AST-based gate with fixtures covering aliases, wrappers and allowed direct facility use."
+  },
+  {
+   "unit": "A20",
+   "subject": "Formal invariants section",
+   "kind": "standard_violation",
+   "text": "None: kept outside Registry's checks — rules 1–4 and rule 6's host and\nPython by the release process and its installation (rule 5), and rule 6's\n\"tests for the presence of none\" by the Factory's static gate on every\ngenerated module, which rejects any probe of an attribute — so the running\ndependencies are the release's (name, version, digest) and the host is\nLinux, which no note or check of Registry's code can show.",
+   "rule": "Доказательство — декларация, а не проза: фраза «её читает гейт» читателя не доказывает.",
+   "section": "15.3.1",
+   "question": "Replace the prose-only Factory-gate claim with a gate policy whose declared kind, reader, read fields and applicability are present in the Factory declaration, or remove the claim and leave the fact outside generated-code enforcement."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A20\",\"subject\":\"supported Linux behavior\",\"kind\":\"undefined guarantee\",\"text\":\"Another system, or a Linux or file system on which a call Registry's rules rely on — opening a file without following a link, binding a listening socket, renaming, flushing — does not act as Linux documents it, is unsupported: Registry neither tests for it nor defines what it does there.\",\"question\":\"Which Linux documentation and exact observable semantics define the supported behavior for each relied-on facility, and are the four named facilities exhaustive or only examples?\",\"options\":[\"Treat the documented semantics of a named Linux version and supported file-system set as the guarantee.\",\"Define operation-level guarantees such as no link following, exclusive binding, atomic replacement and durable flushing without tying them to one Linux version.\",\"Treat any behavior supplied by any Linux kernel and file system as supported unless a call fails.\"],\"default_guess\":\"Define the required operation-level guarantees and declare all other host behavior unsupported.\",\"witness\":{\"initial\":\"Registry runs on CPython 3.12 on Linux, using a mounted file system whose rename and flush guarantees differ from the implementer's assumed local file system.\",\"events\":[\"Registry replaces and flushes a security-sensitive file.\",\"The host reports success but provides weaker crash-durability semantics than one implementer reads into “as Linux documents it”.\"],\"outcomes\":[\"The operation is within the supported guarantee and must survive a crash.\",\"That file system is unsupported, so Registry defines no post-crash result.\"],\"observer\":\"the owner restoring or reading the file after a crash\"}},{\"unit\":\"A20\",\"subject\":\"runtime feature probes\",\"kind\":\"vague prohibition\",\"text\":\"it uses the host's facilities as Linux documents them and tests for the presence of none.\",\"question\":\"What exactly counts as testing for the presence of a host facility: only explicit capability detection, version and platform checks, or also ordinary attribute access, error handling and verification of an operation's result?\",\"options\":[\"Forbid only capability, platform and version detection while permitting direct use and normal error handling.\",\"Forbid every reflective attribute-presence test such as hasattr or getattr with a fallback.\",\"Forbid every access to a host-facility attribute, including direct use such as os.O_NOFOLLOW.\"],\"default_guess\":\"Forbid platform, version and capability branching, including reflective fallback checks, but allow direct use and required result/error checks.\",\"witness\":{\"initial\":\"A generated module must open a file without following a symbolic link.\",\"events\":[\"The module directly reads os.O_NOFOLLOW and passes it to the open call.\",\"The Factory applies the phrase “any probe of an attribute”.\"],\"outcomes\":[\"Direct access is ordinary use of the assumed Linux facility, so the module is admitted.\",\"Every attribute access is a probe, so the module is rejected.\"],\"observer\":\"the Factory and the release builder\"}},{\"unit\":\"A20\",\"subject\":\"rule 6 formal invariant\",\"kind\":\"missing invariant\",\"text\":\"None: kept outside Registry's checks — rules 1–4 and rule 6's host and Python by the release process and its installation (rule 5), and rule 6's \\\"tests for the presence of none\\\" by the Factory's static gate on every generated module, which rejects any probe of an attribute\",\"question\":\"Is the absence of host or capability probes a formal invariant of Registry's generated code, and if so what Required tests item must show it; otherwise, why does the text assign it to a rejecting Factory gate while declaring no formal invariant?\",\"options\":[\"Declare a formal invariant prohibiting a precisely defined set of probes and add a Required tests item describing what must be shown.\",\"Make host and Python entirely external release assumptions, remove the generated-code gate claim and keep no Registry invariant.\",\"Keep a code constraint but state that it is not a formal invariant and identify the other State 2 category and required evidence that owns it.\"],\"default_guess\":\"Declare a narrowly defined no-capability-probing formal invariant and add a Required tests item for it.\",\"witness\":{\"initial\":\"A generated module contains a platform or feature check before using a Linux facility.\",\"events\":[\"The State 2 reviewer applies the Formal invariants heading, which says “None”.\",\"The Factory applies the prose claiming a static gate rejects the check.\"],\"outcomes\":[\"There is no invariant or required test that can reject the module.\",\"The Factory must reject the module as violating rule 6.\"],\"observer\":\"the Factory gate and the module author\"}},{\"unit\":\"A20\",\"subject\":\"release host and interpreter tests\",\"kind\":\"missing required test\",\"text\":\"A release runs on Linux and on no other host, no version named, and its Python is CPython 3.12\",\"question\":\"What must the Required tests show to establish that the release uses Linux and CPython 3.12, rather than merely showing that whatever Python version and base image the release lists are exact and digest-fixed?\",\"options\":[\"Show explicitly that the selected interpreter is CPython 3.12 and the selected runtime host/base is Linux.\",\"Treat Linux and CPython 3.12 as externally inspected release metadata with no required test.\",\"Rely on digest pinning alone, even though it can pin CPython 3.11 or a non-Linux image exactly.\"],\"default_guess\":\"Add release-process tests that assert CPython 3.12 and a Linux runtime in addition to exact versions and digests.\",\"witness\":{\"initial\":\"A release manifest exactly pins CPython 3.11 and every distribution and base-image digest.\",\"events\":[\"The release-process tests perform Required tests 1–4.\",\"No test asserts the value CPython 3.12.\"],\"outcomes\":[\"All listed Required tests pass, so the release is accepted.\",\"Rule 6 makes the release invalid because its interpreter is not CPython 3.12.\"],\"observer\":\"the release gate and the operator installing the release\"}},{\"unit\":\"A20\",\"subject\":\"meaning of “runs on Linux and on no other host”\",\"kind\":\"refusal ambiguity\",\"text\":\"A release runs on Linux and on no other host, no version named\",\"question\":\"Does “on no other host” require installation or startup to refuse a non-Linux host, or does it only declare such execution unsupported with no required refusal?\",\"options\":[\"The release or installer must refuse installation or startup on a non-Linux host.\",\"No refusal is required; execution outside Linux has wholly undefined results.\",\"The release artifact is made available only to a Linux deployment, so attempting it elsewhere is outside every specified history.\"],\"default_guess\":\"Treat non-Linux execution as outside support without adding a Registry runtime probe, but require the release process to admit the artifact only for Linux deployment.\",\"witness\":{\"initial\":\"The release artifact is copied to a host that can run CPython 3.12 but is not Linux.\",\"events\":[\"The operator starts Registry.\",\"Registry performs no platform-presence test, as rule 6 also requires.\"],\"outcomes\":[\"Installation or startup is required to fail because the release runs on no other host.\",\"Registry may start and behave arbitrarily because the host is unsupported and no refusal is defined.\"],\"observer\":\"the operator starting Registry\"}},{\"unit\":\"A21\",\"subject\":\"security review after the A20 amendment\",\"kind\":\"stale required result\",\"text\":\"A change to a decision a category names reopens this review.\",\"question\":\"What is the recorded outcome of the reopened dependencies review after the 2026-11-25 change to A20, and may State 2 close before that review is performed?\",\"options\":[\"Perform and record the reopened review before State 2 closes.\",\"Declare that the A20 amendment does not change the dependencies category and record that reviewed conclusion.\",\"Treat the 2026-11-24 A20 review as sufficient despite the later amendment.\"],\"default_guess\":\"Reopen dependencies, review the Linux and CPython additions, and record the result before closure.\",\"witness\":{\"initial\":\"A21's dependencies category references A20, and A20 is changed on 2026-11-25.\",\"events\":[\"A21 rule 2 reopens the review.\",\"The text contains only the earlier 2026-11-24 A20 review, before rule 6 existed.\"],\"outcomes\":[\"State 2 remains open until the amended A20 is reviewed.\",\"The existing “Security review: PERFORMED” is treated as covering the amendment and State 2 closes.\"],\"observer\":\"the State 2 gate and the security reviewer\"}},{\"unit\":\"A21\",\"subject\":\"security categories affected by A20 rule 6\",\"kind\":\"review scope undecided\",\"text\":\"- dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies\",\"question\":\"Does the amended A20 affect only dependencies, or must the review also reconsider files_artifacts and concurrency because it now supplies assumptions for no-link file opening, renaming, flushing and exclusive listener binding?\",\"options\":[\"Review only dependencies because it is the only category currently naming A20.\",\"Add A20 to and reopen files_artifacts and concurrency as well as dependencies.\",\"Review every category whose guarantees rely on any of the listed Linux facilities, whether or not it previously named A20.\"],\"default_guess\":\"Review dependencies, files_artifacts and concurrency, then update their references or explain why A20 is not needed by each.\",\"witness\":{\"initial\":\"A file replacement and listener startup rely on the host semantics newly stated in A20 rule 6.\",\"events\":[\"The security reviewer follows A21's existing reference list.\",\"One reviewer considers only the dependencies category; another follows the substantive effects of no-link opening, exclusive binding, rename and flush.\"],\"outcomes\":[\"Only the dependencies outcome is reconsidered.\",\"The files_artifacts and concurrency outcomes are also reopened and may acquire A20 as a reference.\"],\"observer\":\"the security reviewer and the State 2 closure gate\"}},{\"unit\":\"A20\",\"subject\":\"choice of Linux primitives\",\"kind\":\"later_layer_choice\",\"text\":\"it uses the host's facilities as Linux documents them\",\"question\":\"Which Linux primitives and flags will generated code use to satisfy each owning rule that relies on no-link opening, exclusive listener binding, renaming or flushing?\",\"decision_owner\":\"generation\",\"options\":[\"Use direct Linux/Python primitives selected separately for each owning rule.\",\"Use a shared generated host-adapter abstraction around those primitives.\",\"Use a supporting library whose fixed release exposes the required Linux behavior.\"],\"consequences\":[\"Direct primitives minimize abstraction but repeat subtle flag and error-handling choices.\",\"A shared adapter centralizes behavior but creates an additional internal dependency and boundary.\",\"A library reduces bespoke code but its exact behavior and dependency become part of the fixed release.\"],\"requirement\":\"it uses the host's facilities as Linux documents them and tests for the presence of none.\",\"default_guess\":\"Use direct, explicit Linux primitives or a small internal adapter without capability fallbacks.\"},{\"unit\":\"A20\",\"subject\":\"static detection of forbidden probes\",\"kind\":\"later_layer_choice\",\"text\":\"the Factory's static gate on every generated module, which rejects any probe of an attribute\",\"question\":\"Once State 2 defines the prohibited source constructs and applicable modules, how will the Factory detect them?\",\"decision_owner\":\"factory_checks\",\"options\":[\"AST inspection for the prohibited calls and branching forms.\",\"A type-aware static analysis that resolves aliases and wrappers.\",\"A source-pattern lint supplemented by focused adversarial fixtures.\"],\"consequences\":[\"AST inspection is deterministic but needs explicit handling of aliases and helper wrappers.\",\"Type-aware analysis has broader semantic coverage but is more complex and tool-dependent.\",\"Pattern linting is simple but risks false positives and easy evasion.\"],\"requirement\":\"the Factory's static gate on every generated module, which rejects any probe of an attribute\",\"default_guess\":\"Use an AST-based gate with fixtures covering aliases, wrappers and allowed direct facility use.\"},{\"unit\":\"A20\",\"subject\":\"Formal invariants section\",\"kind\":\"standard_violation\",\"text\":\"None: kept outside Registry's checks — rules 1–4 and rule 6's host and\\nPython by the release process and its installation (rule 5), and rule 6's\\n\\\"tests for the presence of none\\\" by the Factory's static gate on every\\ngenerated module, which rejects any probe of an attribute — so the running\\ndependencies are the release's (name, version, digest) and the host is\\nLinux, which no note or check of Registry's code can show.\",\"rule\":\"Доказательство — декларация, а не проза: фраза «её читает гейт» читателя не доказывает.\",\"section\":\"15.3.1\",\"question\":\"Replace the prose-only Factory-gate claim with a gate policy whose declared kind, reader, read fields and applicability are present in the Factory declaration, or remove the claim and leave the fact outside generated-code enforcement.\"}]}",
+ "set_aside": []
+}

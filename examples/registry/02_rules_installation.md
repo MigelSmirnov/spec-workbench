@@ -732,10 +732,10 @@ Proposed by the security review and accepted by the owner on 2026-10-31.
 3. A dependency changes only by a new release, verified as any release.
 4. Registry has no dependency that loads code at run time from outside its
    release.
-5. Rules 1–4 are kept by the release process and its installation, which
-   Registry does not manage (00_product.md, Explicit exclusions): they make
-   the release, name its dependencies and install them, and Registry's own
-   code reads none of it (owner, 2026-11-24). For rules 1–4 this decision
+5. Rules 1–4 and 6 are kept by the release process and its installation,
+   which Registry does not manage (00_product.md, Explicit exclusions): they
+   make the release, name its dependencies and host and install them, and
+   Registry's own code reads none of it (owner, 2026-11-24). This decision
    therefore declares no formal invariant of Registry: no note of a module
    and no check of Registry's code can show what the installation does, and
    one claimed here would be a false witness.
@@ -744,18 +744,14 @@ Proposed by the security review and accepted by the owner on 2026-10-31.
    file system on which a call Registry's rules rely on — opening a file
    without following a link, binding a listening socket, renaming, flushing
    — does not act as Linux documents it, is unsupported: Registry neither
-   tests for it nor defines what it does there. Unlike rules 1–4, this rule
-   binds Registry's own code: it uses the host's facilities as Linux
-   documents them and tests for the presence of none.
+   tests for it nor defines what it does there.
 
 ### Formal invariants
 
-None: kept outside Registry's checks — rules 1–4 and rule 6's host and
-Python by the release process and its installation (rule 5), and rule 6's
-"tests for the presence of none" by the Factory's static gate on every
-generated module, which rejects any probe of an attribute — so the running
-dependencies are the release's (name, version, digest) and the host is
-Linux, which no note or check of Registry's code can show.
+None: kept by the release process and its installation outside Registry
+(rule 5) — the running dependencies are the release's (name, version,
+digest), its host is Linux and its Python CPython 3.12, which no note or
+check of Registry's code can show.
 
 ### Required tests
 
@@ -774,6 +770,8 @@ check of Registry:
    digest, nothing more.
 4. A release's dependencies change only with a new release (rule 3): the
    same release installed again gives the same list.
+5. A release whose base image is not a Linux one, or whose Python is not a
+   CPython 3.12 release, is not made (rule 6).
 
 ### Consequence
 
@@ -840,8 +838,8 @@ Security review: PERFORMED
 - injection_interpreted_input: APPLICABLE; references: A02, A16, A19; affected: M03, M08, import file, every stored text value
 - external_callbacks_webhooks: NOT_APPLICABLE; rationale: Registry calls no other service and receives no callback (R0-18, R0-54), and every request is a caller's authenticated call (R0-27)
 - browser_boundary: APPLICABLE; references: A13, A19; affected: owner interface, CSRF protection, session cookie, rendering of agent-written text
-- files_artifacts: APPLICABLE; references: A07, A08, A16, A18, A19, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
-- concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A15, A16, A17, A18; affected: M01, M03, M04, M05, M06, M09, M10, M11, a start serving nothing until every check passed and binding each listener exclusively (A17), concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, creates racing the erasure that removes their request id, re-uploads replacing a confirmed file, concurrent import confirmations, backup snapshots taken while transactions go on, overlapping backup runs
+- files_artifacts: APPLICABLE; references: A07, A08, A16, A18, A19, A20, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
+- concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A15, A16, A17, A18, A20; affected: M01, M03, M04, M05, M06, M09, M10, M11, a start serving nothing until every check passed and binding each listener exclusively (A17), concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, creates racing the erasure that removes their request id, re-uploads replacing a confirmed file, concurrent import confirmations, backup snapshots taken while transactions go on, overlapping backup runs
 - dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies
 
 Performed again on 2026-11-01, after that day's changes to A01, A04, A13, A16,
@@ -1006,6 +1004,17 @@ concurrency (A13: a confirmation binds what its step showed, no more),
 secrets and concurrency (A14: the same entries in the same transactions)
 and files_artifacts (A22: the same one declared type): no right, limit,
 class or answer moved, and no outcome changed.
+
+Performed again on 2026-11-25, after A20 rule 6 reopened it (rule 2): a
+release runs on Linux alone with CPython 3.12, and a host that does not act
+as Linux documents it is unsupported. files_artifacts and concurrency now
+name A20, because their guarantees rest on facilities rule 6 names. Under
+files_artifacts (A16, A18), opening without following a link is Linux's.
+Under concurrency (A17, A18), binding each listener exclusively and
+renaming and flushing a backup are Linux's. Under dependencies, the host and
+the Python version join the release's list, and test 5 shows them. No
+guarantee weakened: rule 6 names the host they were written for. No right,
+limit, file, path or answer moved, and no outcome changed.
 
 ### Consequence
 
