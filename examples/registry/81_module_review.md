@@ -239,6 +239,28 @@ closure compared the table with the code:
 The closure is closed. Packets that changed were re-hashed after the
 author re-read them, and no verdict changed.
 
+## Every generic model walk states its means (2026-11-25)
+
+Run `registry-generation-20261125T171458Z` rejected `operations`.
+`_answer_class` walked the answer tree with `hasattr(value, "__dict__")`,
+the same hole as `owner_interface`'s walker, whose rule had been written
+only there. The same rule now stands in every note whose callable walks
+models generically:
+
+- `_answer_class` (`operations`);
+- `_confirmation_binding_digest` (`owner_sessions`);
+- `_write_service_answer` (`service_api`), which also tells enumeration
+  members by `isinstance`.
+
+The rule: tell a model by `isinstance` against pydantic's base model
+class, take its fields by iterating it, and never use `hasattr`, `getattr`,
+`setattr`, `vars`, `__dict__` or `model_dump`. Each of these modules
+declares `from pydantic import BaseModel`.
+
+`owner_sessions` and `service_api` had passed generation, and only by the
+draw. The rejected `operations` candidate, with its walker rewritten to
+the rule, passes the Factory's static gates.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
