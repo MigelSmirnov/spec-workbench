@@ -428,6 +428,43 @@ any stream failure (an upload's head no CSRF value, its file part
 `file_unreadable`); the answer is sent if the connection still takes it,
 and the connection is then closed.
 
+## Test seams
+
+The witness tests drive Registry from outside, through its two surfaces
+(`tests/semantic/RUNTIME_SURFACE.md`). Where a test must reach inside the
+running code, the specification names the point, and the fixture enters only
+there. The generated code calls each point below through its module's own
+name at the moment of the call, never through a reference taken earlier, so
+that replacing the module's attribute takes effect. No other module calls
+it (owner, 2026-11-25).
+
+- **`clock`, as a whole.** Tests replace the clock as a whole (State 5,
+  `recorded_now`): `recorded_now` and `monotonic_reading` come from the
+  fixture's sources.
+- **`StoreRepository`, method by method.** Every connection `store` opens
+  gets its own `SqliteStoreRepository` (above, "The store's rows"). A test
+  may wrap one so that a named method raises a driver error once, or so that
+  the snapshot's first `load_audit_sequence_row` waits.
+- **`instance_lifecycle._start_passes`.** It is the one place the two passes
+  start. `start_instance` calls it once serving began, and no other code
+  starts a pass. A test replaces it as a whole, so no pass runs by itself.
+  The test then calls `owner_sessions.end_expired_sessions` and
+  `backups.run_daily_backup_if_due` itself.
+- **`backups._run_backup`.** It is the one place a backup run is made.
+  `run_daily_backup_if_due` starts it on a thread of its own and answers
+  at once. A test wraps it to know when a run it started has ended. The
+  wrapper runs the original and then signals.
+- **`store._integrity_ok`.** It is the one place `check_store_file`
+  judges a file's integrity. A test replaces it as a whole, so a copy that
+  decrypts still fails the `INTEGRITY` check (A18 rule 4).
+- **A test release.** A test release is this release whose `data_provider`
+  is emitted from `70_data_provider_closure.json` with other values for
+  named constants. Every other module is the same code. A module reads a
+  constant only by importing it by name from `data_provider` (Constants
+  each module imports, State 5). A process therefore runs with the values of
+  the `data_provider` it imported, and a test release takes effect at the
+  start of a new process (owner, 2026-11-24).
+
 ## Open
 
 - `60_contract_plan.json` stays `open` until the State 6 transition checks
