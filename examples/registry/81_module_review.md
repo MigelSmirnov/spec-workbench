@@ -115,11 +115,16 @@ not carry:
 | `projects` | `Customer` | rejected: named only to forbid reading it |
 | `projects` | `ALIAS_MAX_CHARACTERS`, `OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, `OBJECT_ROOMS_MIN` | rejected: named only by a test clause |
 
-The three type decisions stand, so their notes no longer name the
-symbols. The same paths and fields are described in words, and the meaning
-is unchanged. The constants decision is reversed: the
-`create_project` test clause calls them "the imported … constant", and a
-test of the bounds needs their values, so they are now `uses` (`reads`).
+Every decision stands, so the notes no longer name the symbols. The same
+paths, fields and bounds are described in words, and the meaning is
+unchanged. The `create_project` test clause now names its bounds through
+`check_value_forms`, the function that applies them.
+
+A first repair (`c0a576eb`) instead turned the constants into `uses`
+(`reads`). The second Route B run (`registry-generation-20261125T145132Z`)
+rejected `projects` at coverage: a `uses` entry obliges the code to import
+the symbol, and only the test reads these. The original rejection was
+right, and the second repair restores it.
 
 The three packets changed by these lines only. The author re-read them
 against the reviewed text and re-hashed them. No reviewer verdict
