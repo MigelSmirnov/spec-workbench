@@ -1,0 +1,198 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "owner-form carrier meaning",
+   "kind": "vague_boundary_semantics",
+   "text": "Owner form carrier: `request`, `values` — what an owner form field fills, the owner request itself or the values it carries (M29).",
+   "question": "What are the public meanings of the `request` and `values` carriers, and what object does the owner-interface reader return or mutate for each?",
+   "options": [
+    "`request` addresses fields of the operation request and `values` addresses a nested values object within it.",
+    "`request` is the submitted operation request while `values` is a separate page-rendering value map.",
+    "Both address one request tree, with `values` selecting a distinguished subtree."
+   ],
+   "default_guess": "Treat `values` as a distinguished subtree of the operation request, but require State 5 to state that callers may rely on this meaning."
+  },
+  {
+   "unit": "context",
+   "subject": "owner-form conversion failures",
+   "kind": "missing_failure_contract",
+   "text": "Owner form value kind: `text`, `integer`, `boolean`, `member` — how an owner form field's text is read: as itself, as an integer's decimal digits, as `true` or `false`, or as an enumeration member's value (M29).",
+   "question": "What public failure must the owner interface return when a listed field cannot be read according to its value kind, and does it preserve the submitted values for redisplay?",
+   "options": [
+    "Return `invalid_request` with `outside_form` for the field and redisplay the submitted values.",
+    "Return `invalid_request` with `missing_value` for every conversion failure.",
+    "Treat conversion failure as `internal_error`.",
+    "Ignore the field and continue with it absent."
+   ],
+   "default_guess": "Return `invalid_request` with `outside_form`, identify the field path, change nothing, and preserve safe submitted values for redisplay.",
+   "witness": {
+    "initial": "A listed integer field is submitted with the text `abc`.",
+    "events": [
+     "The owner interface resolves its `OWNER_FORM_FIELDS` row.",
+     "The reader attempts to construct the owner operation's input."
+    ],
+    "outcomes": [
+     "The interface returns a request refusal identifying the invalid field and changes nothing.",
+     "The conversion raises an internal failure or the field is silently omitted."
+    ],
+    "observer": "The owner"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "duplicate submitted owner-form field names",
+   "kind": "missing_input_rule",
+   "text": "No two rows share a name: the name alone picks a row, and a table in which two rows share one is not a release.",
+   "question": "What must happen when one submitted form or query contains the same listed field name more than once?",
+   "options": [
+    "Refuse the request as invalid.",
+    "Use the first submitted value.",
+    "Use the last submitted value.",
+    "Accept repeated values only for explicitly tuple-positioned fields."
+   ],
+   "default_guess": "Refuse duplicate occurrences; tuple positions already have distinct names.",
+   "witness": {
+    "initial": "The release has one valid row named `floor`, and a request contains `floor=-1` followed by `floor=3`.",
+    "events": [
+     "A browser or crafted caller submits both occurrences.",
+     "The owner-interface reader resolves the name to its single row."
+    ],
+    "outcomes": [
+     "The request is refused because the submitted name is duplicated.",
+     "One value is selected by ordering, producing either floor -1 or floor 3."
+    ],
+    "observer": "The owner and any caller constructing the request"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "negative integer owner-form values",
+   "kind": "ambiguous_input_semantics",
+   "text": "as an integer's decimal digits",
+   "question": "Must the owner-form boundary accept a textual representation of negative integers, as required for an object's floor below ground, and if so what minimum guarantee must State 5 impose before State 6 chooses the exact grammar?",
+   "options": [
+    "Require support for negative as well as non-negative integers; leave the exact spelling to State 6.",
+    "Read only unsigned decimal digits, making negative floor values impossible through the owner interface.",
+    "Give fields separate signed-integer and unsigned-integer value kinds."
+   ],
+   "default_guess": "Require that every domain-valid integer, including a negative floor, can cross the owner-form boundary; let State 6 choose the exact textual grammar.",
+   "witness": {
+    "initial": "An active project has floor 0 and the owner needs to correct it to basement floor -1, which M02 permits.",
+    "events": [
+     "The owner enters `-1` in the form.",
+     "The owner interface reads the field using value kind `integer`."
+    ],
+    "outcomes": [
+     "The signed value is read as integer -1 and reaches the correction operation.",
+     "The minus sign is not a decimal digit, so the otherwise domain-valid correction is refused or cannot be expressed."
+    ],
+    "observer": "The owner"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "enumeration member resolution",
+   "kind": "later_layer_choice",
+   "text": "as an enumeration member's value",
+   "question": "How will a `member` row identify the particular enumeration whose member must be read?",
+   "decision_owner": "6",
+   "options": [
+    "The row carries an explicit enumeration/type reference.",
+    "The declared request field at the row's path supplies the enumeration type.",
+    "A generated per-operation decoder fixes the enumeration without adding it to the row."
+   ],
+   "consequences": [
+    "An explicit reference makes rows self-contained but adds a field to M29's exact State 6 shape.",
+    "Resolving from the request field avoids duplication but requires the path and contract type graph to be authoritative.",
+    "A generated decoder keeps the runtime row smaller but makes correctness depend on generated operation-specific code."
+   ],
+   "requirement": "Owner form value kind: `text`, `integer`, `boolean`, `member` — how an owner form field's text is read: as itself, as an integer's decimal digits, as `true` or `false`, or as an enumeration member's value (M29).",
+   "default_guess": "Resolve the enumeration from the typed request field addressed by the row's path."
+  },
+  {
+   "unit": "context",
+   "subject": "owner-form path and tuple-position representation",
+   "kind": "later_layer_choice",
+   "text": "Facts: the field's name, which holds its path and the mark of each tuple position in it, so that two rows of different paths are different rows; what it fills; how its text is read.",
+   "question": "What exact State 6 representation will make a path and every tuple position unambiguous?",
+   "decision_owner": "6",
+   "options": [
+    "Use a structured sequence of named-field and tuple-index path segments.",
+    "Use separate path and tuple-position fields.",
+    "Use one encoded string with escaping and a declared grammar."
+   ],
+   "consequences": [
+    "Structured segments avoid escaping ambiguity but require nested model types.",
+    "Separate fields are simple only if tuple positions cannot occur at several path depths.",
+    "An encoded string is compact but requires canonical escaping and parsing rules."
+   ],
+   "requirement": "Facts: the field's name, which holds its path and the mark of each tuple position in it, so that two rows of different paths are different rows; what it fills; how its text is read.",
+   "default_guess": "Use structured path segments with explicit tuple-index segments."
+  },
+  {
+   "unit": "context",
+   "subject": "OWNER_FORM_FIELDS uniqueness enforcement",
+   "kind": "later_layer_choice",
+   "text": "No two rows share a name: the name alone picks a row, and a table in which two rows share one is not a release.",
+   "question": "Which release check proves that `OWNER_FORM_FIELDS` has no duplicate name before generation or deployment admits it?",
+   "decision_owner": "factory_checks",
+   "options": [
+    "Validate uniqueness directly in the specification/data-table checker.",
+    "Generate a release invariant test over the assembled constant.",
+    "Check both the source table and the generated constant."
+   ],
+   "consequences": [
+    "A source-table check fails early but does not independently detect a faulty projection.",
+    "A generated-constant test checks the artifact consumers use but fails later.",
+    "Both checks give stronger coverage at the cost of duplicate validation logic."
+   ],
+   "requirement": "No two rows share a name: the name alone picks a row, and a table in which two rows share one is not a release.",
+   "default_guess": "Check the source table during specification validation and recheck the assembled constant in factory checks."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"OWNER_FORM_FIELDS boundary and operation ownership\",\"kind\":\"missing_boundary_contract\",\"text\":\"The release: the data provider's `OWNER_FORM_FIELDS`.\",\"question\":\"Which module supplies `OWNER_FORM_FIELDS` to the owner interface, which module owns resolving a submitted field and converting its text, and what result may the caller rely on?\",\"options\":[\"The owner interface imports the table and owns lookup and conversion.\",\"`data_provider` exposes a lookup operation while the owner interface owns conversion.\",\"`data_provider` exposes one operation that performs lookup and conversion.\"],\"default_guess\":\"The owner interface consumes the table exported by `data_provider` and owns lookup and conversion.\"},{\"unit\":\"context\",\"subject\":\"owner-form carrier meaning\",\"kind\":\"vague_boundary_semantics\",\"text\":\"Owner form carrier: `request`, `values` — what an owner form field fills, the owner request itself or the values it carries (M29).\",\"question\":\"What are the public meanings of the `request` and `values` carriers, and what object does the owner-interface reader return or mutate for each?\",\"options\":[\"`request` addresses fields of the operation request and `values` addresses a nested values object within it.\",\"`request` is the submitted operation request while `values` is a separate page-rendering value map.\",\"Both address one request tree, with `values` selecting a distinguished subtree.\"],\"default_guess\":\"Treat `values` as a distinguished subtree of the operation request, but require State 5 to state that callers may rely on this meaning.\"},{\"unit\":\"context\",\"subject\":\"completeness of OWNER_FORM_FIELDS\",\"kind\":\"missing_boundary_invariant\",\"text\":\"A field no row names is not read. The table holds the names so that the page and the reader cannot name a field differently (Route B runs of 2026-11-25).\",\"question\":\"Must every writable form or query field emitted by an owner page have exactly one table row, and is a release invalid when a page emits an unlisted field?\",\"options\":[\"Require a row for every emitted writable field; an omission makes the release invalid.\",\"Allow emitted but unlisted fields and silently ignore them on submission.\",\"Allow unlisted display or navigation fields, but require rows for every field intended to affect an operation.\"],\"default_guess\":\"Require rows for every operation-affecting field while allowing explicitly non-input page fields.\",\"witness\":{\"initial\":\"An owner page emits an operation-affecting field for which `OWNER_FORM_FIELDS` has no row.\",\"events\":[\"The owner edits the field and submits the form.\",\"The owner interface reads the submission.\"],\"outcomes\":[\"The release is rejected because the page and reader contract is incomplete.\",\"The submission is accepted but the unlisted field is ignored, so the displayed edit has no effect.\"],\"observer\":\"The owner and the release checker\"}},{\"unit\":\"context\",\"subject\":\"owner-form conversion failures\",\"kind\":\"missing_failure_contract\",\"text\":\"Owner form value kind: `text`, `integer`, `boolean`, `member` — how an owner form field's text is read: as itself, as an integer's decimal digits, as `true` or `false`, or as an enumeration member's value (M29).\",\"question\":\"What public failure must the owner interface return when a listed field cannot be read according to its value kind, and does it preserve the submitted values for redisplay?\",\"options\":[\"Return `invalid_request` with `outside_form` for the field and redisplay the submitted values.\",\"Return `invalid_request` with `missing_value` for every conversion failure.\",\"Treat conversion failure as `internal_error`.\",\"Ignore the field and continue with it absent.\"],\"default_guess\":\"Return `invalid_request` with `outside_form`, identify the field path, change nothing, and preserve safe submitted values for redisplay.\",\"witness\":{\"initial\":\"A listed integer field is submitted with the text `abc`.\",\"events\":[\"The owner interface resolves its `OWNER_FORM_FIELDS` row.\",\"The reader attempts to construct the owner operation's input.\"],\"outcomes\":[\"The interface returns a request refusal identifying the invalid field and changes nothing.\",\"The conversion raises an internal failure or the field is silently omitted.\"],\"observer\":\"The owner\"}},{\"unit\":\"context\",\"subject\":\"duplicate submitted owner-form field names\",\"kind\":\"missing_input_rule\",\"text\":\"No two rows share a name: the name alone picks a row, and a table in which two rows share one is not a release.\",\"question\":\"What must happen when one submitted form or query contains the same listed field name more than once?\",\"options\":[\"Refuse the request as invalid.\",\"Use the first submitted value.\",\"Use the last submitted value.\",\"Accept repeated values only for explicitly tuple-positioned fields.\"],\"default_guess\":\"Refuse duplicate occurrences; tuple positions already have distinct names.\",\"witness\":{\"initial\":\"The release has one valid row named `floor`, and a request contains `floor=-1` followed by `floor=3`.\",\"events\":[\"A browser or crafted caller submits both occurrences.\",\"The owner-interface reader resolves the name to its single row.\"],\"outcomes\":[\"The request is refused because the submitted name is duplicated.\",\"One value is selected by ordering, producing either floor -1 or floor 3.\"],\"observer\":\"The owner and any caller constructing the request\"}},{\"unit\":\"context\",\"subject\":\"negative integer owner-form values\",\"kind\":\"ambiguous_input_semantics\",\"text\":\"as an integer's decimal digits\",\"question\":\"Must the owner-form boundary accept a textual representation of negative integers, as required for an object's floor below ground, and if so what minimum guarantee must State 5 impose before State 6 chooses the exact grammar?\",\"options\":[\"Require support for negative as well as non-negative integers; leave the exact spelling to State 6.\",\"Read only unsigned decimal digits, making negative floor values impossible through the owner interface.\",\"Give fields separate signed-integer and unsigned-integer value kinds.\"],\"default_guess\":\"Require that every domain-valid integer, including a negative floor, can cross the owner-form boundary; let State 6 choose the exact textual grammar.\",\"witness\":{\"initial\":\"An active project has floor 0 and the owner needs to correct it to basement floor -1, which M02 permits.\",\"events\":[\"The owner enters `-1` in the form.\",\"The owner interface reads the field using value kind `integer`.\"],\"outcomes\":[\"The signed value is read as integer -1 and reaches the correction operation.\",\"The minus sign is not a decimal digit, so the otherwise domain-valid correction is refused or cannot be expressed.\"],\"observer\":\"The owner\"}},{\"unit\":\"context\",\"subject\":\"enumeration member resolution\",\"kind\":\"later_layer_choice\",\"text\":\"as an enumeration member's value\",\"question\":\"How will a `member` row identify the particular enumeration whose member must be read?\",\"decision_owner\":\"6\",\"options\":[\"The row carries an explicit enumeration/type reference.\",\"The declared request field at the row's path supplies the enumeration type.\",\"A generated per-operation decoder fixes the enumeration without adding it to the row.\"],\"consequences\":[\"An explicit reference makes rows self-contained but adds a field to M29's exact State 6 shape.\",\"Resolving from the request field avoids duplication but requires the path and contract type graph to be authoritative.\",\"A generated decoder keeps the runtime row smaller but makes correctness depend on generated operation-specific code.\"],\"requirement\":\"Owner form value kind: `text`, `integer`, `boolean`, `member` — how an owner form field's text is read: as itself, as an integer's decimal digits, as `true` or `false`, or as an enumeration member's value (M29).\",\"default_guess\":\"Resolve the enumeration from the typed request field addressed by the row's path.\"},{\"unit\":\"context\",\"subject\":\"owner-form path and tuple-position representation\",\"kind\":\"later_layer_choice\",\"text\":\"Facts: the field's name, which holds its path and the mark of each tuple position in it, so that two rows of different paths are different rows; what it fills; how its text is read.\",\"question\":\"What exact State 6 representation will make a path and every tuple position unambiguous?\",\"decision_owner\":\"6\",\"options\":[\"Use a structured sequence of named-field and tuple-index path segments.\",\"Use separate path and tuple-position fields.\",\"Use one encoded string with escaping and a declared grammar.\"],\"consequences\":[\"Structured segments avoid escaping ambiguity but require nested model types.\",\"Separate fields are simple only if tuple positions cannot occur at several path depths.\",\"An encoded string is compact but requires canonical escaping and parsing rules.\"],\"requirement\":\"Facts: the field's name, which holds its path and the mark of each tuple position in it, so that two rows of different paths are different rows; what it fills; how its text is read.\",\"default_guess\":\"Use structured path segments with explicit tuple-index segments.\"},{\"unit\":\"context\",\"subject\":\"OWNER_FORM_FIELDS uniqueness enforcement\",\"kind\":\"later_layer_choice\",\"text\":\"No two rows share a name: the name alone picks a row, and a table in which two rows share one is not a release.\",\"question\":\"Which release check proves that `OWNER_FORM_FIELDS` has no duplicate name before generation or deployment admits it?\",\"decision_owner\":\"factory_checks\",\"options\":[\"Validate uniqueness directly in the specification/data-table checker.\",\"Generate a release invariant test over the assembled constant.\",\"Check both the source table and the generated constant.\"],\"consequences\":[\"A source-table check fails early but does not independently detect a faulty projection.\",\"A generated-constant test checks the artifact consumers use but fails later.\",\"Both checks give stronger coverage at the cost of duplicate validation logic.\"],\"requirement\":\"No two rows share a name: the name alone picks a row, and a table in which two rows share one is not a release.\",\"default_guess\":\"Check the source table during specification validation and recheck the assembled constant in factory checks.\"}]}",
+ "set_aside": [
+  {
+   "unit": "context",
+   "subject": "OWNER_FORM_FIELDS boundary and operation ownership",
+   "kind": "missing_boundary_contract",
+   "text": "The release: the data provider's `OWNER_FORM_FIELDS`.",
+   "question": "Which module supplies `OWNER_FORM_FIELDS` to the owner interface, which module owns resolving a submitted field and converting its text, and what result may the caller rely on?",
+   "options": [
+    "The owner interface imports the table and owns lookup and conversion.",
+    "`data_provider` exposes a lookup operation while the owner interface owns conversion.",
+    "`data_provider` exposes one operation that performs lookup and conversion."
+   ],
+   "default_guess": "The owner interface consumes the table exported by `data_provider` and owns lookup and conversion.",
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  },
+  {
+   "unit": "context",
+   "subject": "completeness of OWNER_FORM_FIELDS",
+   "kind": "missing_boundary_invariant",
+   "text": "A field no row names is not read. The table holds the names so that the page and the reader cannot name a field differently (Route B runs of 2026-11-25).",
+   "question": "Must every writable form or query field emitted by an owner page have exactly one table row, and is a release invalid when a page emits an unlisted field?",
+   "options": [
+    "Require a row for every emitted writable field; an omission makes the release invalid.",
+    "Allow emitted but unlisted fields and silently ignore them on submission.",
+    "Allow unlisted display or navigation fields, but require rows for every field intended to affect an operation."
+   ],
+   "default_guess": "Require rows for every operation-affecting field while allowing explicitly non-input page fields.",
+   "witness": {
+    "initial": "An owner page emits an operation-affecting field for which `OWNER_FORM_FIELDS` has no row.",
+    "events": [
+     "The owner edits the field and submits the form.",
+     "The owner interface reads the submission."
+    ],
+    "outcomes": [
+     "The release is rejected because the page and reader contract is incomplete.",
+     "The submission is accepted but the unlisted field is ignored, so the displayed edit has no effect."
+    ],
+    "observer": "The owner and the release checker"
+   },
+   "set_aside_because": "an unchanged passage of a unit reviewed for its change"
+  }
+ ]
+}
