@@ -484,6 +484,17 @@ On the scratch copy, the first and fifth fixes alone brought these files
 from 15 failures to 3. The other three are the step page, the order of
 the closed import, and witness a06.
 
+## 2026-11-25: a discriminated union is declared as Annotated
+
+On `14c82418` (run `20261125_224840`) the import path reached confirmation.
+The reader in this sample then lost `access_answer` (7 checks). The models
+module declares a discriminated union as `Annotated[Union[...],
+Field(discriminator=…)]`, and the reader recognised a union only by its
+`Union` origin. SCHEMA_CONSTRAINT now says that the models module's union
+is so declared and is unwrapped before its variant is chosen.
+`owner_interface` was re-hashed. The four a16 confirmations still wait on
+the fixture's `owner_confirm`.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
