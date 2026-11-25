@@ -131,3 +131,20 @@
 ## После раунда State 2 от 2026-11-24
 
 `faults.fail_next_commit()` удалён из `RUNTIME_SURFACE.md`: три свидетеля, которые на нём держались (A14 `failed_store_leaves_no_change_no_entry`, `accepted_change_writes_one_entry_in_transaction`, A15 `failed_change_leaves_sequence_unchanged`), теперь используют `faults.fail_store_call` с методами `StoreRepository`, названными в State 6 (`insert_audit_entry_row`, `update_project_row`, `update_customer_row`). Строки и выводы выше о `fail_next_commit` — история; шов без опоры остаётся один: `fail_next_backup_check("integrity")` (2 свидетеля A18), плюс частичная опора у удержания проходов.
+
+
+## После решения владельца 2026-11-25: точки названы в State 6
+
+Владелец решил закрыть оставшиеся швы в спеке. В `60_contracts.md` появился раздел
+«Test seams». Каждая точка там названа и вызывается сгенерированным кодом через имя
+своего модуля в момент вызова, поэтому подмена атрибута модуля действует:
+
+| возможность | опора теперь |
+|---|---|
+| `run_session_pass()`, `run_backup_look()` (удержание проходов) | **есть.** `instance_lifecycle._start_passes` — единственное место, где стартуют проходы; тест подменяет её целиком и сам вызывает `end_expired_sessions` и `run_daily_backup_if_due` (`60_contracts.md`, «Test seams»; ноты `start_instance`, `_start_passes`) |
+| `run_backup_look()` (конец прогона) | **есть.** `backups._run_backup` — единственное место, где делается прогон; `run_daily_backup_if_due` запускает её на своём потоке, тест оборачивает её и получает сигнал конца (ноты `run_daily_backup_if_due`, `_run_backup`) |
+| `faults.fail_next_backup_check("integrity")` | **есть.** `store._integrity_ok` — единственное место, где `check_store_file` судит о целостности; тест подменяет её целиком (ноты `check_store_file`, `_integrity_ok`) |
+| `configure_release(**constants)` | **есть.** Тестовый релиз — тот же код рядом с `data_provider`, выпущенным из `70_data_provider_closure.json` с другими значениями; модули читают константу только импортом по имени, поэтому релиз действует со старта нового процесса |
+
+Швов без опоры не осталось. `faults.fail_next_commit` в поверхности нет (см. выше).
+

@@ -281,6 +281,33 @@ Checked on the rejected candidate with the deadline taken from
 `monotonic_reading`. The Factory's time-source gate passes it, and the
 original reproduces both findings.
 
+## Test seams named (2026-11-25)
+
+The `semantic_runtime` fixture went to an outside implementer. The owner
+decided to close the seams it needs in the specification first. State 6
+`60_contracts.md` now has a "Test seams" section, and State 6/7 gained three
+internal functions:
+
+- **`instance_lifecycle._start_passes`.** The pass notes moved here from
+  `start_instance`, which now calls it once.
+- **`backups._run_backup`.** The run's step notes moved here from
+  `run_daily_backup_if_due`. That function now starts `_run_backup` with
+  the look's UTC date as `run_date`.
+- **`store._integrity_ok`.** `check_store_file` asks it for the
+  `INTEGRITY` check.
+
+Each seam is called through its module's name at call time, so replacing
+the module's attribute takes effect. A test release is defined as the same
+code beside another `data_provider`.
+
+Behaviour is unchanged: the same steps sit under named functions. The
+author re-read the `backups`, `instance_lifecycle` and `store` packets and
+re-hashed them. The other twelve re-hashed packets changed only by the
+global note indices that the two inserted notes shifted (checked on
+`upload_framing` against `1c7486ee`); their texts are unchanged. The imports closure was rebuilt for the moved notes, and
+the only change of the import surface is `LoadedConfiguration` in
+`instance_lifecycle`, for `_start_passes`'s signature.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
