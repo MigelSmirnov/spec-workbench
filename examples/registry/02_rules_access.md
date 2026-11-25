@@ -355,9 +355,10 @@ sees every change as a new version.
    version the step showed, or that it showed none when the action has
    neither (a record without a revision, A04 rule 3, among them), and its
    inputs — for the import, the file's digest
-   and the picks — kept as a digest of those values in a fixed order, never
-   as the values themselves; a submission's inputs are bound when their digest
-   equals it. A session holds at most one: showing a confirmation step
+   and the picks: a submission whose action, target, version or inputs
+   differ from those the step showed is refused (test 12). How the session
+   keeps what it binds is the owner session operation's (State 5), not a rule
+   here. A session holds at most one: showing a confirmation step
    replaces the one pending (M11). It is valid only in that session, while
    less than 10 minutes have passed since it was shown, and is used up by the first submission that carries it, whatever
    its answer; a refused submission needs the step shown again. A submission

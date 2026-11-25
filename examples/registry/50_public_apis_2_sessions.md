@@ -213,9 +213,11 @@ of `clock.monotonic_reading` it was shown at.
 
 ### Enforces
 
-A session holds at most one pending confirmation; the inputs are kept as
-their digest, never as values; the value never appears in a URL, a log
-line, a diagnostic or an entry (A13 rules 6, 7).
+A session holds at most one pending confirmation (A13 rule 6); a
+submission whose action, target, version or inputs differ from those shown
+is not bound (A13 rule 6, test 12) — the inputs are kept as their digest,
+this operation's way of binding them, never as values; the value never
+appears in a URL, a log line, a diagnostic or an entry (A13 rule 7).
 
 ### Errors
 
