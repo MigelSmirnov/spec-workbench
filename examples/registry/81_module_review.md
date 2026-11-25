@@ -367,6 +367,27 @@ location diagnostic that does not name `backup_dir` is a generation defect
 and the spec is not changed for it: `probe_backup_location`'s RETURN_SHAPE
 note already requires the diagnostic to name the item.
 
+## 2026-11-25: owner form field names and the equal-ports diagnostic
+
+Route B on `ebf2d6fe` (run `20261125_210728`) showed two more notes that
+lower their state ambiguously:
+
+- `_read_owner_request` filled "OwnerRequest's other fields and OwnerValues"
+  from "the fields named by their path". The generated code counted the path
+  from `OwnerRequest`, so `values.request_id`. The fixture counted it from
+  `OwnerValues`, so `request_id`. State 6 (`60_contracts.md`, "an
+  `OwnerRequest` or `OwnerValues` field by its name") decides for the
+  fixture, and no name is shared by the two models. The SCHEMA_CONSTRAINT
+  note now names both models' fields by their own name, with `values` adding
+  nothing to the path. This one ambiguity caused about 90 of the 99 failures.
+- `load_configuration` named "the failed item", and the code named both
+  ports for the equal-ports check. A17 Required test 8 names the service
+  API's address. The note now says `service_listen` alone.
+
+Re-read and re-hashed: `configuration` and `owner_interface` for these
+notes; `operations` for the State 5 text of `7c0f17b1`; `service_api` and
+`instance_lifecycle`, whose packets show the changed neighbouring notes.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
