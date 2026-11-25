@@ -306,7 +306,9 @@ re-hashed them. The other twelve re-hashed packets changed only by the
 global note indices that the two inserted notes shifted (checked on
 `upload_framing` against `1c7486ee`); their texts are unchanged. The imports closure was rebuilt for the moved notes, and
 the only change of the import surface is `LoadedConfiguration` in
-`instance_lifecycle`, for `_start_passes`'s signature.
+`instance_lifecycle`, for `_start_passes`'s signature. The `start_instance`
+notes also no longer name `StartDiagnostic`, which stays rejected: a step's
+stopped answer is told by the union's `result` field.
 
 ## Known tooling limits met in the review
 
