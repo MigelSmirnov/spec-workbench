@@ -145,8 +145,11 @@ the confirmation id from `random_values.mint_identity` only then (A14 rule
 Every code of the closed set, from the module that decided it. A request
 that names no owner action — `owner_interface` handed it on with no action,
 having matched no route — is checked at stage (1) as a read and then
-refused `invalid_request` (`outside_closed_list`) at stage (4), as the
-service API refuses an operation it does not know (owner, 2026-11-24).
+refused `invalid_request` (`outside_closed_list`) at stage (4) (owner,
+2026-11-24). The owner holds no rights row, so a route that names no action
+is a value outside the closed list. This is unlike the service API: there an
+operation no row names is outside the service's rights (A09 rule 1) and is
+refused `not_permitted` (`outside_service_rights`) at stage (1).
 
 ### State impact
 
