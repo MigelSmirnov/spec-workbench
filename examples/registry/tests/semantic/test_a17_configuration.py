@@ -35,7 +35,7 @@ Fixture surface used here:
   ``start()`` -> ``None`` or the diagnostic line, ``stop()``;
 - ``configure_environment(variables)``: the instance's next start sees exactly these environment variables beside
   the host's own non-`REGISTRY_` ones, the fixture's configuration not
-  applied; reaches ``configuration.load_runtime_settings`` (State 6
+  applied; reaches ``runtime_settings.load_runtime_settings`` (State 6
   `config.runtime_environment_variables`);
 - ``owner(...)``, ``sign_in()``, ``new_request_id()`` and ``service(...)``,
   which, when no service API listener is open, raises ``OSError`` — the
