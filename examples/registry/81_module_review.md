@@ -449,6 +449,41 @@ a new place. State 6's naming rule exists only as prose in `60_contracts.md`,
 which the generator does not see; the notes restate it. Making it a
 structure the notes can reference is put to the owner.
 
+## 2026-11-25: the import path, from run 20261125_222330
+
+On `7f02a412` 88 checks passed. 14 failures were fixture stubs, and 9 were
+on the import path. The author traced each one on a scratch copy of the
+run's code, with every swallowed exception logged:
+
+- **Empty tuple.** A form cannot carry an empty tuple: it has no position.
+  `import_choices.customers` was therefore absent. "An absent field is
+  none" made it `None`, and `OwnerValues` refused it, which emptied every
+  import request. SCHEMA_CONSTRAINT: a tuple with no position given is the
+  empty tuple, never None.
+- **The step page had no form.** `_render_owner_page` listed a form for
+  every answer except `ConfirmationStepAnswer`. The step page showed the
+  inputs as text only, and a19 found no hostile value in any attribute. The
+  page now has one form of the confirmed action that carries its
+  confirmation value and inputs. The BEHAVIOR note already said what that
+  form carries.
+- **A closed import was answered as a missing value.** SHOW_CONFIRMATION
+  asked `_confirmation_inputs` before mapping. Once the import closed and
+  the kept file was dropped, it answered NoConfirmationInputs, which the
+  code refused as a missing `import_choices`. The note now maps the picks
+  first, so `import_closed` and `file_not_kept` come from the mapping.
+- **Witness a06.** Its v1 pointer carried `version` as a JSON number.
+  State 6 "The import file" says that versions are text of decimal digits,
+  so the code's FILE_UNREADABLE was right. The witness now writes the
+  version as text.
+- **Fixture.** `owner_confirm` resent the step's original form without the
+  step's `inputs.upload_number` and `file_digest`, which a browser submits
+  as the step form's hidden fields (State 6). Every confirmed import was
+  therefore bound elsewhere. Correcting this belongs to the implementer.
+
+On the scratch copy, the first and fifth fixes alone brought these files
+from 15 failures to 3. The other three are the step page, the order of
+the closed import, and witness a06.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants

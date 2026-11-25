@@ -355,7 +355,8 @@ def test_nested_collections_follow_declared_order(semantic_runtime):
             "project_id": p1,
             "artifact_type": "estimate",
             "owner_service": "presupro",
-            "version": version,
+            # State 6 "The import file": versions as text of decimal digits.
+            "version": str(version),
             "status": status,
             "uri": f"https://v1.example/{version}",
             "payload_ref": None,
