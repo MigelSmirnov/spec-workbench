@@ -414,6 +414,19 @@ target too. The FIELD_ASSIGNMENT note now says the target is read from the
 query for every method and never from a body. `owner_interface` was
 re-hashed.
 
+## 2026-11-25: target and csrf_value keep their constants' names
+
+On `d2b6d56b` (run `20261125_215551`) the reader named `csrf_value` by its
+own name. The fixture's `csrf` field went unread, and the form was refused
+as carrying an unrecognised field. The author caused this. The
+SCHEMA_CONSTRAINT note said "a field of OwnerRequest … by its own name
+alone", which contradicts FIELD_ASSIGNMENT for `target` and `csrf_value`,
+whose names come from `OWNER_TARGET_PARAMETER` and `OWNER_CSRF_FIELD`.
+The own-name rule now excludes `action` (from the route), `target` and
+`csrf_value`. Three samples in a row each broke a different part of the
+reader, and each break was a gap or a contradiction in these two notes.
+`owner_interface` was re-hashed.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
