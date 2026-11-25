@@ -449,7 +449,8 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused   -- A13-2
     is refused, and used up, when the submission carrying its value changes
     any one of them: another action, another target, another version or
     none, another value of any input, or the same list in another order
-    (rule 6).
+    (rule 6) — a change whose encoding shares the bound digest aside, which
+    rule 6 puts outside the guarantee and no test can produce.
 
 ### Consequence
 

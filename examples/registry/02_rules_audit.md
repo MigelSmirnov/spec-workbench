@@ -61,6 +61,11 @@ e.outcome = accepted   -- A14-2
 6. Each action of M09.actions accepted and changing its record — a Customer's
    restriction among them — writes exactly one entry, in its transaction.
    Shows A14-1. [witness: verification:registry_a14_accepted_change_writes_one_entry_in_transaction]
+7. The imported `OWNER_AUDIT_ACTIONS` constant has exactly one row for each
+   owner action M09 lists, for each customer mark transition and each
+   project erasure kind, the erasure of old entries among them, and no other
+   row; and each such action, accepted, writes the audit action its row
+   names (rule 1).
 
 ### Consequence
 
