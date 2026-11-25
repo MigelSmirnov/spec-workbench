@@ -329,6 +329,18 @@ were the witnesses' own:
 No assertion about Registry changed. `review/A17.md` names the M2 check
 anew.
 
+## 2026-11-25: the upload body reaches OwnerActionStep
+
+The fixture report found every upload failing with `transaction_failed`:
+the generated `OwnerActionStep.run` read `self.body`, which nothing set.
+The defect was the spec's. `OwnerActionStep.run`'s UPLOAD_IMPORT note
+named "the body its OwnerRequestStep holds", but the step was built from a
+`PreparedOwnerAction` alone, and that model has no body. Now
+`OwnerActionStep.__init__` takes `body: UploadBody | None` and keeps it,
+`OwnerRequestStep.run` hands its own body on, and the UPLOAD_IMPORT note
+reads "the body the step holds". `UploadBody` is imported to annotate the
+constructor. The `operations` packet was re-read and re-hashed.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
