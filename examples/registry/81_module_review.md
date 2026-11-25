@@ -101,6 +101,34 @@ The admission code accepts only `PASS`, a divergence already recorded as
 G18 in `docs/INSTRUMENT_INVENTORY_20261108.md`. Each module's summary in
 the status file names its reviewer's class.
 
+## Repair after the first Route B run (2026-11-25)
+
+Route B run `registry-route-b-20261125T142104Z` stopped at
+`migration_import`. The Factory's generation microscope (static lens)
+found notes naming foreign exports that the module's import surface does
+not carry:
+
+| Module | Named, not imported | Recorded decision |
+|---|---|---|
+| `migration_import` | `PathElement`, `ImportCustomerValue` | rejected: never named in code |
+| `artifact_pointers` | `PathElement` | rejected: never named in code |
+| `projects` | `Customer` | rejected: named only to forbid reading it |
+| `projects` | `ALIAS_MAX_CHARACTERS`, `OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, `OBJECT_ROOMS_MIN` | rejected: named only by a test clause |
+
+The three type decisions stand, so their notes no longer name the
+symbols. The same paths and fields are described in words, and the meaning
+is unchanged. The constants decision is reversed: the
+`create_project` test clause calls them "the imported … constant", and a
+test of the bounds needs their values, so they are now `uses` (`reads`).
+
+The three packets changed by these lines only. The author re-read them
+against the reviewed text and re-hashed them. No reviewer verdict
+changed.
+
+The same run hit the generation output limit (16000 tokens) on
+`migration_import`, whose generated code was cut off. That is a run
+parameter, not a specification defect.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
