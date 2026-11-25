@@ -310,6 +310,25 @@ the only change of the import surface is `LoadedConfiguration` in
 notes also no longer name `StartDiagnostic`, which stays rejected: a step's
 stopped answer is told by the union's `result` field.
 
+## 2026-11-25: two A17 witness helpers, from the fixture report
+
+The outside implementer's fixture (Factory line, `agent/registry-semantic-runtime`,
+`4551451a`, `tests/FIXTURE_REPORT.md`) ran every witness. Two A17 failures
+were the witnesses' own:
+
+- `test_listener_failure_serves_nothing_keeps_store`: over an existing
+  store, the loop held each endpoint with the test's own socket and then
+  asked whether the owner's endpoint accepts. With the owner's endpoint
+  taken, the test's socket accepted. The check now asks the endpoint the
+  test did not take.
+- `_accepts`: `connect` to port 65536 raises `OverflowError`, not `OSError`,
+  so `test_service_address_with_tokens_and_wellformed` failed in its
+  helper. The helper now answers false for it, as it already did for
+  `getaddrinfo`.
+
+No assertion about Registry changed. `review/A17.md` names the M2 check
+anew.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants

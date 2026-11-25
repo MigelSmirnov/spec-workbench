@@ -152,7 +152,7 @@ def _accepts(address):
         client.settimeout(2)
         try:
             client.connect((host, port))
-        except OSError:
+        except (OSError, OverflowError):
             return False
         return True
 
@@ -381,10 +381,10 @@ def test_listener_failure_serves_nothing_keeps_store(semantic_runtime, tmp_path)
     before = {table: rt.store_rows(table) for table in TABLES}
     assert [r["project_id"] for r in before["project_rows"]] == [project_id]
 
-    for taken in ("owner_listen", "service_listen"):
+    for taken, other in (("owner_listen", "service_listen"), ("service_listen", "owner_listen")):
         with _occupied(full[taken]):
             assert _start(rt, full) is not None
-            assert not _accepts(full["owner_listen"])
+            assert not _accepts(full[other])
         assert store.exists()
         assert {table: rt.store_rows(table) for table in TABLES} == before
 
