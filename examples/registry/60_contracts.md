@@ -247,7 +247,10 @@ readings, so an action's today is `operations`' (`_today_of`).
   `project_id`, `name`, `created_at`) and `pointers` (`pointer_id`,
   `project_id`, `artifact_type`, `owner_service`, `version`, `status`, `uri`,
   `payload_ref`, `content_digest`, `created_at`, `superseded_at`); instants
-  as ISO 8601 text with their offset. The v1 store keeps no archived or
+  as ISO 8601 text with their offset, in the forms Python's
+  `datetime.fromisoformat` reads, and versions as text of ASCII decimal
+  digits alone (Stage 8.1 review, 2026-11-25: ISO 8601 alone admits forms
+  the export never writes, so which ones a record may carry was open). The v1 store keeps no archived or
   superseded instant and no digest: the export script (outside Registry)
   writes the instant of the change that archived or superseded a record, and
   no digest. Every value is read as text and checked by A16 rule 4;
