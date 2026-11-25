@@ -400,6 +400,20 @@ included, names its fields by the same rule. The note was prepared while the
 neighbour re-ran Route B on the same spec, and it is exported only if the
 defect returns. `owner_interface` was re-hashed.
 
+## 2026-11-25: the target is read from the query for every method
+
+On `873a48b5` (run `20261125_214201`) the reader took a POST's target from
+its body, while the module's own forms put it in the action's query. About
+55 checks failed. The generation microscope's chain-of-custody lens, run on
+five generated `owner_interface` candidates from the runs, found no single
+source of the target across them: one candidate reads the query, two read a
+merged field map, and one reads the body for a POST. The note said "the
+query parameter", and then "from the query for a GET and from the body for
+a POST" for the other fields, so the generator applied that split to the
+target too. The FIELD_ASSIGNMENT note now says the target is read from the
+query for every method and never from a body. `owner_interface` was
+re-hashed.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
@@ -417,3 +431,7 @@ defect returns. `owner_interface` was re-hashed.
 - **Code evidence before OTK.** The imports closure reads the deploy's
   untracked `projects/<p>/app/`, and FA008 refuses the checkout while that
   directory is there. Before promotion, the two cannot both pass.
+- **Microscope constants.** The chain-of-custody lens reports every
+  imported data-provider constant (`OWNER_ACTIONS`, `OWNER_TARGET_PARAMETER`,
+  …) as absent in 0/5 candidates. Every candidate imports and uses them, so
+  the lens does not see constants read inside a function.
