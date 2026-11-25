@@ -219,6 +219,28 @@ decided that Registry runs on Linux alone with CPython 3.12.
   packets changed by these words only. The author re-read and re-hashed
   them.
 
+## The imports table against the accepted code (2026-11-25)
+
+Once Route B had built all 23 modules (spec `ceb5f485`), the imports
+closure compared the table with the code:
+
+- **Six symbols the code annotates were not in `uses`.** `SnapshotOutcome`
+  and `StoreFileCheck` (`backups`), `RuntimeSettings` (`configuration`),
+  `PathElement` (`customers`), `HttpResponse` (`instance_lifecycle`) and
+  `AuditSubject` (`operations`) are now `uses`, `annotates`, with basis
+  `code`.
+- **The variants the code names are `uses`.** These are `AuditSubject`'s
+  variants in `operations` and `SnapshotOutcome`'s in `backups`, also with
+  basis `code`.
+- **34 `inspects` uses the code never names are rejected.** These are the
+  success variants in `operations` and `StartDiagnostic` in
+  `instance_lifecycle`. The code tells an outcome by `isinstance` against
+  `Refusal`, or by the union's `result` field, and reads the variant by
+  attribute.
+
+The closure is strict-ready. Packets that changed were re-hashed after the
+author re-read them, and no verdict changed.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
