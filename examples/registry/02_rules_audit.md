@@ -9,12 +9,12 @@ an entry (round 28 P1) — and how the audit log is protected (R0-37).
 
 ### Normative rules
 
-1. An entry is written by an accepted action that changes state and that M09
-   lists, in the same transaction as the change: if the change is not stored,
-   neither is the entry, and the reverse. Which audit action an accepted owner
-   action writes — for a customer mark by its transition, for a project's
-   erasure by its kind — is its row of the imported `OWNER_AUDIT_ACTIONS`
-   constant (SPEC_STANDARD §15.3.1; State 1 M28). The table has exactly one
+1. An accepted action that changes state and that M09 lists writes an entry
+   with the audit action its row of the imported `OWNER_AUDIT_ACTIONS`
+   constant names — for a customer mark by its transition, for a project's
+   erasure by its kind (SPEC_STANDARD §15.3.1; State 1 M28) — in the same
+   transaction as the change: if the change is not stored, neither is the
+   entry, and the reverse. The table has exactly one
    row for each owner action M09 lists, for each transition and each erasure
    kind it has — the erasure of old entries among them (A15 rule 6) — and no
    other: an owner action M09 does not list writes no entry by rule 4 and
