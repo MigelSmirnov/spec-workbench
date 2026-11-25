@@ -225,9 +225,13 @@ later line, and modules on one line do not know each other.
 
 ### Owns
 
-The models M01–M12 as the domain's vocabulary, the declared vocabularies of
+The models M01–M28 as the domain's vocabulary — among them the forms of a
+pointer's publisher and an audit entry's subject (M13–M19), the owner
+session's pending confirmation and uploaded file (M20, M21) and the row
+shapes of the data provider's seven tables (M22–M28), whose rows are
+`data_provider`'s — and the declared vocabularies of
 State 1 as enumerations — for the artifact types only the shape of a type
-with its owner service, whose rows are `data_provider`'s, so a stored
+with its owner service (M22), whose rows are `data_provider`'s, so a stored
 pointer of a type a later release removed still reads (A22 rule 4) — and the disclosure class
 of every fact ("Disclosure classes by field"),
 the order of the classes (A09 rule 4), and the refusal vocabulary: each refusal
