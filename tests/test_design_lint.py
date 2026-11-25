@@ -283,6 +283,48 @@ def test_security_review_applicable_reference_must_resolve(tmp_path: Path) -> No
     assert design_lint.report_exit_code(report) == 1
 
 
+def test_security_review_applicable_every_reference_must_be_a_decision(
+    tmp_path: Path,
+) -> None:
+    # A21-2 of registry: references(c) are decisions of States 0-2 — every one,
+    # so an open question beside a decision is refused, not hidden by it.
+    project = tmp_path / "demo"
+    _write(project / "02_policy.md", _decision("A1", security_review=""))
+    review = _security_review(
+        authorization="- authorization: APPLICABLE; references: A1, OQ-1; affected: M12",
+    )
+    document = _decision("A2", security_review=review) + (
+        "\n## Open question OQ-1 — Atomicity\n\n"
+        "Who owns the atomic transition?\n"
+    )
+    _write(project / "02_review.md", document)
+
+    report = design_lint.lint_project(project, state=2)
+
+    assert _codes(report) == ["invalid_security_reference_kind"]
+    assert "'OQ-1'" in report.findings[0].message
+    assert report.findings[0].section == "authorization"
+    assert design_lint.report_exit_code(report) == 1
+
+
+def test_security_review_applicable_open_question_alone_is_refused(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "demo"
+    review = _security_review(
+        authorization="- authorization: APPLICABLE; references: OQ-1; affected: M12",
+    )
+    document = _decision(security_review=review) + (
+        "\n## Open question OQ-1 — Atomicity\n\n"
+        "Who owns the atomic transition?\n"
+    )
+    _write(project / "02_rules.md", document)
+
+    report = design_lint.lint_project(project, state=2)
+
+    assert _codes(report) == ["invalid_security_reference_kind"]
+
+
 def test_state2_without_security_review_is_blocked(tmp_path: Path) -> None:
     project = tmp_path / "demo"
     _write(project / "02_rules.md", _decision(security_review=""))
