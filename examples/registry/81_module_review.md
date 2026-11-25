@@ -224,21 +224,19 @@ decided that Registry runs on Linux alone with CPython 3.12.
 Once Route B had built all 23 modules (spec `ceb5f485`), the imports
 closure compared the table with the code:
 
-- **Six symbols the code annotates were not in `uses`.** `SnapshotOutcome`
-  and `StoreFileCheck` (`backups`), `RuntimeSettings` (`configuration`),
-  `PathElement` (`customers`), `HttpResponse` (`instance_lifecycle`) and
-  `AuditSubject` (`operations`) are now `uses`, `annotates`, with basis
-  `code`.
-- **The variants the code names are `uses`.** These are `AuditSubject`'s
-  variants in `operations` and `SnapshotOutcome`'s in `backups`, also with
-  basis `code`.
+- **Six symbols the code annotates, and the union variants it names, were
+  not in `uses`.** They were first taken as `uses` with basis `code`, then
+  dropped again. The code evidence comes from the untracked `app/` that the
+  deploy leaves on the line, and FA008 refuses that dirty checkout. Before
+  OTK, an admission can therefore never see the code. These are
+  annotations of locals, not part of the minimal import surface.
 - **34 `inspects` uses the code never names are rejected.** These are the
   success variants in `operations` and `StartDiagnostic` in
   `instance_lifecycle`. The code tells an outcome by `isinstance` against
   `Refusal`, or by the union's `result` field, and reads the variant by
   attribute.
 
-The closure is strict-ready. Packets that changed were re-hashed after the
+The closure is closed. Packets that changed were re-hashed after the
 author re-read them, and no verdict changed.
 
 ## Known tooling limits met in the review
@@ -255,3 +253,6 @@ author re-read them, and no verdict changed.
   nor `check_note_draft` runs the Factory validator's §15.3 check of
   upper-case names. No Workbench check compares a contract's stated
   dependency with `imports.third_party`.
+- **Code evidence before OTK.** The imports closure reads the deploy's
+  untracked `projects/<p>/app/`, and FA008 refuses the checkout while that
+  directory is there. Before promotion, the two cannot both pass.
