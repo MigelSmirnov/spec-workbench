@@ -181,6 +181,25 @@ left unchanged. Only the `owner_interface` and `instance_lifecycle` packets
 changed. The author re-read them and re-hashed them, and no reviewer
 verdict changed.
 
+## Repair after the fifth Route B run (2026-11-25)
+
+Run `registry-generation-20261125T160218Z` rejected `owner_interface`
+again for `reflective_attribute_access`, this time in a field-path walker:
+`hasattr(value, "model_dump")`. The note forbade the probe but gave no
+replacement. `_read_owner_request`'s path rule now says how to walk a
+value:
+
+- tell a model by `isinstance` against the pydantic base model class;
+- walk its fields by iterating it, which yields name and value in declared
+  order (checked on pydantic 2.12.5);
+- tell an enumeration member by `isinstance` against the enum class.
+
+`_render_owner_page` walks by the same rule. `owner_interface` declares
+`from pydantic import BaseModel` in `third_party_by_module`.
+
+Verified on the rejected candidate with that one helper replaced: the
+Factory's full static gate set reports no blocking finding.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
