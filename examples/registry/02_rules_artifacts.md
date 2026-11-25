@@ -141,8 +141,10 @@ R0-88.
 1. The first release declares one type: `estimate`, owner service PresuPro
    (R0-88). The v1 types (L08) are not declared.
 2. The declared types are part of the specification and of the release; a
-   running instance reads them from its release, never from its configuration
-   or its store (R0-33).
+   running instance reads them from its release — the imported
+   `ARTIFACT_TYPE_OWNERS` constant, one row per declared type with its owner
+   service (SPEC_STANDARD §15.3.1; State 1 M22) — never from its
+   configuration or its store (R0-33).
 3. A release that adds a type accepts publishes of it from that release on.
 4. A release that removes a type keeps every pointer of it, with its status as
    it was: 'list artifacts' still carries all of them, and the agent

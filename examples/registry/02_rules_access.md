@@ -12,8 +12,11 @@ here: what each service token and Kernel's agent authority may do and receive
 
 1. Every service token names one service; Registry knows from its own release
    which operations that service may call and the highest disclosure class it
-   may receive (R0-26, R0-27). The configuration holds the tokens, not their
-   rights (R0-20, R0-23).
+   may receive (R0-26, R0-27): the rows of rule 2, which the code reads as the
+   imported `SERVICE_RIGHTS` constant and the imported
+   `SERVICE_HIGHEST_CLASSES` constant (SPEC_STANDARD §15.3.1; State 1 M23,
+   M24). An operation no row names for the service is refused (rule 3). The
+   configuration holds the tokens, not their rights (R0-20, R0-23).
 2. The services and their rights:
 
    | service | operations | highest class |
@@ -354,7 +357,13 @@ sees every change as a new version.
    inputs — for the import, the file's digest
    and the picks — kept as a digest of those values in a fixed order, never
    as the values themselves; a submission's inputs are bound when their digest
-   equals it. A session holds at most one: showing a confirmation step
+   equals it. The digest is a collision-resistant cryptographic digest of one
+   unambiguous encoding of the action, the target, the version and the inputs
+   in that order, every list in its order and an absent value told apart from
+   an empty one, so that two different tuples never share an encoding; that
+   two encodings share a digest is outside the guarantee, as for the file's
+   own SHA-256 (M10, M21). Comparing the values themselves is excluded, since
+   they are not kept (round-123 T10). A session holds at most one: showing a confirmation step
    replaces the one pending (M11). It is valid only in that session, while
    less than 10 minutes have passed since it was shown, and is used up by the first submission that carries it, whatever
    its answer; a refused submission needs the step shown again. A submission

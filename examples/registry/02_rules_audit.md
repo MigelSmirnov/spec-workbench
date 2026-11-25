@@ -11,7 +11,11 @@ an entry (round 28 P1) — and how the audit log is protected (R0-37).
 
 1. An entry is written by an accepted action that changes state and that M09
    lists, in the same transaction as the change: if the change is not stored,
-   neither is the entry, and the reverse.
+   neither is the entry, and the reverse. Which audit action an accepted owner
+   action writes — for a customer mark by its transition, for a project's
+   erasure by its kind — is its row of the imported `OWNER_AUDIT_ACTIONS`
+   constant (SPEC_STANDARD §15.3.1; State 1 M28); an owner action without a
+   row writes no entry, and the table changes only with a release.
 2. A refused action writes no entry — a stale revision, a failed check of
    rights, an unknown id, a refused sign-in included. Security events of the
    infrastructure are the infrastructure's (R0-58).
