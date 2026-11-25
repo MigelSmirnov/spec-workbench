@@ -1533,6 +1533,12 @@ One row per field.
 Facts: the field's name; whether it belongs to the request or to its values;
 how its text is read.
 
+Candidate fields:
+
+- `name: str`
+- `carrier: OwnerFormCarrier`
+- `reads_as: FormValueKind`
+
 ### Identity
 
 value
