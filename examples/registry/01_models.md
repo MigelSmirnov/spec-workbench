@@ -1548,10 +1548,12 @@ Continuity: none; changed only with a new release.
 
 ### Source of truth
 
-The release: the data provider's owner form table. The generated code reads
-the table, so a constant of the data provider delivers it (SPEC_STANDARD
-§15.3.1), as it delivers the seven tables of M22–M28; a `models` catalog of
-the same table would not reach the code, and none is declared.
+The release: the data provider's `OWNER_FORM_FIELDS` constant, which the
+owner interface imports and `models` never does; `models` declares only the
+row's shape. The generated code reads the table, so the data provider's
+constant delivers it (SPEC_STANDARD §15.3.1), as it delivers the seven
+tables of M22–M28; a `models` catalog of the same table would not reach the
+code, and none is declared.
 
 ### Lifecycle candidate
 
