@@ -52,7 +52,8 @@ pointer's publisher (M13, M14), the five forms of an audit entry's subject
 (M15–M19), the owner session's pending confirmation and uploaded file (M20,
 M21; the upload number, which State 6 carried on the owner's word of
 2026-11-24, is now a fact of M11), and the rows of the data provider's seven
-tables (M22–M28).
+tables (M22–M28). Later on 2026-11-25 the owner made the owner form's fields
+an eighth table, so its row has the record M29 (owner, 2026-11-25).
 
 Every State 1 question the owner must answer is under a model's
 `Open questions`; a `BLOCK:` question stops State 2 until answered.
@@ -1533,7 +1534,8 @@ runs of 2026-11-25).
 
 Facts: the field's name, which holds its path and the mark of each tuple
 position in it, so that two rows of different paths are different rows; what
-it fills; how its text is read.
+it fills; how its text is read. No two rows share a name: the name alone
+picks a row, and a table in which two rows share one is not a release.
 
 ### Identity
 
