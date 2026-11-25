@@ -1,0 +1,117 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 rule 6, A16 rule 2 and Required test 3, M21 UploadedFile",
+   "kind": "contradiction",
+   "text": "Confirming a mapping after another file was uploaded in the session is refused: the file it named is no longer kept — also when the new file has the same bytes.",
+   "question": "Does an import confirmation bind the particular upload occurrence, including its upload number, or only the file digest and mapping inputs? A13 names only the file digest and picks, which are unchanged by re-uploading identical bytes, while A16 test 3 and M21 require refusal.",
+   "options": [
+    "Bind the upload number as well as the digest and mapping inputs, so an identical re-upload invalidates the confirmation.",
+    "Bind only the digest and mapping inputs, so an identical re-upload remains confirmable.",
+    "Clear every pending import confirmation whenever any upload succeeds, including an identical upload."
+   ],
+   "default_guess": "Bind the upload number as well as the digest and mapping inputs, preserving A16 Required test 3 and M21.",
+   "witness": {
+    "initial": "An owner session holds upload number 1 with bytes B, digest D, and a pending confirmation for its clean mapping.",
+    "events": [
+     "The owner uploads the same bytes B again, creating upload number 2 with the same digest D.",
+     "The owner submits the still-pending confirmation value."
+    ],
+    "outcomes": [
+     "The submission is refused because upload number 1 is no longer kept, and the confirmation is used up.",
+     "The submission is accepted because the bound digest D, picks, names, aliases and Customer values still match upload number 2."
+    ],
+    "observer": "The owner sees either a refused import requiring a new confirmation step or a successful import."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A14 rule 1 and Required tests",
+   "kind": "missing_required_test",
+   "text": "Which audit action an accepted owner action writes — for a customer mark by its transition, for a project's erasure by its kind — is its row of the imported `OWNER_AUDIT_ACTIONS` constant (SPEC_STANDARD §15.3.1; State 1 M28). The table has exactly one row for each owner action M09 lists, for each transition and each erasure kind it has — the erasure of old entries among them (A15 rule 6) — and no other",
+   "question": "What Required tests must show that every required owner-action, transition and erasure-kind row exists exactly once, that no extra row exists, and that every row selects the audit action M09 requires? Current test 6 shows exactly one entry is written but does not say its action value or the table's exact domain must be checked.",
+   "options": [
+    "Add an exhaustive Required test covering the table's exact domain and each row's resulting audit action.",
+    "Split the requirement into a table-completeness check and runtime tests of every mapping.",
+    "Carry the exhaustive table check to factory_checks while retaining runtime tests for representative actions."
+   ],
+   "default_guess": "Require an exhaustive exact-domain check plus runtime verification that each row produces the required audit action.",
+   "witness": {
+    "initial": "A release table has exactly one row for every required owner action, but the row for restricting a Customer selects the audit action for ending a relationship.",
+    "events": [
+     "The owner restricts a Customer and the change is accepted.",
+     "Registry writes exactly one audit entry in the same transaction with outcome `accepted`."
+    ],
+    "outcomes": [
+     "The entry's action records restriction, as M09 requires.",
+     "The entry's action records relationship ending; all current A14 Required tests can still observe one transactional entry with outcome `accepted`."
+    ],
+    "observer": "The owner reading the audit log sees a different event."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 confirmation input boundary",
+   "kind": "later_layer_choice",
+   "text": "another value of any input",
+   "question": "For each confirmed action, which contract values constitute its inputs for confirmation binding, and at what semantic representation are two values equal?",
+   "options": [
+    "Bind every typed semantic action field after contract parsing and validation.",
+    "Define a per-action canonical confirmation projection containing every action field, with normalization stated by the contract.",
+    "Treat distinct accepted wire representations as distinct input values even when they denote the same domain value."
+   ],
+   "default_guess": "Bind every typed semantic action field after contract parsing and validation, with any normalization made explicit in the contract.",
+   "decision_owner": "State 5",
+   "consequences": [
+    "Typed binding makes equivalent accepted representations share a confirmation but requires State 5 to define parsing and normalization.",
+    "A named projection makes the boundary explicit and extensible but must be kept complete when contracts change.",
+    "Wire-representation binding makes harmless formatting changes invalidate confirmation and couples the guarantee to transport serialization."
+   ],
+   "requirement": "A pending confirmation shown for one action, target, version and inputs is refused, and used up, when the submission carrying its value changes any one of them: another action, another target, another version or none, another value of any input, or the same list in another order",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 confirmation digest implementation",
+   "kind": "later_layer_choice",
+   "text": "a collision-resistant cryptographic digest of one unambiguous encoding",
+   "question": "Which typed encoding, domain separation, digest algorithm and digest representation implement this guarantee?",
+   "options": [
+    "Use a typed length-prefixed binary encoding with explicit field and collection tags, domain-separated and hashed with SHA-256.",
+    "Use canonical CBOR with fixed schemas and domain separation, hashed with SHA-256.",
+    "Use another release-fixed injective typed encoding and an approved collision-resistant digest."
+   ],
+   "default_guess": "Use a domain-separated, typed length-prefixed encoding and SHA-256, storing and comparing the fixed-size digest bytes.",
+   "decision_owner": "generation",
+   "consequences": [
+    "A custom typed encoding is small and explicit but needs careful implementation and vectors for every value type.",
+    "Canonical CBOR reduces custom encoding logic but adds a dependency and requires strict canonical-mode enforcement.",
+    "Another approved construction preserves implementation freedom but requires its injectivity and cryptographic properties to be independently established."
+   ],
+   "requirement": "The digest is a collision-resistant cryptographic digest of one unambiguous encoding of the action, the target, the version and the inputs in that order, every list in its order and an absent value told apart from an empty one, so that two different tuples never share an encoding; that two encodings share a digest is outside the guarantee.",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 confirmation encoding verification",
+   "kind": "later_layer_choice",
+   "text": "so that two different tuples never share an encoding",
+   "question": "How will Factory checks establish that the generated encoder preserves field order, list order, type boundaries, and the distinction between absent and empty values for every supported confirmation input type?",
+   "options": [
+    "Require all confirmation digests to use one approved encoder helper and statically reject other constructions.",
+    "Run exhaustive checks for finite domains and property-based collision checks over structured values for open domains.",
+    "Combine an approved-helper gate with fixed adversarial vectors and property-based tests."
+   ],
+   "default_guess": "Combine an approved-helper gate with adversarial vectors and property-based tests.",
+   "decision_owner": "factory_checks",
+   "consequences": [
+    "A helper-only gate provides strong structural control but restricts otherwise valid implementations.",
+    "Property tests exercise many values but cannot prove injectivity over unbounded domains.",
+    "The combined approach gives structural enforcement and behavioural evidence at greater Factory complexity."
+   ],
+   "requirement": "The digest is a collision-resistant cryptographic digest of one unambiguous encoding of the action, the target, the version and the inputs in that order, every list in its order and an absent value told apart from an empty one, so that two different tuples never share an encoding; that two encodings share a digest is outside the guarantee.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 rule 6, A16 rule 2 and Required test 3, M21 UploadedFile\",\"kind\":\"contradiction\",\"text\":\"Confirming a mapping after another file was uploaded in the session is refused: the file it named is no longer kept — also when the new file has the same bytes.\",\"question\":\"Does an import confirmation bind the particular upload occurrence, including its upload number, or only the file digest and mapping inputs? A13 names only the file digest and picks, which are unchanged by re-uploading identical bytes, while A16 test 3 and M21 require refusal.\",\"options\":[\"Bind the upload number as well as the digest and mapping inputs, so an identical re-upload invalidates the confirmation.\",\"Bind only the digest and mapping inputs, so an identical re-upload remains confirmable.\",\"Clear every pending import confirmation whenever any upload succeeds, including an identical upload.\"],\"default_guess\":\"Bind the upload number as well as the digest and mapping inputs, preserving A16 Required test 3 and M21.\",\"witness\":{\"initial\":\"An owner session holds upload number 1 with bytes B, digest D, and a pending confirmation for its clean mapping.\",\"events\":[\"The owner uploads the same bytes B again, creating upload number 2 with the same digest D.\",\"The owner submits the still-pending confirmation value.\"],\"outcomes\":[\"The submission is refused because upload number 1 is no longer kept, and the confirmation is used up.\",\"The submission is accepted because the bound digest D, picks, names, aliases and Customer values still match upload number 2.\"],\"observer\":\"The owner sees either a refused import requiring a new confirmation step or a successful import.\"}},{\"subject\":\"A14 rule 1 and Required tests\",\"kind\":\"missing_required_test\",\"text\":\"Which audit action an accepted owner action writes — for a customer mark by its transition, for a project's erasure by its kind — is its row of the imported `OWNER_AUDIT_ACTIONS` constant (SPEC_STANDARD §15.3.1; State 1 M28). The table has exactly one row for each owner action M09 lists, for each transition and each erasure kind it has — the erasure of old entries among them (A15 rule 6) — and no other\",\"question\":\"What Required tests must show that every required owner-action, transition and erasure-kind row exists exactly once, that no extra row exists, and that every row selects the audit action M09 requires? Current test 6 shows exactly one entry is written but does not say its action value or the table's exact domain must be checked.\",\"options\":[\"Add an exhaustive Required test covering the table's exact domain and each row's resulting audit action.\",\"Split the requirement into a table-completeness check and runtime tests of every mapping.\",\"Carry the exhaustive table check to factory_checks while retaining runtime tests for representative actions.\"],\"default_guess\":\"Require an exhaustive exact-domain check plus runtime verification that each row produces the required audit action.\",\"witness\":{\"initial\":\"A release table has exactly one row for every required owner action, but the row for restricting a Customer selects the audit action for ending a relationship.\",\"events\":[\"The owner restricts a Customer and the change is accepted.\",\"Registry writes exactly one audit entry in the same transaction with outcome `accepted`.\"],\"outcomes\":[\"The entry's action records restriction, as M09 requires.\",\"The entry's action records relationship ending; all current A14 Required tests can still observe one transactional entry with outcome `accepted`.\"],\"observer\":\"The owner reading the audit log sees a different event.\"}},{\"subject\":\"A13 confirmation input boundary\",\"kind\":\"later_layer_choice\",\"text\":\"another value of any input\",\"question\":\"For each confirmed action, which contract values constitute its inputs for confirmation binding, and at what semantic representation are two values equal?\",\"options\":[\"Bind every typed semantic action field after contract parsing and validation.\",\"Define a per-action canonical confirmation projection containing every action field, with normalization stated by the contract.\",\"Treat distinct accepted wire representations as distinct input values even when they denote the same domain value.\"],\"default_guess\":\"Bind every typed semantic action field after contract parsing and validation, with any normalization made explicit in the contract.\",\"decision_owner\":\"State 5\",\"consequences\":[\"Typed binding makes equivalent accepted representations share a confirmation but requires State 5 to define parsing and normalization.\",\"A named projection makes the boundary explicit and extensible but must be kept complete when contracts change.\",\"Wire-representation binding makes harmless formatting changes invalidate confirmation and couples the guarantee to transport serialization.\"],\"requirement\":\"A pending confirmation shown for one action, target, version and inputs is refused, and used up, when the submission carrying its value changes any one of them: another action, another target, another version or none, another value of any input, or the same list in another order\"},{\"subject\":\"A13 confirmation digest implementation\",\"kind\":\"later_layer_choice\",\"text\":\"a collision-resistant cryptographic digest of one unambiguous encoding\",\"question\":\"Which typed encoding, domain separation, digest algorithm and digest representation implement this guarantee?\",\"options\":[\"Use a typed length-prefixed binary encoding with explicit field and collection tags, domain-separated and hashed with SHA-256.\",\"Use canonical CBOR with fixed schemas and domain separation, hashed with SHA-256.\",\"Use another release-fixed injective typed encoding and an approved collision-resistant digest.\"],\"default_guess\":\"Use a domain-separated, typed length-prefixed encoding and SHA-256, storing and comparing the fixed-size digest bytes.\",\"decision_owner\":\"generation\",\"consequences\":[\"A custom typed encoding is small and explicit but needs careful implementation and vectors for every value type.\",\"Canonical CBOR reduces custom encoding logic but adds a dependency and requires strict canonical-mode enforcement.\",\"Another approved construction preserves implementation freedom but requires its injectivity and cryptographic properties to be independently established.\"],\"requirement\":\"The digest is a collision-resistant cryptographic digest of one unambiguous encoding of the action, the target, the version and the inputs in that order, every list in its order and an absent value told apart from an empty one, so that two different tuples never share an encoding; that two encodings share a digest is outside the guarantee.\"},{\"subject\":\"A13 confirmation encoding verification\",\"kind\":\"later_layer_choice\",\"text\":\"so that two different tuples never share an encoding\",\"question\":\"How will Factory checks establish that the generated encoder preserves field order, list order, type boundaries, and the distinction between absent and empty values for every supported confirmation input type?\",\"options\":[\"Require all confirmation digests to use one approved encoder helper and statically reject other constructions.\",\"Run exhaustive checks for finite domains and property-based collision checks over structured values for open domains.\",\"Combine an approved-helper gate with fixed adversarial vectors and property-based tests.\"],\"default_guess\":\"Combine an approved-helper gate with adversarial vectors and property-based tests.\",\"decision_owner\":\"factory_checks\",\"consequences\":[\"A helper-only gate provides strong structural control but restricts otherwise valid implementations.\",\"Property tests exercise many values but cannot prove injectivity over unbounded domains.\",\"The combined approach gives structural enforcement and behavioural evidence at greater Factory complexity.\"],\"requirement\":\"The digest is a collision-resistant cryptographic digest of one unambiguous encoding of the action, the target, the version and the inputs in that order, every list in its order and an absent value told apart from an empty one, so that two different tuples never share an encoding; that two encodings share a digest is outside the guarantee.\"}]}",
+ "set_aside": []
+}
