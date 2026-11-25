@@ -772,10 +772,11 @@ check of Registry:
 4. A release's dependencies change only with a new release (rule 3): the
    same release installed again gives the same list.
 5. A release whose base image is not a Linux one, or whose Python is not a
-   CPython 3.12 release, is not made, and installing a release on a host
-   whose kernel is not Linux's fails and no instance of it starts (rule 6).
+   CPython 3.12 release, is not made (rule 6).
 6. A release with a dependency that loads code at run time from outside
    the release is not made (rule 4).
+7. Installing a release on a host whose kernel is not Linux's fails, and no
+   instance of it starts (rule 6).
 
 ### Consequence
 
