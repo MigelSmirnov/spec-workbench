@@ -1,0 +1,247 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 rule 6 and A16 rules 2 and 6",
+   "kind": "contradiction",
+   "text": "for the import, the file's digest and the picks",
+   "question": "Are the import confirmation's bound inputs only the file digest and picks, or do they also include every submitted name, alias and Customer value as A16 requires?",
+   "options": [
+    "Bind only the file digest and picks; changing names, aliases or Customer values does not invalidate the confirmation.",
+    "Bind the file digest, picks, names, aliases and Customer values; changing any of them refuses and consumes the confirmation."
+   ],
+   "default_guess": "Bind the file digest, picks, names, aliases and Customer values, preserving A16's clean-mapping guarantee.",
+   "witness": {
+    "initial": "An import confirmation step was shown for file F, picks P, display name N1, alias A1 and Customer values C1.",
+    "events": [
+     "The owner submits the pending confirmation value with the same file digest and picks but changes one Customer value from C1 to C2."
+    ],
+    "outcomes": [
+     "A13's stated import binding still matches because the file digest and picks are unchanged.",
+     "A16 refuses and consumes the confirmation because the Customer values differ from those the mapping showed."
+    ],
+    "observer": "The owner sees either an accepted import or a refused submission."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 rule 6, A16 rule 2, A16 Required test 3 and M21",
+   "kind": "contradiction",
+   "text": "for the import, the file's digest and the picks",
+   "question": "Does confirmation bind the particular uploaded-file occurrence, including its upload number, or only its bytes' digest?",
+   "options": [
+    "Bind only the digest, so uploading the same bytes again leaves the file part of the confirmation equal.",
+    "Bind the uploaded-file occurrence or upload number, so every later upload invalidates the earlier confirmation even when its bytes and digest are identical."
+   ],
+   "default_guess": "Bind the uploaded-file occurrence, preserving A16 Required test 3 and M21.",
+   "witness": {
+    "initial": "A session uploads file F and receives a confirmation step bound to its digest and picks.",
+    "events": [
+     "The same session uploads the identical bytes again.",
+     "The owner submits the old confirmation value with the same picks."
+    ],
+    "outcomes": [
+     "Digest-only binding treats the file input as unchanged.",
+     "A16 Required test 3 and M21 treat this as another upload and refuse the old confirmation."
+    ],
+    "observer": "The owner sees either the import proceed or the old confirmation be refused."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 rule 6 and M20 PendingConfirmation",
+   "kind": "ownership_conflict",
+   "text": "How the session keeps what it binds is the owner session operation's (State 5), not a rule here.",
+   "question": "Must State 5 remain free to choose how bound inputs are represented, or must it preserve M20's already stated requirement that they are kept by digest?",
+   "options": [
+    "Remove or relax M20's phrase \"by their digest\" and let State 5 choose a snapshot, digest or another representation that preserves semantic equality.",
+    "Restore digest storage as a State 2 requirement and require State 5 to expose that obligation.",
+    "Treat M20's digest as an internal model choice that constrains State 5 despite A13 saying the choice is not a rule here."
+   ],
+   "default_guess": "Remove the digest representation from M20 and leave State 5 free to choose a collision-safe representation that preserves every refusal required by A13 and A16.",
+   "unit": "?"
+  },
+  {
+   "subject": "PendingConfirmation storage and owner-session operations",
+   "kind": "later_layer_choice",
+   "text": "How the session keeps what it binds is the owner session operation's (State 5), not a rule here.",
+   "question": "What representation and module obligation will State 5 use to retain and compare the action, target, version and inputs bound by a confirmation step?",
+   "options": [
+    "Store an immutable semantic snapshot and compare its fields directly.",
+    "Store a canonical encoding plus a collision-resistant digest.",
+    "Store both the snapshot and digest, using the snapshot for equality and the digest as an index or diagnostic-free identifier."
+   ],
+   "default_guess": "Store an immutable semantic snapshot, or a canonical encoding whose equality is verified without relying solely on digest equality.",
+   "decision_owner": "State 5",
+   "consequences": [
+    "A direct snapshot makes the required equality explicit but retains the bound values in session memory.",
+    "Digest-only storage retains less material but introduces canonicalization and collision semantics that must not weaken refusals.",
+    "Storing both costs more memory but separates identity or lookup from authoritative equality."
+   ],
+   "requirement": "a submission whose action, target, version or inputs differ from those the step showed is refused (test 12).",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 monotonic instants",
+   "kind": "missing_time_representation",
+   "text": "held as readings of that monotonic clock",
+   "question": "What is the representation, unit and comparison domain of a monotonic reading stored in an owner session?",
+   "options": [
+    "An opaque monotonic-instant type supporting duration addition and ordering.",
+    "An integer count of nanoseconds from an unspecified process-local origin.",
+    "A floating-point count of seconds from an unspecified process-local origin."
+   ],
+   "default_guess": "Use an opaque monotonic-instant type backed by integer nanoseconds, with no conversion to or comparison against UTC wall-clock instants.",
+   "witness": {
+    "initial": "A confirmation was shown near the exact ten-minute boundary.",
+    "events": [
+     "The stored monotonic reading and the current reading are represented and rounded by the generated implementation.",
+     "A submission arrives at a value that is exactly ten minutes under one representation but rounds below it under another."
+    ],
+    "outcomes": [
+     "The confirmation is expired and refused.",
+     "The confirmation is still valid and proceeds to its binding checks."
+    ],
+    "observer": "The owner sees a boundary submission accepted or refused."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13, A15, A16 and A04 operations that read time",
+   "kind": "missing_time_read_count",
+   "text": "Both readings reach the code through `clock` alone",
+   "question": "For each operation, how many monotonic and UTC wall-clock readings are taken, and which results must reuse the same reading?",
+   "options": [
+    "Take at most one reading from each applicable clock per operation and reuse it for all decisions and writes in that operation.",
+    "Permit a fresh reading at each check or write.",
+    "Specify separately for sign-in, owner-request admission, confirmation creation and submission, audit erasure, revision changes and import."
+   ],
+   "default_guess": "Take one monotonic reading for all lifetime decisions in an operation and one UTC reading for all fresh recorded instants and date decisions in that operation.",
+   "witness": {
+    "initial": "An audit erasure or confirmed import begins immediately before UTC midnight while a session or confirmation is also near a monotonic limit.",
+    "events": [
+     "The operation performs its validation and later writes its records.",
+     "The clocks advance across the relevant boundary between possible readings."
+    ],
+    "outcomes": [
+     "One reused reading makes all decisions and timestamps belong to one operation instant.",
+     "Multiple readings can validate against one date or lifetime instant but write records using another."
+    ],
+    "observer": "The owner sees different acceptance or boundary timestamps; later audit readers see different recorded instants."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "system_clock_backend generation",
+   "kind": "later_layer_choice",
+   "text": "which a change of the wall clock does not move and which counts the time the host or its VM was suspended",
+   "question": "Which generated clock backend provides a monotonic source with suspend-inclusive semantics on the deployment platform?",
+   "options": [
+    "Use an operating-system boot-time clock whose elapsed value includes suspension.",
+    "Use a platform runtime clock only after verifying that its documented semantics include suspension.",
+    "Compose a monotonic source with suspend detection and correction."
+   ],
+   "default_guess": "Use the operating system's suspend-inclusive boot-time clock behind the generated clock authority.",
+   "decision_owner": "generation",
+   "consequences": [
+    "A boot-time clock directly preserves expiry across suspension but is platform-specific.",
+    "A generic runtime clock is simpler but may stop during suspension and let sessions outlive it.",
+    "A composed clock is portable in principle but adds state and failure modes."
+   ],
+   "requirement": "which a change of the wall clock does not move and which counts the time the host or its VM was suspended",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-interface host isolation",
+   "kind": "later_layer_choice",
+   "text": "the deployment gives the owner interface a host name of its own, under which no other HTTPS service answers",
+   "question": "Which host name, certificate and routing arrangement will the deployment use to keep every other HTTPS service off the owner interface's cookie host?",
+   "options": [
+    "A dedicated DNS name routed only to the Registry owner interface.",
+    "A dedicated local or VPN-only host name with its own TLS certificate and virtual host.",
+    "A dedicated reverse-proxy virtual host that rejects every route except the owner interface."
+   ],
+   "default_guess": "Use a dedicated VPN-resolvable DNS name and TLS virtual host routed only to the owner interface.",
+   "decision_owner": "deploy",
+   "consequences": [
+    "A dedicated DNS name gives the clearest cookie boundary but requires DNS and certificate management.",
+    "A local or VPN-only name reduces exposure but needs every owner client to resolve and trust it.",
+    "A proxy-only separation works only if no other service can later be added under the same host name."
+   ],
+   "requirement": "the deployment gives the owner interface a host name of its own, under which no other HTTPS service answers",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 rule 7 Factory verification",
+   "kind": "later_layer_choice",
+   "text": "it is checked on the code",
+   "question": "How will Factory verification prove that every session, CSRF and confirmation secret is created and compared only through the named functions?",
+   "options": [
+    "A static import and call-site check that rejects every other constructor or comparison path.",
+    "A semantic code check with whole-module data-flow analysis.",
+    "Runtime instrumentation tests that replace the named functions and show every creation and comparison reaches them."
+   ],
+   "default_guess": "Use a static whole-module call-site and data-flow check, supplemented by focused instrumentation tests.",
+   "decision_owner": "factory_checks",
+   "consequences": [
+    "A syntactic check is deterministic but can miss aliases or indirect calls.",
+    "Data-flow analysis covers indirection but is more complex.",
+    "Runtime instrumentation demonstrates exercised paths but cannot alone prove absence of an unexercised path."
+   ],
+   "requirement": "State 5 routes every such comparison through `random_values.equal_in_constant_time` and makes every such value in `random_values.make_secret_value` alone",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 Required test 13 Factory verification",
+   "kind": "later_layer_choice",
+   "text": "Through Registry's surfaces alone a minted id cannot be chosen, so the refusal is checked on the code by the Factory",
+   "question": "How will the Factory prove that `confirm_import` builds exactly one mapping inside the confirming transaction and applies it only while clean?",
+   "options": [
+    "A static structural check of the transaction and mapping call graph.",
+    "An instrumented test replacing the random source and transaction backend to force the conflict.",
+    "Both a structural check and an instrumented forced-conflict test."
+   ],
+   "default_guess": "Use both the structural check and the instrumented forced-conflict test.",
+   "decision_owner": "factory_checks",
+   "consequences": [
+    "A structural check proves placement but may not prove runtime rollback behavior.",
+    "Instrumentation proves the forced history and unchanged store but only for exercised paths.",
+    "Combining them covers both required structure and observable atomic refusal."
+   ],
+   "requirement": "`confirm_import` builds the mapping inside the confirming transaction and applies it only when clean",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 security review",
+   "kind": "missing_required_result",
+   "text": "A change to a decision a category names reopens this review.",
+   "question": "What is the recorded outcome of the security review reopened by the current A13 change, especially for authentication_credential_abuse, browser_boundary and concurrency?",
+   "options": [
+    "Record that the changed binding-storage ownership preserves every category outcome, with the decisions and guarantees checked.",
+    "Record a changed outcome or an additional required guarantee before closing State 2."
+   ],
+   "default_guess": "Reperform the named categories and record that the outcome remains unchanged only after the A13/A16 binding contradictions are resolved.",
+   "unit": "?"
+  },
+  {
+   "subject": "A09 rules 2 and 4",
+   "kind": "standard_violation",
+   "text": "The classes are ordered `open` < `business_confidential` <\n   `personal_data` (R0-26).",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Replace each disclosure-class value used as an enum member with its emitted member name beside the `= models.<enumeration>` address, leaving any serialized value only as an optional annotation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A16 rule 4",
+   "kind": "standard_violation",
+   "text": "a status is outside its\n   vocabulary, or a pointer is `withdrawn` (v1 never withdrew one, M05); a\n   pointer's type is not declared or its owner service is not the type's\n   (A22); the versions of a project's pointers of one type are not 1..n, or\n   are not every one `superseded` but the highest, which is `published`; an\n   instant cannot be read; an `active` project has an\n   archived instant or an `archived` one has none; a `superseded` pointer has\n   no superseded instant or a `published` one has one",
+   "rule": "Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).",
+   "section": "15.3.1",
+   "question": "Name every Project-status and ArtifactPointer-status member by its emitted member name beside the address of its model enumeration; retain `active`, `archived`, `published`, `superseded` and `withdrawn` only as optional value annotations.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 rule 6 and A16 rules 2 and 6\",\"kind\":\"contradiction\",\"text\":\"for the import, the file's digest and the picks\",\"question\":\"Are the import confirmation's bound inputs only the file digest and picks, or do they also include every submitted name, alias and Customer value as A16 requires?\",\"options\":[\"Bind only the file digest and picks; changing names, aliases or Customer values does not invalidate the confirmation.\",\"Bind the file digest, picks, names, aliases and Customer values; changing any of them refuses and consumes the confirmation.\"],\"default_guess\":\"Bind the file digest, picks, names, aliases and Customer values, preserving A16's clean-mapping guarantee.\",\"witness\":{\"initial\":\"An import confirmation step was shown for file F, picks P, display name N1, alias A1 and Customer values C1.\",\"events\":[\"The owner submits the pending confirmation value with the same file digest and picks but changes one Customer value from C1 to C2.\"],\"outcomes\":[\"A13's stated import binding still matches because the file digest and picks are unchanged.\",\"A16 refuses and consumes the confirmation because the Customer values differ from those the mapping showed.\"],\"observer\":\"The owner sees either an accepted import or a refused submission.\"}},{\"subject\":\"A13 rule 6, A16 rule 2, A16 Required test 3 and M21\",\"kind\":\"contradiction\",\"text\":\"for the import, the file's digest and the picks\",\"question\":\"Does confirmation bind the particular uploaded-file occurrence, including its upload number, or only its bytes' digest?\",\"options\":[\"Bind only the digest, so uploading the same bytes again leaves the file part of the confirmation equal.\",\"Bind the uploaded-file occurrence or upload number, so every later upload invalidates the earlier confirmation even when its bytes and digest are identical.\"],\"default_guess\":\"Bind the uploaded-file occurrence, preserving A16 Required test 3 and M21.\",\"witness\":{\"initial\":\"A session uploads file F and receives a confirmation step bound to its digest and picks.\",\"events\":[\"The same session uploads the identical bytes again.\",\"The owner submits the old confirmation value with the same picks.\"],\"outcomes\":[\"Digest-only binding treats the file input as unchanged.\",\"A16 Required test 3 and M21 treat this as another upload and refuse the old confirmation.\"],\"observer\":\"The owner sees either the import proceed or the old confirmation be refused.\"}},{\"subject\":\"A13 rule 6 and M20 PendingConfirmation\",\"kind\":\"ownership_conflict\",\"text\":\"How the session keeps what it binds is the owner session operation's (State 5), not a rule here.\",\"question\":\"Must State 5 remain free to choose how bound inputs are represented, or must it preserve M20's already stated requirement that they are kept by digest?\",\"options\":[\"Remove or relax M20's phrase \\\"by their digest\\\" and let State 5 choose a snapshot, digest or another representation that preserves semantic equality.\",\"Restore digest storage as a State 2 requirement and require State 5 to expose that obligation.\",\"Treat M20's digest as an internal model choice that constrains State 5 despite A13 saying the choice is not a rule here.\"],\"default_guess\":\"Remove the digest representation from M20 and leave State 5 free to choose a collision-safe representation that preserves every refusal required by A13 and A16.\"},{\"subject\":\"PendingConfirmation storage and owner-session operations\",\"kind\":\"later_layer_choice\",\"text\":\"How the session keeps what it binds is the owner session operation's (State 5), not a rule here.\",\"question\":\"What representation and module obligation will State 5 use to retain and compare the action, target, version and inputs bound by a confirmation step?\",\"options\":[\"Store an immutable semantic snapshot and compare its fields directly.\",\"Store a canonical encoding plus a collision-resistant digest.\",\"Store both the snapshot and digest, using the snapshot for equality and the digest as an index or diagnostic-free identifier.\"],\"default_guess\":\"Store an immutable semantic snapshot, or a canonical encoding whose equality is verified without relying solely on digest equality.\",\"decision_owner\":\"State 5\",\"consequences\":[\"A direct snapshot makes the required equality explicit but retains the bound values in session memory.\",\"Digest-only storage retains less material but introduces canonicalization and collision semantics that must not weaken refusals.\",\"Storing both costs more memory but separates identity or lookup from authoritative equality.\"],\"requirement\":\"a submission whose action, target, version or inputs differ from those the step showed is refused (test 12).\"},{\"subject\":\"A13 monotonic instants\",\"kind\":\"missing_time_representation\",\"text\":\"held as readings of that monotonic clock\",\"question\":\"What is the representation, unit and comparison domain of a monotonic reading stored in an owner session?\",\"options\":[\"An opaque monotonic-instant type supporting duration addition and ordering.\",\"An integer count of nanoseconds from an unspecified process-local origin.\",\"A floating-point count of seconds from an unspecified process-local origin.\"],\"default_guess\":\"Use an opaque monotonic-instant type backed by integer nanoseconds, with no conversion to or comparison against UTC wall-clock instants.\",\"witness\":{\"initial\":\"A confirmation was shown near the exact ten-minute boundary.\",\"events\":[\"The stored monotonic reading and the current reading are represented and rounded by the generated implementation.\",\"A submission arrives at a value that is exactly ten minutes under one representation but rounds below it under another.\"],\"outcomes\":[\"The confirmation is expired and refused.\",\"The confirmation is still valid and proceeds to its binding checks.\"],\"observer\":\"The owner sees a boundary submission accepted or refused.\"}},{\"subject\":\"A13, A15, A16 and A04 operations that read time\",\"kind\":\"missing_time_read_count\",\"text\":\"Both readings reach the code through `clock` alone\",\"question\":\"For each operation, how many monotonic and UTC wall-clock readings are taken, and which results must reuse the same reading?\",\"options\":[\"Take at most one reading from each applicable clock per operation and reuse it for all decisions and writes in that operation.\",\"Permit a fresh reading at each check or write.\",\"Specify separately for sign-in, owner-request admission, confirmation creation and submission, audit erasure, revision changes and import.\"],\"default_guess\":\"Take one monotonic reading for all lifetime decisions in an operation and one UTC reading for all fresh recorded instants and date decisions in that operation.\",\"witness\":{\"initial\":\"An audit erasure or confirmed import begins immediately before UTC midnight while a session or confirmation is also near a monotonic limit.\",\"events\":[\"The operation performs its validation and later writes its records.\",\"The clocks advance across the relevant boundary between possible readings.\"],\"outcomes\":[\"One reused reading makes all decisions and timestamps belong to one operation instant.\",\"Multiple readings can validate against one date or lifetime instant but write records using another.\"],\"observer\":\"The owner sees different acceptance or boundary timestamps; later audit readers see different recorded instants.\"}},{\"subject\":\"system_clock_backend generation\",\"kind\":\"later_layer_choice\",\"text\":\"which a change of the wall clock does not move and which counts the time the host or its VM was suspended\",\"question\":\"Which generated clock backend provides a monotonic source with suspend-inclusive semantics on the deployment platform?\",\"options\":[\"Use an operating-system boot-time clock whose elapsed value includes suspension.\",\"Use a platform runtime clock only after verifying that its documented semantics include suspension.\",\"Compose a monotonic source with suspend detection and correction.\"],\"default_guess\":\"Use the operating system's suspend-inclusive boot-time clock behind the generated clock authority.\",\"decision_owner\":\"generation\",\"consequences\":[\"A boot-time clock directly preserves expiry across suspension but is platform-specific.\",\"A generic runtime clock is simpler but may stop during suspension and let sessions outlive it.\",\"A composed clock is portable in principle but adds state and failure modes.\"],\"requirement\":\"which a change of the wall clock does not move and which counts the time the host or its VM was suspended\"},{\"subject\":\"A13 owner-interface host isolation\",\"kind\":\"later_layer_choice\",\"text\":\"the deployment gives the owner interface a host name of its own, under which no other HTTPS service answers\",\"question\":\"Which host name, certificate and routing arrangement will the deployment use to keep every other HTTPS service off the owner interface's cookie host?\",\"options\":[\"A dedicated DNS name routed only to the Registry owner interface.\",\"A dedicated local or VPN-only host name with its own TLS certificate and virtual host.\",\"A dedicated reverse-proxy virtual host that rejects every route except the owner interface.\"],\"default_guess\":\"Use a dedicated VPN-resolvable DNS name and TLS virtual host routed only to the owner interface.\",\"decision_owner\":\"deploy\",\"consequences\":[\"A dedicated DNS name gives the clearest cookie boundary but requires DNS and certificate management.\",\"A local or VPN-only name reduces exposure but needs every owner client to resolve and trust it.\",\"A proxy-only separation works only if no other service can later be added under the same host name.\"],\"requirement\":\"the deployment gives the owner interface a host name of its own, under which no other HTTPS service answers\"},{\"subject\":\"A13 rule 7 Factory verification\",\"kind\":\"later_layer_choice\",\"text\":\"it is checked on the code\",\"question\":\"How will Factory verification prove that every session, CSRF and confirmation secret is created and compared only through the named functions?\",\"options\":[\"A static import and call-site check that rejects every other constructor or comparison path.\",\"A semantic code check with whole-module data-flow analysis.\",\"Runtime instrumentation tests that replace the named functions and show every creation and comparison reaches them.\"],\"default_guess\":\"Use a static whole-module call-site and data-flow check, supplemented by focused instrumentation tests.\",\"decision_owner\":\"factory_checks\",\"consequences\":[\"A syntactic check is deterministic but can miss aliases or indirect calls.\",\"Data-flow analysis covers indirection but is more complex.\",\"Runtime instrumentation demonstrates exercised paths but cannot alone prove absence of an unexercised path.\"],\"requirement\":\"State 5 routes every such comparison through `random_values.equal_in_constant_time` and makes every such value in `random_values.make_secret_value` alone\"},{\"subject\":\"A16 Required test 13 Factory verification\",\"kind\":\"later_layer_choice\",\"text\":\"Through Registry's surfaces alone a minted id cannot be chosen, so the refusal is checked on the code by the Factory\",\"question\":\"How will the Factory prove that `confirm_import` builds exactly one mapping inside the confirming transaction and applies it only while clean?\",\"options\":[\"A static structural check of the transaction and mapping call graph.\",\"An instrumented test replacing the random source and transaction backend to force the conflict.\",\"Both a structural check and an instrumented forced-conflict test.\"],\"default_guess\":\"Use both the structural check and the instrumented forced-conflict test.\",\"decision_owner\":\"factory_checks\",\"consequences\":[\"A structural check proves placement but may not prove runtime rollback behavior.\",\"Instrumentation proves the forced history and unchanged store but only for exercised paths.\",\"Combining them covers both required structure and observable atomic refusal.\"],\"requirement\":\"`confirm_import` builds the mapping inside the confirming transaction and applies it only when clean\"},{\"subject\":\"A21 security review\",\"kind\":\"missing_required_result\",\"text\":\"A change to a decision a category names reopens this review.\",\"question\":\"What is the recorded outcome of the security review reopened by the current A13 change, especially for authentication_credential_abuse, browser_boundary and concurrency?\",\"options\":[\"Record that the changed binding-storage ownership preserves every category outcome, with the decisions and guarantees checked.\",\"Record a changed outcome or an additional required guarantee before closing State 2.\"],\"default_guess\":\"Reperform the named categories and record that the outcome remains unchanged only after the A13/A16 binding contradictions are resolved.\"},{\"subject\":\"A09 rules 2 and 4\",\"kind\":\"standard_violation\",\"text\":\"The classes are ordered `open` < `business_confidential` <\\n   `personal_data` (R0-26).\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Replace each disclosure-class value used as an enum member with its emitted member name beside the `= models.<enumeration>` address, leaving any serialized value only as an optional annotation.\"},{\"subject\":\"A16 rule 4\",\"kind\":\"standard_violation\",\"text\":\"a status is outside its\\n   vocabulary, or a pointer is `withdrawn` (v1 never withdrew one, M05); a\\n   pointer's type is not declared or its owner service is not the type's\\n   (A22); the versions of a project's pointers of one type are not 1..n, or\\n   are not every one `superseded` but the highest, which is `published`; an\\n   instant cannot be read; an `active` project has an\\n   archived instant or an `archived` one has none; a `superseded` pointer has\\n   no superseded instant or a `published` one has one\",\"rule\":\"Член, названный одним значением, — нарушение: значение с точкой или дефисом не является именем ни одного члена, генератор пишет только имена (`AuditAction.EXPENSE_CREATE`), и валидатор отклоняет такую note (`note_enum_member_by_value`).\",\"section\":\"15.3.1\",\"question\":\"Name every Project-status and ArtifactPointer-status member by its emitted member name beside the address of its model enumeration; retain `active`, `archived`, `published`, `superseded` and `withdrawn` only as optional value annotations.\"}]}",
+ "set_aside": []
+}
