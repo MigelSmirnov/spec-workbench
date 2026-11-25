@@ -198,7 +198,10 @@ The admitted session; the action; its target; the revision or access
 version the step shows, or that it shows none; the action's inputs — for an
 erasure its choice, for the import the upload's number and the file's
 digest with the picks, names, aliases and Customer values, for an erasure
-of old entries the date.
+of old entries the date. The inputs are bound as the owner request's form
+reading gives them, before any value is judged (A02 is the action's, at its
+own stage): the same reading at the step and at the submission, a field
+given empty and a field not given being two inputs.
 
 ### Outputs
 
@@ -243,7 +246,9 @@ pending confirmation, and use it up (A13 rule 6).
 
 The admitted session; the confirmation value the submission gives, or none;
 the action, its target, the revision or access version it states or that it
-states none, and the digest of its inputs.
+states none, and its inputs, as `show_confirmation_step` takes them. The
+operation computes their binding itself, by the one procedure
+`show_confirmation_step` uses, so the two cannot differ.
 
 ### Outputs
 
