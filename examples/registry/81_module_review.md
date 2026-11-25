@@ -134,6 +134,26 @@ The same run hit the generation output limit (16000 tokens) on
 `migration_import`, whose generated code was cut off. That is a run
 parameter, not a specification defect.
 
+## Repair after the third Route B run (2026-11-25)
+
+Run `registry-generation-20261125T153831Z` rejected `backups` for two
+reasons.
+
+- **The `cryptography` package was not declared.** State 6 already
+  decided the package ("This needs the `cryptography` package, pinned by
+  digest", A18, A20), but no State 8 import table carried it. The
+  candidate's four imports failed the Factory's `unknown_top_level_import`
+  gate. `imports.third_party` and `imports.third_party_by_module.backups`
+  now hold the four import lines. The encryption scheme is unchanged.
+- **The no-follow flag was probed with `hasattr`.** Three notes require
+  "without following a link", and the generator probed the flag
+  defensively. They now say the flag is named directly and never probed.
+  The flag is not named in the notes, because the Factory validator reads an
+  upper-case name in a note as a data symbol (§15.3).
+
+Only the `backups` packet changed. The author re-read it and re-hashed it.
+No reviewer verdict changed.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
@@ -144,3 +164,7 @@ parameter, not a specification defect.
   `70_data_provider_closure.json`.
 - **Emitter edges.** As above: FA018 runs no emitter on emitter-written
   modules.
+- **Factory checks the Workbench does not run.** Neither the State 7 gate
+  nor `check_note_draft` runs the Factory validator's §15.3 check of
+  upper-case names. No Workbench check compares a contract's stated
+  dependency with `imports.third_party`.
