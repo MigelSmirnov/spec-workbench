@@ -1,0 +1,215 @@
+{
+ "open_points": [
+  {
+   "subject": "M29 OWNER_FORM_FIELDS row set",
+   "kind": "missing_contract_decision",
+   "text": "A row of the owner form table: one field an owner page writes into a form or a query, and the owner interface reads back (owner, 2026-11-25).",
+   "question": "Which owner actions and pages have rows, and what exact field name, path, carrier and value kind does each row contain?",
+   "options": [
+    "State 6 declares one row for every field emitted or accepted by every owner action.",
+    "State 6 declares rows only for submitted values, leaving query and page-only fields outside this table."
+   ],
+   "default_guess": "State 6 declares every field that generated owner-interface code emits or reads.",
+   "decision_owner": "6",
+   "consequences": [
+    "A complete table lets generation determine every accepted field without inventing names or paths.",
+    "A partial table forces generation to invent handling for fields outside the table or makes those fields unreadable."
+   ],
+   "requirement": "A field no row names is not read.",
+   "unit": "?"
+  },
+  {
+   "subject": "M29 field transport",
+   "kind": "missing_contract_decision",
+   "text": "one field an owner page writes into a form or a query",
+   "question": "For each field, is it carried in a form body or in a query, and which values are forbidden from the query so that URLs cannot expose protected data?",
+   "options": [
+    "Only non-personal read parameters use queries; changes, personal values, session values, CSRF values and confirmation values use forms.",
+    "Any field may use a query unless another rule explicitly names that field."
+   ],
+   "default_guess": "Use queries only for non-personal read parameters and forms for every change or protected value.",
+   "decision_owner": "6",
+   "consequences": [
+    "Restricting queries preserves the existing URL confidentiality guarantees.",
+    "Allowing arbitrary query placement can expose personal values or security values in URLs."
+   ],
+   "requirement": "No personal value appears in a URL.",
+   "unit": "?"
+  },
+  {
+   "subject": "M29 request path representation",
+   "kind": "later_serialization_choice",
+   "text": "its path in the owner request or its values, with a tuple's position marked",
+   "question": "What is the exact path representation, how is a tuple position distinguished from an ordinary path component, and are tuple positions zero-based or one-based?",
+   "options": [
+    "Use a typed path whose components distinguish member names from zero-based tuple positions.",
+    "Use a textual path syntax with an escaping rule and explicitly chosen index base."
+   ],
+   "default_guess": "Use typed components with zero-based tuple positions.",
+   "decision_owner": "6",
+   "consequences": [
+    "A typed path removes collisions between names and positions but requires a structured contract representation.",
+    "A textual path is compact but requires escaping and index rules; without them different generators can address different values."
+   ],
+   "requirement": "the field's name, which holds its path and the mark of each tuple position in it, so that two rows of different paths are different rows",
+   "unit": "?"
+  },
+  {
+   "subject": "M29 carrier semantics",
+   "kind": "later_contract_choice",
+   "text": "which of the two it fills",
+   "question": "Exactly what does carrier `request` versus carrier `values` mean for each operation, and may one field populate both?",
+   "options": [
+    "Each row populates exactly one of two separately typed contract objects, and never both.",
+    "`request` is the whole operation request while `values` is a nested value collection, with explicitly declared copying between them."
+   ],
+   "default_guess": "Each row populates exactly one separately typed destination and never both.",
+   "decision_owner": "5",
+   "consequences": [
+    "Exclusive destinations give callers and readers an unambiguous contract.",
+    "Copying or overlap can make validation depend on which destination wins when values disagree."
+   ],
+   "requirement": "Owner form carrier: `request`, `values` — what an owner form field fills, the owner request itself or the values it carries (M29).",
+   "unit": "?"
+  },
+  {
+   "subject": "M29 member-valued fields",
+   "kind": "missing_type_binding",
+   "text": "as an enumeration member's value",
+   "question": "How does a `member` row identify the enumeration whose member is to be read?",
+   "options": [
+    "The row explicitly names the enumeration type.",
+    "The destination path's State 6 type determines the enumeration, and generation rejects a path that is not enum-typed."
+   ],
+   "default_guess": "Derive the enumeration from the typed destination path and reject an inconsistent row.",
+   "decision_owner": "6",
+   "consequences": [
+    "An explicit enum reference makes the table self-contained but adds another row fact.",
+    "Derivation avoids duplication but requires every destination path to have an unambiguous declared enum type."
+   ],
+   "requirement": "Owner form value kind: `text`, `integer`, `boolean`, `member` — how an owner form field's text is read: as itself, as an integer's decimal digits, as `true` or `false`, or as an enumeration member's value (M29).",
+   "unit": "?"
+  },
+  {
+   "subject": "owner-form scalar parsing",
+   "kind": "undecided_refusal",
+   "text": "as text, as an integer, as true or false, or as an enumeration member's value",
+   "question": "What result is required when an integer, boolean or member field contains text outside its accepted lexical form, and are signs, leading zeroes, non-ASCII decimal digits or differently cased boolean/member values accepted?",
+   "options": [
+    "Accept only ASCII unsigned decimal digits, exact lowercase `true` or `false`, and exact enum values; refuse any other text at the values check.",
+    "Use the target language's integer and boolean parsing and the enumeration library's matching rules.",
+    "Treat text that cannot be parsed as if the field were absent."
+   ],
+   "default_guess": "Accept exact ASCII forms and exact enum values, and refuse malformed text at stage (4).",
+   "witness": {
+    "initial": "A valid owner session submits a form whose declared integer field contains `1x`.",
+    "events": [
+     "The owner submits the form with valid session and CSRF values.",
+     "The owner-interface reader applies the M29 row."
+    ],
+    "outcomes": [
+     "The request is refused at the values check as malformed.",
+     "The value is treated as absent or accepted according to the implementation language's parser."
+    ],
+    "observer": "The owner sees a different answer and the requested change may differ."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner-form repeated field names",
+   "kind": "undecided_input_multiplicity",
+   "text": "the name alone picks a row",
+   "question": "When one submitted form or query contains the same declared field name more than once, is the request refused, does the first value win, does the last value win, or is a list formed?",
+   "options": [
+    "Refuse a repeated scalar field name.",
+    "Use the first occurrence.",
+    "Use the last occurrence.",
+    "Permit repetition only for a destination explicitly declared as a collection."
+   ],
+   "default_guess": "Refuse repetition unless the destination contract explicitly declares a collection.",
+   "witness": {
+    "initial": "A valid correction form contains the same display-name field twice with values `A` and `B`.",
+    "events": [
+     "The owner submits the form.",
+     "The reader finds one M29 row by the shared field name."
+    ],
+    "outcomes": [
+     "The correction uses `A`.",
+     "The correction uses `B` or is refused."
+    ],
+    "observer": "The owner reads a different stored display name or a refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner-form absent boolean fields",
+   "kind": "undecided_absence_semantics",
+   "text": "as `true` or `false`",
+   "question": "When a declared boolean field is absent, does it mean false, mean not given, or make a required field missing?",
+   "options": [
+    "Absence remains not given and ordinary required/optional rules decide the outcome.",
+    "Absence means false, following an unchecked HTML checkbox convention.",
+    "Every boolean field must be submitted explicitly as `true` or `false`."
+   ],
+   "default_guess": "Absence remains not given; the destination contract decides whether that is allowed.",
+   "witness": {
+    "initial": "A valid owner form omits a declared boolean field.",
+    "events": [
+     "The owner submits the form.",
+     "The reader applies the M29 table."
+    ],
+    "outcomes": [
+     "The operation receives false and may be accepted.",
+     "The operation receives no value and may clear, preserve or refuse it under the destination's rules."
+    ],
+    "observer": "The owner sees a different stored result or refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M29 name uniqueness",
+   "kind": "missing_invariant_test",
+   "text": "No two rows share a name: the name alone picks a row, and a table in which two rows share one is not a release.",
+   "question": "What formal invariant and Required tests item must show that every release's OWNER_FORM_FIELDS names are globally unique?",
+   "options": [
+    "State 2 states global name uniqueness as an invariant and requires a release-table test over every row.",
+    "Uniqueness is scoped by owner action or page, which requires changing the quoted global rule."
+   ],
+   "default_guess": "State 2 states global uniqueness and requires a test over the complete release table.",
+   "witness": {
+    "initial": "Two rows use the same field name but address different paths.",
+    "events": [
+     "A page emits that name.",
+     "The reader looks up the row by name."
+    ],
+    "outcomes": [
+     "The first row is selected and one destination is filled.",
+     "The second row is selected and the other destination is filled."
+    ],
+    "observer": "The owner sees a different operation input or stored result."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "M29 page-reader agreement",
+   "kind": "missing_invariant_test",
+   "text": "The table holds the names so that the page and the reader cannot name a field differently (Route B runs of 2026-11-25).",
+   "question": "What Required tests item must show that every field emitted by an owner page is read under the same name and that no separately invented reader or page name exists?",
+   "options": [
+    "Require a complete page-to-reader round-trip check for every OWNER_FORM_FIELDS row and every owner action.",
+    "Require a structural check that both emitted pages and readers are derived from the same complete table."
+   ],
+   "default_guess": "Require the observable round trip for every row; leave the check's mechanism to factory_checks.",
+   "decision_owner": "factory_checks",
+   "consequences": [
+    "Round-trip checks demonstrate the user-visible guarantee but may require many generated cases.",
+    "A structural check is smaller but must prove that neither side has another source of field names."
+   ],
+   "requirement": "The table holds the names so that the page and the reader cannot name a field differently (Route B runs of 2026-11-25).",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M29 OWNER_FORM_FIELDS row set\",\"kind\":\"missing_contract_decision\",\"text\":\"A row of the owner form table: one field an owner page writes into a form or a query, and the owner interface reads back (owner, 2026-11-25).\",\"question\":\"Which owner actions and pages have rows, and what exact field name, path, carrier and value kind does each row contain?\",\"options\":[\"State 6 declares one row for every field emitted or accepted by every owner action.\",\"State 6 declares rows only for submitted values, leaving query and page-only fields outside this table.\"],\"default_guess\":\"State 6 declares every field that generated owner-interface code emits or reads.\",\"decision_owner\":\"6\",\"consequences\":[\"A complete table lets generation determine every accepted field without inventing names or paths.\",\"A partial table forces generation to invent handling for fields outside the table or makes those fields unreadable.\"],\"requirement\":\"A field no row names is not read.\"},{\"subject\":\"M29 field transport\",\"kind\":\"missing_contract_decision\",\"text\":\"one field an owner page writes into a form or a query\",\"question\":\"For each field, is it carried in a form body or in a query, and which values are forbidden from the query so that URLs cannot expose protected data?\",\"options\":[\"Only non-personal read parameters use queries; changes, personal values, session values, CSRF values and confirmation values use forms.\",\"Any field may use a query unless another rule explicitly names that field.\"],\"default_guess\":\"Use queries only for non-personal read parameters and forms for every change or protected value.\",\"decision_owner\":\"6\",\"consequences\":[\"Restricting queries preserves the existing URL confidentiality guarantees.\",\"Allowing arbitrary query placement can expose personal values or security values in URLs.\"],\"requirement\":\"No personal value appears in a URL.\"},{\"subject\":\"M29 request path representation\",\"kind\":\"later_serialization_choice\",\"text\":\"its path in the owner request or its values, with a tuple's position marked\",\"question\":\"What is the exact path representation, how is a tuple position distinguished from an ordinary path component, and are tuple positions zero-based or one-based?\",\"options\":[\"Use a typed path whose components distinguish member names from zero-based tuple positions.\",\"Use a textual path syntax with an escaping rule and explicitly chosen index base.\"],\"default_guess\":\"Use typed components with zero-based tuple positions.\",\"decision_owner\":\"6\",\"consequences\":[\"A typed path removes collisions between names and positions but requires a structured contract representation.\",\"A textual path is compact but requires escaping and index rules; without them different generators can address different values.\"],\"requirement\":\"the field's name, which holds its path and the mark of each tuple position in it, so that two rows of different paths are different rows\"},{\"subject\":\"M29 carrier semantics\",\"kind\":\"later_contract_choice\",\"text\":\"which of the two it fills\",\"question\":\"Exactly what does carrier `request` versus carrier `values` mean for each operation, and may one field populate both?\",\"options\":[\"Each row populates exactly one of two separately typed contract objects, and never both.\",\"`request` is the whole operation request while `values` is a nested value collection, with explicitly declared copying between them.\"],\"default_guess\":\"Each row populates exactly one separately typed destination and never both.\",\"decision_owner\":\"5\",\"consequences\":[\"Exclusive destinations give callers and readers an unambiguous contract.\",\"Copying or overlap can make validation depend on which destination wins when values disagree.\"],\"requirement\":\"Owner form carrier: `request`, `values` — what an owner form field fills, the owner request itself or the values it carries (M29).\"},{\"subject\":\"M29 member-valued fields\",\"kind\":\"missing_type_binding\",\"text\":\"as an enumeration member's value\",\"question\":\"How does a `member` row identify the enumeration whose member is to be read?\",\"options\":[\"The row explicitly names the enumeration type.\",\"The destination path's State 6 type determines the enumeration, and generation rejects a path that is not enum-typed.\"],\"default_guess\":\"Derive the enumeration from the typed destination path and reject an inconsistent row.\",\"decision_owner\":\"6\",\"consequences\":[\"An explicit enum reference makes the table self-contained but adds another row fact.\",\"Derivation avoids duplication but requires every destination path to have an unambiguous declared enum type.\"],\"requirement\":\"Owner form value kind: `text`, `integer`, `boolean`, `member` — how an owner form field's text is read: as itself, as an integer's decimal digits, as `true` or `false`, or as an enumeration member's value (M29).\"},{\"subject\":\"owner-form scalar parsing\",\"kind\":\"undecided_refusal\",\"text\":\"as text, as an integer, as true or false, or as an enumeration member's value\",\"question\":\"What result is required when an integer, boolean or member field contains text outside its accepted lexical form, and are signs, leading zeroes, non-ASCII decimal digits or differently cased boolean/member values accepted?\",\"options\":[\"Accept only ASCII unsigned decimal digits, exact lowercase `true` or `false`, and exact enum values; refuse any other text at the values check.\",\"Use the target language's integer and boolean parsing and the enumeration library's matching rules.\",\"Treat text that cannot be parsed as if the field were absent.\"],\"default_guess\":\"Accept exact ASCII forms and exact enum values, and refuse malformed text at stage (4).\",\"witness\":{\"initial\":\"A valid owner session submits a form whose declared integer field contains `1x`.\",\"events\":[\"The owner submits the form with valid session and CSRF values.\",\"The owner-interface reader applies the M29 row.\"],\"outcomes\":[\"The request is refused at the values check as malformed.\",\"The value is treated as absent or accepted according to the implementation language's parser.\"],\"observer\":\"The owner sees a different answer and the requested change may differ.\"}},{\"subject\":\"owner-form repeated field names\",\"kind\":\"undecided_input_multiplicity\",\"text\":\"the name alone picks a row\",\"question\":\"When one submitted form or query contains the same declared field name more than once, is the request refused, does the first value win, does the last value win, or is a list formed?\",\"options\":[\"Refuse a repeated scalar field name.\",\"Use the first occurrence.\",\"Use the last occurrence.\",\"Permit repetition only for a destination explicitly declared as a collection.\"],\"default_guess\":\"Refuse repetition unless the destination contract explicitly declares a collection.\",\"witness\":{\"initial\":\"A valid correction form contains the same display-name field twice with values `A` and `B`.\",\"events\":[\"The owner submits the form.\",\"The reader finds one M29 row by the shared field name.\"],\"outcomes\":[\"The correction uses `A`.\",\"The correction uses `B` or is refused.\"],\"observer\":\"The owner reads a different stored display name or a refusal.\"}},{\"subject\":\"owner-form absent boolean fields\",\"kind\":\"undecided_absence_semantics\",\"text\":\"as `true` or `false`\",\"question\":\"When a declared boolean field is absent, does it mean false, mean not given, or make a required field missing?\",\"options\":[\"Absence remains not given and ordinary required/optional rules decide the outcome.\",\"Absence means false, following an unchecked HTML checkbox convention.\",\"Every boolean field must be submitted explicitly as `true` or `false`.\"],\"default_guess\":\"Absence remains not given; the destination contract decides whether that is allowed.\",\"witness\":{\"initial\":\"A valid owner form omits a declared boolean field.\",\"events\":[\"The owner submits the form.\",\"The reader applies the M29 table.\"],\"outcomes\":[\"The operation receives false and may be accepted.\",\"The operation receives no value and may clear, preserve or refuse it under the destination's rules.\"],\"observer\":\"The owner sees a different stored result or refusal.\"}},{\"subject\":\"M29 name uniqueness\",\"kind\":\"missing_invariant_test\",\"text\":\"No two rows share a name: the name alone picks a row, and a table in which two rows share one is not a release.\",\"question\":\"What formal invariant and Required tests item must show that every release's OWNER_FORM_FIELDS names are globally unique?\",\"options\":[\"State 2 states global name uniqueness as an invariant and requires a release-table test over every row.\",\"Uniqueness is scoped by owner action or page, which requires changing the quoted global rule.\"],\"default_guess\":\"State 2 states global uniqueness and requires a test over the complete release table.\",\"witness\":{\"initial\":\"Two rows use the same field name but address different paths.\",\"events\":[\"A page emits that name.\",\"The reader looks up the row by name.\"],\"outcomes\":[\"The first row is selected and one destination is filled.\",\"The second row is selected and the other destination is filled.\"],\"observer\":\"The owner sees a different operation input or stored result.\"}},{\"subject\":\"M29 page-reader agreement\",\"kind\":\"missing_invariant_test\",\"text\":\"The table holds the names so that the page and the reader cannot name a field differently (Route B runs of 2026-11-25).\",\"question\":\"What Required tests item must show that every field emitted by an owner page is read under the same name and that no separately invented reader or page name exists?\",\"options\":[\"Require a complete page-to-reader round-trip check for every OWNER_FORM_FIELDS row and every owner action.\",\"Require a structural check that both emitted pages and readers are derived from the same complete table.\"],\"default_guess\":\"Require the observable round trip for every row; leave the check's mechanism to factory_checks.\",\"decision_owner\":\"factory_checks\",\"consequences\":[\"Round-trip checks demonstrate the user-visible guarantee but may require many generated cases.\",\"A structural check is smaller but must prove that neither side has another source of field names.\"],\"requirement\":\"The table holds the names so that the page and the reader cannot name a field differently (Route B runs of 2026-11-25).\"}]}",
+ "set_aside": []
+}

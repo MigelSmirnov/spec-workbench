@@ -1,0 +1,136 @@
+{
+ "open_points": [
+  {
+   "subject": "context",
+   "kind": "query handling",
+   "text": "“the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`” versus “one field an owner page writes into a form or a query, and the owner interface reads back”",
+   "question": "Do owner flows read `OWNER_FORM_FIELDS` from the query as well as the form, and if so is the source selected by the action's GET/POST method or by another rule?",
+   "options": [
+    "GET actions read their rows from the query and POST actions read them from the form",
+    "All rows are read from both sources with a stated precedence",
+    "State 4 reads only forms; query fields other than `OWNER_TARGET_PARAMETER` are unsupported"
+   ],
+   "default_guess": "Use the action's method: GET rows come from the query and POST rows from the form.",
+   "witness": {
+    "initial": "A valid owner session requests a page whose list choice is written as an `OWNER_FORM_FIELDS` query field.",
+    "events": [
+     "The owner follows the page's link with the query field set.",
+     "`owner_interface` serves the request and hands the decoded owner request to `operations`."
+    ],
+    "outcomes": [
+     "The query field is decoded and the requested choice affects the answer.",
+     "Only the cookie, CSRF value, form and separately named target are read, so the query field is ignored or absent."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "unsupported field kind",
+   "text": "“every other field it reads or a page writes a row of `OWNER_FORM_FIELDS`” and “how its text is read: as text, as an integer, as true or false, or as an enumeration member's value”",
+   "question": "How is the upload page's file field represented, given that the page writes it but it is a byte stream read by `upload_framing`, not text of any declared owner-form value kind?",
+   "options": [
+    "Explicitly exempt the multipart file field from `OWNER_FORM_FIELDS` and name it separately",
+    "Add a file or byte-stream value kind and route it to `upload_framing`",
+    "Give it a table row used only for its name and state that the row's value kind is ignored"
+   ],
+   "default_guess": "Exempt the file part explicitly and give its field name a separate data-provider constant.",
+   "witness": {
+    "initial": "The owner has a valid session and an import file to upload.",
+    "events": [
+     "`owner_interface` renders the upload page with a file input.",
+     "The owner submits the multipart form with CSRF first and the file second.",
+     "`upload_framing` attempts to frame the file part as a byte stream."
+    ],
+    "outcomes": [
+     "The file input is an explicit exception and the byte stream reaches `migration_import`.",
+     "Every page-written field must be an `OwnerFormField`, but no declared kind can carry the file, so the upload cannot be decoded as specified."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "conversion failure",
+   "text": "“how its text is read: as text, as an integer, as true or false, or as an enumeration member's value”",
+   "question": "What does `owner_interface` hand to `operations` when a named field cannot be read as its declared integer, boolean or enumeration-member kind?",
+   "options": [
+    "Treat the entire form as undecodable and hand on no values",
+    "Preserve a field-specific conversion failure so stage (4) refuses that field",
+    "Treat only that field as absent and retain the other decoded fields"
+   ],
+   "default_guess": "Preserve a field-specific conversion failure and let the operation report it at stage (4).",
+   "witness": {
+    "initial": "A valid owner session has a current project correction form.",
+    "events": [
+     "The owner submits valid editable values but sends non-integer text in the revision field.",
+     "`owner_interface` finds the field's `OWNER_FORM_FIELDS` row and attempts its declared conversion.",
+     "`operations` processes the resulting owner request."
+    ],
+    "outcomes": [
+     "Only the revision field is reported as malformed or stale while the other supplied values remain represented.",
+     "The whole form is treated as undecodable, or the revision alone becomes absent, producing a different refusal and failure set."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "duplicate field",
+   "text": "“No two rows share a name: the name alone picks a row”",
+   "question": "When one incoming form or query contains the same named field more than once, which occurrence is used, or is the request refused?",
+   "options": [
+    "Refuse the request as an ambiguous form",
+    "Use the first occurrence",
+    "Use the last occurrence"
+   ],
+   "default_guess": "Refuse duplicate occurrences of every non-tuple field as an ambiguous form.",
+   "witness": {
+    "initial": "A project is at revision 2 and the owner has a valid correction form.",
+    "events": [
+     "A request submits the revision field twice, first as `1` and then as `2`.",
+     "`owner_interface` resolves both occurrences to the same `OwnerFormField` row.",
+     "`operations` checks the stated revision."
+    ],
+    "outcomes": [
+     "Using the first occurrence produces a stale-revision refusal.",
+     "Using the last occurrence accepts the correction; refusing duplicates produces a third observable answer."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context",
+   "kind": "tuple reconstruction",
+   "text": "“its path in the owner request or its values, with a tuple's position marked”",
+   "question": "How are tuple-position fields reconstructed, and what is the outcome for duplicate, missing, malformed or non-contiguous positions?",
+   "options": [
+    "Require canonical contiguous positions and refuse malformed or duplicate positions",
+    "Allow sparse positions and preserve their numeric positions",
+    "Compact present positions into encounter order and ignore malformed names"
+   ],
+   "default_guess": "Require canonical zero-based contiguous positions, reject duplicates and malformed positions, and preserve the resulting order.",
+   "witness": {
+    "initial": "A valid owner session holds an uploaded import file and submits mappings for two picked projects.",
+    "events": [
+     "The submitted names and aliases use tuple positions 0 and 2, with position 1 absent.",
+     "`owner_interface` matches the dynamic field names against rows containing `OWNER_FORM_POSITION_MARK`.",
+     "The import mapping is built from the reconstructed picks and values."
+    ],
+    "outcomes": [
+     "The request is refused because its tuple positions are not a canonical complete sequence.",
+     "The fields are compacted or kept sparse, potentially associating a name or alias with a different picked project."
+    ],
+    "observer": "The owner viewing the mapping"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context\",\"kind\":\"query handling\",\"text\":\"“the owner interface reads the cookie, the CSRF value and the form and hands them to `operations`” versus “one field an owner page writes into a form or a query, and the owner interface reads back”\",\"question\":\"Do owner flows read `OWNER_FORM_FIELDS` from the query as well as the form, and if so is the source selected by the action's GET/POST method or by another rule?\",\"options\":[\"GET actions read their rows from the query and POST actions read them from the form\",\"All rows are read from both sources with a stated precedence\",\"State 4 reads only forms; query fields other than `OWNER_TARGET_PARAMETER` are unsupported\"],\"default_guess\":\"Use the action's method: GET rows come from the query and POST rows from the form.\",\"witness\":{\"initial\":\"A valid owner session requests a page whose list choice is written as an `OWNER_FORM_FIELDS` query field.\",\"events\":[\"The owner follows the page's link with the query field set.\",\"`owner_interface` serves the request and hands the decoded owner request to `operations`.\"],\"outcomes\":[\"The query field is decoded and the requested choice affects the answer.\",\"Only the cookie, CSRF value, form and separately named target are read, so the query field is ignored or absent.\"],\"observer\":\"The owner\"}},{\"subject\":\"context\",\"kind\":\"unsupported field kind\",\"text\":\"“every other field it reads or a page writes a row of `OWNER_FORM_FIELDS`” and “how its text is read: as text, as an integer, as true or false, or as an enumeration member's value”\",\"question\":\"How is the upload page's file field represented, given that the page writes it but it is a byte stream read by `upload_framing`, not text of any declared owner-form value kind?\",\"options\":[\"Explicitly exempt the multipart file field from `OWNER_FORM_FIELDS` and name it separately\",\"Add a file or byte-stream value kind and route it to `upload_framing`\",\"Give it a table row used only for its name and state that the row's value kind is ignored\"],\"default_guess\":\"Exempt the file part explicitly and give its field name a separate data-provider constant.\",\"witness\":{\"initial\":\"The owner has a valid session and an import file to upload.\",\"events\":[\"`owner_interface` renders the upload page with a file input.\",\"The owner submits the multipart form with CSRF first and the file second.\",\"`upload_framing` attempts to frame the file part as a byte stream.\"],\"outcomes\":[\"The file input is an explicit exception and the byte stream reaches `migration_import`.\",\"Every page-written field must be an `OwnerFormField`, but no declared kind can carry the file, so the upload cannot be decoded as specified.\"],\"observer\":\"The owner\"}},{\"subject\":\"context\",\"kind\":\"conversion failure\",\"text\":\"“how its text is read: as text, as an integer, as true or false, or as an enumeration member's value”\",\"question\":\"What does `owner_interface` hand to `operations` when a named field cannot be read as its declared integer, boolean or enumeration-member kind?\",\"options\":[\"Treat the entire form as undecodable and hand on no values\",\"Preserve a field-specific conversion failure so stage (4) refuses that field\",\"Treat only that field as absent and retain the other decoded fields\"],\"default_guess\":\"Preserve a field-specific conversion failure and let the operation report it at stage (4).\",\"witness\":{\"initial\":\"A valid owner session has a current project correction form.\",\"events\":[\"The owner submits valid editable values but sends non-integer text in the revision field.\",\"`owner_interface` finds the field's `OWNER_FORM_FIELDS` row and attempts its declared conversion.\",\"`operations` processes the resulting owner request.\"],\"outcomes\":[\"Only the revision field is reported as malformed or stale while the other supplied values remain represented.\",\"The whole form is treated as undecodable, or the revision alone becomes absent, producing a different refusal and failure set.\"],\"observer\":\"The owner\"}},{\"subject\":\"context\",\"kind\":\"duplicate field\",\"text\":\"“No two rows share a name: the name alone picks a row”\",\"question\":\"When one incoming form or query contains the same named field more than once, which occurrence is used, or is the request refused?\",\"options\":[\"Refuse the request as an ambiguous form\",\"Use the first occurrence\",\"Use the last occurrence\"],\"default_guess\":\"Refuse duplicate occurrences of every non-tuple field as an ambiguous form.\",\"witness\":{\"initial\":\"A project is at revision 2 and the owner has a valid correction form.\",\"events\":[\"A request submits the revision field twice, first as `1` and then as `2`.\",\"`owner_interface` resolves both occurrences to the same `OwnerFormField` row.\",\"`operations` checks the stated revision.\"],\"outcomes\":[\"Using the first occurrence produces a stale-revision refusal.\",\"Using the last occurrence accepts the correction; refusing duplicates produces a third observable answer.\"],\"observer\":\"The owner\"}},{\"subject\":\"context\",\"kind\":\"tuple reconstruction\",\"text\":\"“its path in the owner request or its values, with a tuple's position marked”\",\"question\":\"How are tuple-position fields reconstructed, and what is the outcome for duplicate, missing, malformed or non-contiguous positions?\",\"options\":[\"Require canonical contiguous positions and refuse malformed or duplicate positions\",\"Allow sparse positions and preserve their numeric positions\",\"Compact present positions into encounter order and ignore malformed names\"],\"default_guess\":\"Require canonical zero-based contiguous positions, reject duplicates and malformed positions, and preserve the resulting order.\",\"witness\":{\"initial\":\"A valid owner session holds an uploaded import file and submits mappings for two picked projects.\",\"events\":[\"The submitted names and aliases use tuple positions 0 and 2, with position 1 absent.\",\"`owner_interface` matches the dynamic field names against rows containing `OWNER_FORM_POSITION_MARK`.\",\"The import mapping is built from the reconstructed picks and values.\"],\"outcomes\":[\"The request is refused because its tuple positions are not a canonical complete sequence.\",\"The fields are compacted or kept sparse, potentially associating a name or alias with a different picked project.\"],\"observer\":\"The owner viewing the mapping\"}}]}",
+ "set_aside": []
+}

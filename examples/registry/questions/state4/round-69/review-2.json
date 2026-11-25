@@ -1,0 +1,161 @@
+{
+ "open_points": [
+  {
+   "subject": "context: target and CSRF fields",
+   "kind": "contradiction",
+   "text": "M29 says “A field no row names is not read,” while `owner_interface` says “its target is the query parameter `OWNER_TARGET_PARAMETER` names, its CSRF value the form field `OWNER_CSRF_FIELD` names, every other field it reads or a page writes a row of `OWNER_FORM_FIELDS`.”",
+   "question": "Are the target and CSRF fields exceptions read only through their dedicated constants, or must they also have `OWNER_FORM_FIELDS` rows?",
+   "options": [
+    "Target and CSRF are explicit exceptions to M29 and have no table rows.",
+    "Target and CSRF must also have table rows, with the dedicated constants constrained to name those rows.",
+    "All fields, including target and CSRF, are read only through `OWNER_FORM_FIELDS`; remove the separate reading rule."
+   ],
+   "default_guess": "Make target and CSRF explicit exceptions, because their dedicated parsing and security handling already exist.",
+   "witness": {
+    "initial": "A valid owner session exists, project P is at revision 1, and the session has CSRF value C.",
+    "events": [
+     "The owner submits P's correction route with target P, CSRF value C and revision 1.",
+     "`owner_interface` decides whether to read target and CSRF despite their being outside “every other field” of `OWNER_FORM_FIELDS`."
+    ],
+    "outcomes": [
+     "Following M29 literally for fields without rows, target and CSRF are not read, so the request is refused for missing admission or target data.",
+     "Following the dedicated constants, target P and CSRF C are read and the correction can be accepted."
+    ],
+    "observer": "The owner sees a refusal instead of the corrected project."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: import upload file field",
+   "kind": "unrepresentable field",
+   "text": "M29 covers “one field an owner page writes into a form or a query” and permits only `text`, `integer`, `boolean`, or `member`, while the import page writes a multipart file field that `upload_framing` must return as an unread byte stream.",
+   "question": "Is the multipart file part outside `OWNER_FORM_FIELDS`, or how does a table row represent and deliver it when no carrier or value kind can hold a file stream?",
+   "options": [
+    "Explicitly exempt the upload file part and keep it owned entirely by `upload_framing`.",
+    "Add a file/stream value kind and a carrier path for the upload body.",
+    "Represent only the file part's field name in the table while specifying that `upload_framing` supplies its stream separately."
+   ],
+   "default_guess": "Exempt the file part and state that `OWNER_FORM_FIELDS` covers scalar form and query fields only.",
+   "witness": {
+    "initial": "A valid owner session has no uploaded file and the migration closure does not exist.",
+    "events": [
+     "The owner opens the upload page.",
+     "The page submits the CSRF part followed by a valid export file part.",
+     "The interface tries to interpret every page-written field under M29."
+    ],
+    "outcomes": [
+     "Because no M29 value kind can produce a byte stream, the file field is ignored or the form is unreadable, so no upload is kept.",
+     "The file part is treated as an implicit exception, reaches `read_import_mapping` as a stream and is kept after validation."
+    ],
+    "observer": "The owner either receives the import mapping or an upload refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: owner form row shape",
+   "kind": "ambiguous model",
+   "text": "M29 first says “The row gives the field's name, its path in the owner request or its values,” but its Facts say “the field's name, which holds its path and the mark of each tuple position in it.”",
+   "question": "Is the destination path a separate fact of `OwnerFormField`, or is it encoded in the field name, and what exact row facts may State 6 declare without adding a fact State 1 omitted?",
+   "options": [
+    "Store `name` and `path` as separate row facts.",
+    "Make the field name itself a path template and declare no separate path fact.",
+    "Store a structured destination containing carrier and path, with the wire name separate."
+   ],
+   "default_guess": "Use separate wire-name and structured destination-path facts; revise M29 to say so explicitly.",
+   "witness": {
+    "initial": "An owner action has a wire field named `revision` that must fill the request's stated-revision path.",
+    "events": [
+     "The page writes the `revision` field.",
+     "The reader obtains its `OwnerFormField` row.",
+     "One implementation treats the row name as the destination path; another expects a distinct path fact."
+    ],
+    "outcomes": [
+     "The revision reaches the request and the action is checked against it.",
+     "No destination path is available, so the revision is absent and the action is refused as stale."
+    ],
+    "observer": "The owner sees acceptance versus a stale-revision refusal."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: malformed owner field conversion",
+   "kind": "unstated failure",
+   "text": "M29 says text is read “as text, as an integer, as true or false, or as an enumeration member's value,” but no flow states the outcome when a named field cannot be converted; `owner_interface` only says that “a form that cannot be decoded” is handed on with no values.",
+   "question": "When one named field contains invalid integer, boolean, member, path, or tuple-position text, is the entire form unreadable, is only that field absent, or is a specific stage-(4) value failure produced, and which module produces it?",
+   "options": [
+    "Treat any conversion failure as an unreadable form and hand on no values.",
+    "Omit only the malformed field and let the domain operation report it as missing.",
+    "Produce a stage-(4) malformed-value failure for that field while preserving the other decoded fields."
+   ],
+   "default_guess": "Produce a stage-(4) malformed-value failure naming the field, preserving successfully decoded fields.",
+   "witness": {
+    "initial": "Project P is at revision 2 and a valid owner session displays its correction form.",
+    "events": [
+     "The owner submits valid editable values but changes the integer revision field to `2x`.",
+     "`owner_interface` encounters the failed integer conversion."
+    ],
+    "outcomes": [
+     "The whole form becomes unreadable and operations receives no values, producing several missing-value failures.",
+     "Only the revision is treated as malformed or absent, producing a revision-specific refusal while the other values remain readable."
+    ],
+    "observer": "The owner sees materially different refusal details and rendered recovery data."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: repeated scalar field names",
+   "kind": "unstated multiplicity",
+   "text": "M29 requires that “No two rows share a name,” but says nothing about an incoming form or query carrying the same named field more than once.",
+   "question": "For a scalar `OWNER_FORM_FIELDS` row, does the reader reject duplicate occurrences, take the first, take the last, or collect them, and what failure follows when duplicates are invalid?",
+   "options": [
+    "Reject every duplicate scalar field as a malformed request.",
+    "Use the first occurrence.",
+    "Use the last occurrence.",
+    "Allow multiplicity only for paths explicitly containing a tuple-position mark."
+   ],
+   "default_guess": "Reject duplicate scalar occurrences; allow repetition only through explicitly indexed tuple fields.",
+   "witness": {
+    "initial": "Project P is at revision 2 and the owner has a valid correction session.",
+    "events": [
+     "A correction request carries the same revision field twice, first `1` and then `2`.",
+     "The owner interface reads the field's single M29 row."
+    ],
+    "outcomes": [
+     "A first-value interpretation uses revision 1 and refuses the correction as stale.",
+     "A last-value interpretation uses revision 2 and accepts the correction."
+    ],
+    "observer": "The owner sees refusal versus a changed project."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "context: tuple-position fields",
+   "kind": "undefined indexing",
+   "text": "M29 says a path has “a tuple's position marked,” and `data_provider` exports `OWNER_FORM_POSITION_MARK`, but no text defines the position syntax, valid index set, duplicate or missing positions, ordering, or the outcome of a malformed position.",
+   "question": "How are tuple positions parsed and ordered, and what happens for negative, non-decimal, repeated, sparse, or out-of-order positions?",
+   "options": [
+    "Require contiguous zero-based ASCII-decimal positions in wire order and refuse malformed or duplicate positions.",
+    "Allow sparse non-negative positions and order by numeric position.",
+    "Treat positions as opaque text and preserve request order.",
+    "Define one row per fixed tuple position instead of dynamic indexed fields."
+   ],
+   "default_guess": "Require unique contiguous zero-based ASCII-decimal positions and produce a stage-(4) refusal for malformed indexing.",
+   "witness": {
+    "initial": "A kept import file contains projects P and Q and the owner is preparing the ordered picks for a confirmation step.",
+    "events": [
+     "The submitted mapping fields use tuple positions 0 and 2, with position 1 absent.",
+     "The interface expands the marked M29 paths into the picks tuple."
+    ],
+    "outcomes": [
+     "One implementation compacts the positions and shows a clean two-project mapping whose confirmation binds that order.",
+     "Another treats the gap as malformed and shows no confirmation step."
+    ],
+    "observer": "The owner sees a confirmation step in one implementation and a mapping error in the other."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"context: target and CSRF fields\",\"kind\":\"contradiction\",\"text\":\"M29 says “A field no row names is not read,” while `owner_interface` says “its target is the query parameter `OWNER_TARGET_PARAMETER` names, its CSRF value the form field `OWNER_CSRF_FIELD` names, every other field it reads or a page writes a row of `OWNER_FORM_FIELDS`.”\",\"question\":\"Are the target and CSRF fields exceptions read only through their dedicated constants, or must they also have `OWNER_FORM_FIELDS` rows?\",\"options\":[\"Target and CSRF are explicit exceptions to M29 and have no table rows.\",\"Target and CSRF must also have table rows, with the dedicated constants constrained to name those rows.\",\"All fields, including target and CSRF, are read only through `OWNER_FORM_FIELDS`; remove the separate reading rule.\"],\"default_guess\":\"Make target and CSRF explicit exceptions, because their dedicated parsing and security handling already exist.\",\"witness\":{\"initial\":\"A valid owner session exists, project P is at revision 1, and the session has CSRF value C.\",\"events\":[\"The owner submits P's correction route with target P, CSRF value C and revision 1.\",\"`owner_interface` decides whether to read target and CSRF despite their being outside “every other field” of `OWNER_FORM_FIELDS`.\"],\"outcomes\":[\"Following M29 literally for fields without rows, target and CSRF are not read, so the request is refused for missing admission or target data.\",\"Following the dedicated constants, target P and CSRF C are read and the correction can be accepted.\"],\"observer\":\"The owner sees a refusal instead of the corrected project.\"}},{\"subject\":\"context: import upload file field\",\"kind\":\"unrepresentable field\",\"text\":\"M29 covers “one field an owner page writes into a form or a query” and permits only `text`, `integer`, `boolean`, or `member`, while the import page writes a multipart file field that `upload_framing` must return as an unread byte stream.\",\"question\":\"Is the multipart file part outside `OWNER_FORM_FIELDS`, or how does a table row represent and deliver it when no carrier or value kind can hold a file stream?\",\"options\":[\"Explicitly exempt the upload file part and keep it owned entirely by `upload_framing`.\",\"Add a file/stream value kind and a carrier path for the upload body.\",\"Represent only the file part's field name in the table while specifying that `upload_framing` supplies its stream separately.\"],\"default_guess\":\"Exempt the file part and state that `OWNER_FORM_FIELDS` covers scalar form and query fields only.\",\"witness\":{\"initial\":\"A valid owner session has no uploaded file and the migration closure does not exist.\",\"events\":[\"The owner opens the upload page.\",\"The page submits the CSRF part followed by a valid export file part.\",\"The interface tries to interpret every page-written field under M29.\"],\"outcomes\":[\"Because no M29 value kind can produce a byte stream, the file field is ignored or the form is unreadable, so no upload is kept.\",\"The file part is treated as an implicit exception, reaches `read_import_mapping` as a stream and is kept after validation.\"],\"observer\":\"The owner either receives the import mapping or an upload refusal.\"}},{\"subject\":\"context: owner form row shape\",\"kind\":\"ambiguous model\",\"text\":\"M29 first says “The row gives the field's name, its path in the owner request or its values,” but its Facts say “the field's name, which holds its path and the mark of each tuple position in it.”\",\"question\":\"Is the destination path a separate fact of `OwnerFormField`, or is it encoded in the field name, and what exact row facts may State 6 declare without adding a fact State 1 omitted?\",\"options\":[\"Store `name` and `path` as separate row facts.\",\"Make the field name itself a path template and declare no separate path fact.\",\"Store a structured destination containing carrier and path, with the wire name separate.\"],\"default_guess\":\"Use separate wire-name and structured destination-path facts; revise M29 to say so explicitly.\",\"witness\":{\"initial\":\"An owner action has a wire field named `revision` that must fill the request's stated-revision path.\",\"events\":[\"The page writes the `revision` field.\",\"The reader obtains its `OwnerFormField` row.\",\"One implementation treats the row name as the destination path; another expects a distinct path fact.\"],\"outcomes\":[\"The revision reaches the request and the action is checked against it.\",\"No destination path is available, so the revision is absent and the action is refused as stale.\"],\"observer\":\"The owner sees acceptance versus a stale-revision refusal.\"}},{\"subject\":\"context: malformed owner field conversion\",\"kind\":\"unstated failure\",\"text\":\"M29 says text is read “as text, as an integer, as true or false, or as an enumeration member's value,” but no flow states the outcome when a named field cannot be converted; `owner_interface` only says that “a form that cannot be decoded” is handed on with no values.\",\"question\":\"When one named field contains invalid integer, boolean, member, path, or tuple-position text, is the entire form unreadable, is only that field absent, or is a specific stage-(4) value failure produced, and which module produces it?\",\"options\":[\"Treat any conversion failure as an unreadable form and hand on no values.\",\"Omit only the malformed field and let the domain operation report it as missing.\",\"Produce a stage-(4) malformed-value failure for that field while preserving the other decoded fields.\"],\"default_guess\":\"Produce a stage-(4) malformed-value failure naming the field, preserving successfully decoded fields.\",\"witness\":{\"initial\":\"Project P is at revision 2 and a valid owner session displays its correction form.\",\"events\":[\"The owner submits valid editable values but changes the integer revision field to `2x`.\",\"`owner_interface` encounters the failed integer conversion.\"],\"outcomes\":[\"The whole form becomes unreadable and operations receives no values, producing several missing-value failures.\",\"Only the revision is treated as malformed or absent, producing a revision-specific refusal while the other values remain readable.\"],\"observer\":\"The owner sees materially different refusal details and rendered recovery data.\"}},{\"subject\":\"context: repeated scalar field names\",\"kind\":\"unstated multiplicity\",\"text\":\"M29 requires that “No two rows share a name,” but says nothing about an incoming form or query carrying the same named field more than once.\",\"question\":\"For a scalar `OWNER_FORM_FIELDS` row, does the reader reject duplicate occurrences, take the first, take the last, or collect them, and what failure follows when duplicates are invalid?\",\"options\":[\"Reject every duplicate scalar field as a malformed request.\",\"Use the first occurrence.\",\"Use the last occurrence.\",\"Allow multiplicity only for paths explicitly containing a tuple-position mark.\"],\"default_guess\":\"Reject duplicate scalar occurrences; allow repetition only through explicitly indexed tuple fields.\",\"witness\":{\"initial\":\"Project P is at revision 2 and the owner has a valid correction session.\",\"events\":[\"A correction request carries the same revision field twice, first `1` and then `2`.\",\"The owner interface reads the field's single M29 row.\"],\"outcomes\":[\"A first-value interpretation uses revision 1 and refuses the correction as stale.\",\"A last-value interpretation uses revision 2 and accepts the correction.\"],\"observer\":\"The owner sees refusal versus a changed project.\"}},{\"subject\":\"context: tuple-position fields\",\"kind\":\"undefined indexing\",\"text\":\"M29 says a path has “a tuple's position marked,” and `data_provider` exports `OWNER_FORM_POSITION_MARK`, but no text defines the position syntax, valid index set, duplicate or missing positions, ordering, or the outcome of a malformed position.\",\"question\":\"How are tuple positions parsed and ordered, and what happens for negative, non-decimal, repeated, sparse, or out-of-order positions?\",\"options\":[\"Require contiguous zero-based ASCII-decimal positions in wire order and refuse malformed or duplicate positions.\",\"Allow sparse non-negative positions and order by numeric position.\",\"Treat positions as opaque text and preserve request order.\",\"Define one row per fixed tuple position instead of dynamic indexed fields.\"],\"default_guess\":\"Require unique contiguous zero-based ASCII-decimal positions and produce a stage-(4) refusal for malformed indexing.\",\"witness\":{\"initial\":\"A kept import file contains projects P and Q and the owner is preparing the ordered picks for a confirmation step.\",\"events\":[\"The submitted mapping fields use tuple positions 0 and 2, with position 1 absent.\",\"The interface expands the marked M29 paths into the picks tuple.\"],\"outcomes\":[\"One implementation compacts the positions and shows a clean two-project mapping whose confirmation binds that order.\",\"Another treats the gap as malformed and shows no confirmation step.\"],\"observer\":\"The owner sees a confirmation step in one implementation and a mapping error in the other.\"}}]}",
+ "set_aside": []
+}
