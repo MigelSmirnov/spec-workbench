@@ -989,8 +989,8 @@ name the release tables they rest on as imported constants
 every owner action M09 lists; A13 rule 6 states what the digest of a
 confirmation's inputs guarantees — one unambiguous encoding of the action,
 target, version and inputs under a collision-resistant cryptographic
-digest, a collision of that digest outside the guarantee — and test 12
-shows that changing any of them is refused. Reviewed
+digest, so that a changed submission is refused — and test 12 shows that
+changing any of them is refused. Reviewed
 under authentication_credential_abuse and authorization (A09: the same
 rights and classes, read from the release), browser_boundary and
 concurrency (A13: a confirmation binds what its step showed, no more),

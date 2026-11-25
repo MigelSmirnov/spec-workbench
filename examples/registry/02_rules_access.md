@@ -357,12 +357,13 @@ sees every change as a new version.
    inputs — for the import, the file's digest
    and the picks — kept as a digest of those values in a fixed order, never
    as the values themselves; a submission's inputs are bound when their digest
-   equals it. The digest is a collision-resistant cryptographic digest of one
-   unambiguous encoding of the action, the target, the version and the inputs
-   in that order, every list in its order and an absent value told apart from
-   an empty one, so that two different tuples never share an encoding; that
-   two encodings share a digest is outside the guarantee. Comparing the
-   values themselves is excluded, since they are not kept (round-123 T10). A session holds at most one: showing a confirmation step
+   equals it. A submission whose action, target, version or inputs differ
+   from those the step showed is therefore refused: the digest is a
+   collision-resistant cryptographic digest of one unambiguous encoding of the
+   action, the target, the version and the inputs in that order, every list
+   in its order and an absent value told apart from an empty one, so that two
+   different tuples never share an encoding and digest equality stands for
+   equality of what was shown (round-123 T10). A session holds at most one: showing a confirmation step
    replaces the one pending (M11). It is valid only in that session, while
    less than 10 minutes have passed since it was shown, and is used up by the first submission that carries it, whatever
    its answer; a refused submission needs the step shown again. A submission
@@ -449,8 +450,7 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused   -- A13-2
     is refused, and used up, when the submission carrying its value changes
     any one of them: another action, another target, another version or
     none, another value of any input, or the same list in another order
-    (rule 6) — a change whose encoding shares the bound digest aside, which
-    rule 6 puts outside the guarantee and no test can produce.
+    (rule 6).
 
 ### Consequence
 

@@ -64,8 +64,9 @@ e.outcome = accepted   -- A14-2
 7. The imported `OWNER_AUDIT_ACTIONS` constant has exactly one row for each
    owner action M09 lists, for each customer mark transition and each
    project erasure kind, the erasure of old entries among them, and no other
-   row; and each such action, accepted, writes the audit action its row
-   names (rule 1).
+   row; and each such action, accepted and changing state, writes the audit
+   action its row names (rule 1) — an accepted action that changes nothing
+   writes none, but for the erasure of old entries (rule 3).
 
 ### Consequence
 
