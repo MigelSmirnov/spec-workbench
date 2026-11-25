@@ -44,6 +44,16 @@ here with every fact as a typed field, and declares there what this state
 decides — its identity and its kind (§5, §15.1.1). This state holds every
 fact that becomes a field, so State 6 adds no fact a model does not list here.
 
+Reopened on 2026-11-25: the assembled specification held sixteen runtime
+models with no record here (the identity closure's `missing_state1_model`).
+None adds a concept: each is a value a model above already names, or a row of
+a table of the release, and each now has its record — the two forms of a
+pointer's publisher (M13, M14), the five forms of an audit entry's subject
+(M15–M19), the owner session's pending confirmation and uploaded file (M20,
+M21; the upload number, which State 6 carried on the owner's word of
+2026-11-24, is now a fact of M11), and the rows of the data provider's seven
+tables (M22–M28).
+
 Every State 1 question the owner must answer is under a model's
 `Open questions`; a `BLOCK:` question stops State 2 until answered.
 
@@ -840,7 +850,10 @@ target, the revision or access version if the step showed one, and the
 inputs it is bound to, and
 the instant it was shown — made when a confirmation step is shown, replaced
 by the next one shown and cleared when used; and at most one uploaded import
-file, replaced by the next upload and dropped when the import is accepted.
+file — its bytes, their digest and its upload number within the session
+(owner, 2026-11-24) — replaced by the next upload and dropped when the import
+is accepted. The pending confirmation and the uploaded file are values of the
+session, M20 and M21.
 Everything in it ends with the session. The confirmation id of an action the owner confirms in it
 is minted per confirmation, not per session ("Identity formats").
 
@@ -925,6 +938,585 @@ audit append.
 None. It is read only inside Registry: by the audit append, which takes the
 next number, and by a backup, which records the number in its own readable
 record (State 2 A18); no answer returns it.
+
+## Model M13 — PrincipalPublisher
+
+### Meaning
+
+The publisher of a pointer published in Registry (M05): the acting principal
+(M07) that published it — Kernel for the agent naming its session, or the
+owner (R0-88). One of the two forms of M05's publisher; the other is M14.
+
+Facts: the principal (M07).
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two pointers published by the same principal carry equal
+publishers, and nothing tells the two apart. Continuity: none; it is written
+once with its pointer and never changes.
+
+### Source of truth
+
+Registry's authentication of the publish request (M07).
+
+### Lifecycle candidate
+
+None; a value has no independent lifecycle.
+
+### Persistence candidate
+
+Embedded in its pointer (M05).
+
+### Open questions
+
+None.
+
+## Model M14 — ImportPublisher
+
+### Meaning
+
+The publisher of a pointer the import brought in (M05, R0-50): the import
+itself, the migration closure (M10), named by the digest of the file it
+accepted — not a principal, since the v1 Registry recorded none (L22; owner,
+2026-10-31; codex round-02 T1).
+
+Facts: the digest of the accepted file (M10).
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: every imported pointer carries the same publisher, the one
+migration closure of the instance (M10). Continuity: none; it is written once
+with its pointer.
+
+### Source of truth
+
+The migration closure (M10).
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Embedded in its pointer (M05).
+
+### Open questions
+
+None.
+
+## Model M15 — ProjectSubject
+
+### Meaning
+
+The subject of an audit entry for a project's actions (M09): the project, by
+its identity only (R0-37).
+
+Facts: the project's identity (M01).
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two entries about the same project carry equal subjects.
+Continuity: none; written once with its entry. It names the project and does
+not follow it: an anonymised or deleted project leaves it as written.
+
+### Source of truth
+
+The action that writes the entry (M09).
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Embedded in its audit entry (M09).
+
+### Open questions
+
+None.
+
+## Model M16 — CustomerSubject
+
+### Meaning
+
+The subject of an audit entry for a customer's actions, restricting and
+lifting, ending and resuming (M09): the customer, by its `customer_ref` only
+(R0-37).
+
+Facts: the customer's identity (M04).
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two entries about the same customer carry equal subjects.
+Continuity: none; written once with its entry, and kept as written when the
+customer is erased.
+
+### Source of truth
+
+The action that writes the entry (M09).
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Embedded in its audit entry (M09).
+
+### Open questions
+
+None.
+
+## Model M17 — SessionProjectSubject
+
+### Meaning
+
+The subject of an audit entry for granting a project to a session or revoking
+it (M09): the agent session and the project, by identity only (R0-37).
+
+Facts: the session's identity (M06); the project's identity (M01).
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: a grant and a later revocation of the same project to the same
+session carry equal subjects; the entries differ by their action and
+number, not by their subject. Continuity: none; written once with its entry.
+
+### Source of truth
+
+The action that writes the entry (M09).
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Embedded in its audit entry (M09).
+
+### Open questions
+
+None.
+
+## Model M18 — ImportSubject
+
+### Meaning
+
+The subject of the import's one audit entry (M09): the digest of the file the
+import accepted, the migration closure's only identity (M10; codex round-04
+T1).
+
+Facts: the digest of the accepted file (M10).
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: the instance has one migration closure, so every import subject
+of an instance is equal. Continuity: none; written once with its entry.
+
+### Source of truth
+
+The migration closure (M10).
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Embedded in its audit entry (M09).
+
+### Open questions
+
+None.
+
+## Model M19 — NoSubject
+
+### Meaning
+
+The subject of an audit entry for an erasure of old entries (M09, R0-66): none,
+since that action names no record; its fact is the owner's date, which the
+entry itself carries.
+
+Facts: none beyond its being the empty subject.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: every empty subject is equal. Continuity: none.
+
+### Source of truth
+
+The erasure of old entries (M09).
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Embedded in its audit entry (M09).
+
+### Open questions
+
+None.
+
+## Model M20 — PendingConfirmation
+
+### Meaning
+
+The confirmation step an owner session shows and waits on (M11; State 2 A13
+rule 6, A16 rule 2): what the owner is asked to confirm and what the
+confirmation will be checked against. At most one per session.
+
+Facts: its one-time value; the confirmed action; its target, when the action
+has one; the revision or access version the step showed, when it showed one;
+the inputs it is bound to, by their digest; and when it was shown, as the
+session's monotonic reading (A13), since its limits are measured on that
+clock.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: it is a fact of its session, replaced whole by the next step
+shown; two steps with equal facts would bind the same confirmation.
+Continuity: none of its own; it is replaced or cleared, never changed in
+place.
+
+### Source of truth
+
+The confirmation step Registry shows (A13 rule 6).
+
+### Lifecycle candidate
+
+None of its own: made when a step is shown, replaced by the next one, cleared
+when used or when the session ends (M11).
+
+### Persistence candidate
+
+Held in its owner session's memory (M11); never in the store.
+
+### Open questions
+
+None.
+
+## Model M21 — UploadedFile
+
+### Meaning
+
+The import file an owner session holds until the import is accepted, another
+file is uploaded in that session, or the session ends (M11; State 2 A16 rule
+2). At most one per session.
+
+Facts: its bytes, as uploaded; their digest, by which the mapping names the
+file (A16 rule 2); and its upload number within the session, so that an upload
+of the same bytes is still another upload and a confirmation step binds the
+upload it showed (owner, 2026-11-24; `60_contracts.md`).
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: it is a fact of its session, replaced whole by the next upload.
+Continuity: none of its own.
+
+### Source of truth
+
+The owner's upload in the owner interface (A16 rule 1).
+
+### Lifecycle candidate
+
+None of its own: kept from its upload until the next upload, the accepted
+import or the end of its session drops it (A16 rule 2).
+
+### Persistence candidate
+
+Process memory only, never in the store and never on a disk (A16 rule 2).
+
+### Open questions
+
+None.
+
+## Model M22 — ArtifactTypeOwner
+
+### Meaning
+
+A row of the artifact type vocabulary ("Declared vocabularies"): one declared
+artifact type with its one owner service, where its documents live (R0-33).
+The first release declares one row, `estimate` by PresuPro (R0-88; A22).
+
+Facts: the artifact type; its owner service.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the vocabulary.
+Continuity: none; a row is a value of the release and changes only with a new
+release (A22).
+
+### Source of truth
+
+The release: the data provider's `ARTIFACT_TYPE_OWNERS`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M23 — ServiceRight
+
+### Meaning
+
+A row of the service rights table: one operation one service's token may call
+(State 2 A09 rule 3).
+
+Facts: the service; the operation.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same right. Continuity: none;
+the rights change only with a new release.
+
+### Source of truth
+
+The release: the data provider's `SERVICE_RIGHTS`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M24 — ServiceHighestClass
+
+### Meaning
+
+A row of the service class table: the highest disclosure class (R0-26) one
+service's token may read (State 2 A09 rule 4). One row per service.
+
+Facts: the service; its highest class.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `SERVICE_HIGHEST_CLASSES`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M25 — PersonalDataField
+
+### Meaning
+
+A row of the personal data table: one field of one answer that holds a
+`personal_data` value (R0-26, "Disclosure classes by field"); an answer holding
+a value in a listed field is `personal_data` (State 2 A09 rule 4).
+
+Facts: the answer's name; the field's name.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `PERSONAL_DATA_FIELDS`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M26 — RefusalHttpStatus
+
+### Meaning
+
+A row of the refusal status table: the HTTP status a refusal code is answered
+with on the service API and the owner interface — `not_found` 404,
+`internal_error` 500, every other code 422, as v1 answered (L14; owner,
+2026-11-24). One row per refusal code.
+
+Facts: the refusal code; its HTTP status.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `REFUSAL_HTTP_STATUSES`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M27 — OwnerActionRoute
+
+### Meaning
+
+A row of the owner action table: how one owner action is addressed in the
+owner interface (owner, 2026-11-24): its method — `GET` for a read, `POST`
+for every other action — and path, whether it is a change, whose form
+carries the CSRF value (State 2 A13 rule 2), and whether it touches an
+uploaded file (A16 rule 2). One row per owner action.
+
+Facts: the owner action; its method; its path; whether it is a change;
+whether it touches an uploaded file.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `OWNER_ACTIONS`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M28 — OwnerAuditAction
+
+### Meaning
+
+A row of the owner audit table: which audit action (M09, R0-58) an accepted
+owner action writes — for a customer mark, by its transition; for a project's
+erasure, by its kind (owner, 2026-11-24).
+
+Facts: the owner action; the customer mark's transition, where the action has
+one; the project erasure's kind, where the action has one; the audit action it
+writes.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `OWNER_AUDIT_ACTIONS`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
 
 ## Declared vocabularies
 
