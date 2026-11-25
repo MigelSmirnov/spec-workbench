@@ -1,0 +1,171 @@
+{
+ "open_points": [
+  {
+   "subject": "A20 host kernel and dependency list",
+   "kind": "scope_ambiguity",
+   "text": "A release names every dependency it runs with, at an exact version, with its digest\nA release runs on Linux and on no other host — the kernel that runs Registry's process is Linux's and so is the base image around it — no version named",
+   "question": "Is the host kernel a dependency covered by rules 1–4, or a separate unversioned execution prerequisite under rule 6?",
+   "options": [
+    "The kernel is a dependency and must have an exact version and digest.",
+    "The kernel is a separate host prerequisite; only its being Linux is fixed.",
+    "The base-image digest represents both the user space and the otherwise unversioned host kernel."
+   ],
+   "default_guess": "Treat the kernel as a separate host prerequisite because rule 6 expressly says that no version is named.",
+   "witness": {
+    "initial": "A release image satisfying the package, Python and base-image requirements is available, and two supported-looking hosts run different Linux kernel versions.",
+    "events": [
+     "The release process decides whether the host kernel belongs to the dependency list.",
+     "An installer attempts the same release on both hosts."
+    ],
+    "outcomes": [
+     "Both installations are allowed because Linux is an unversioned host prerequisite.",
+     "At least one installation is refused because every runtime dependency, including the kernel, must match an exact version and digest."
+    ],
+    "observer": "The release operator and anyone deploying the release"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A20 Python digest identity",
+   "kind": "missing_value_definition",
+   "text": "Installing the release fails when the digest differs for any one dependency of each kind rule 1 names — a direct Python package, a transitive one, the Python version and the base image — and no instance of that release starts.",
+   "question": "What artifact is hashed as the digest of the Python version, independently of the base-image digest?",
+   "options": [
+    "Digest the exact CPython distribution artifact used to build the image.",
+    "Digest the installed interpreter and standard-library tree.",
+    "Use a separately recorded digest supplied by the base-image producer."
+   ],
+   "default_guess": "Digest the exact CPython distribution artifact used to build the image.",
+   "decision_owner": "generation",
+   "consequences": [
+    "Different builders using the same CPython version must use the same source or binary distribution artifact.",
+    "The digest depends on the installed filesystem representation and build output.",
+    "Trust and reproducibility depend on the base-image producer's metadata."
+   ],
+   "requirement": "Installing the release fails when the digest differs for any one dependency of each kind rule 1 names — a direct Python package, a transitive one, the Python version and the base image — and no instance of that release starts.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 run-time external code prohibition",
+   "kind": "undefined_boundary",
+   "text": "Registry has no dependency that loads code at run time from outside its release.",
+   "question": "What counts as “code”, “loads”, and “outside its release” for deciding whether a dependency is prohibited?",
+   "options": [
+    "Only executable modules fetched or imported after installation are prohibited.",
+    "Native libraries supplied by the host, generated code, templates interpreted as code, and executable extensions are also prohibited unless included in the release.",
+    "Every executable byte must originate in the release, including kernel-provided or host-mounted executable components."
+   ],
+   "default_guess": "Prohibit executable modules, native libraries, generated executable code, and executable extensions obtained after release construction, while treating the Linux kernel as the separate host prerequisite of rule 6.",
+   "witness": {
+    "initial": "A pinned dependency conditionally downloads and executes an extension on its first production request.",
+    "events": [
+     "The release process sees that the dependency itself is pinned and included in the release.",
+     "The dependency downloads and executes the extension after the instance starts."
+    ],
+    "outcomes": [
+     "The release is refused because the extension is run-time code from outside the release.",
+     "The release is admitted because only the dependency package itself is classified as code that must be included."
+    ],
+    "observer": "The release operator and the caller whose request triggers the download"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A20 non-Linux start guarantee",
+   "kind": "test_coverage_gap",
+   "text": "A release runs on Linux and on no other host\nInstalling a release on a host whose kernel is not Linux's fails, and no instance of it starts (rule 6).",
+   "question": "Must the required tests also show that an already installed or copied release cannot be started on a non-Linux kernel, or is installation the only admissible path to starting an instance?",
+   "options": [
+    "State that every start necessarily passes through installation and test that path.",
+    "Require a test that directly attempts to start a copied or previously installed release on a non-Linux host.",
+    "Limit the guarantee to installation and remove the broader claim that the release runs on no other host."
+   ],
+   "default_guess": "State that every admissible start passes through the checked installation path and test that no bypass starts an instance.",
+   "witness": {
+    "initial": "A release is successfully installed on Linux and its installed files are copied to a non-Linux host.",
+    "events": [
+     "An operator starts the copied release without invoking its installer."
+    ],
+    "outcomes": [
+     "The instance must not start because the release runs on Linux and no other host.",
+     "The instance may start because required test 7 governs only installation on the non-Linux host."
+    ],
+    "observer": "The operator and callers able to reach the started instance"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A20 Linux filesystem prerequisite",
+   "kind": "later_layer_choice",
+   "text": "Another system, or a Linux or file system on which a call Registry's rules rely on — opening a file without following a link, binding a listening socket, renaming, flushing — does not act as Linux documents it, is unsupported: Registry neither tests for it nor defines what it does there.",
+   "question": "How must deployment establish that the selected Linux host and filesystem provide the assumed semantics, given that Registry itself does not test them?",
+   "options": [
+    "Restrict deployment to a named, prequalified host and filesystem family.",
+    "Run deployment or installation qualification checks for the required facilities.",
+    "Treat the semantics as an operator-certified prerequisite without an executable check."
+   ],
+   "default_guess": "Use a named, prequalified deployment platform and filesystem, with deployment checks for properties that can be tested safely.",
+   "decision_owner": "deploy",
+   "consequences": [
+    "Support is narrow but reproducible; other Linux environments remain unsupported.",
+    "Deployment gains checks and may refuse environments whose relevant semantics cannot be demonstrated.",
+    "Correctness relies on an operational assertion and failures may appear only during use."
+   ],
+   "requirement": "Another system, or a Linux or file system on which a call Registry's rules rely on — opening a file without following a link, binding a listening socket, renaming, flushing — does not act as Linux documents it, is unsupported: Registry neither tests for it nor defines what it does there.",
+   "unit": "?"
+  },
+  {
+   "subject": "A21 review of A20 host requirement",
+   "kind": "contradiction",
+   "text": "Under dependencies, the host and the Python version join the release's list, and test 5 shows them.",
+   "question": "Must this passage say that the base image and Python version are in the release list while the Linux host kernel is a separate prerequisite shown by test 7, or must A20 instead define and pin the host as a listed dependency?",
+   "options": [
+    "Correct A21: test 5 shows the base image and CPython family, while test 7 shows the host-kernel refusal.",
+    "Change A20 so the host is a listed dependency with the exact version and digest rules require.",
+    "Define “host” here to mean only the base image, and separately mention the kernel requirement and test 7."
+   ],
+   "default_guess": "Correct A21 to distinguish the base image from the host kernel and cite test 7 for the latter.",
+   "witness": {
+    "initial": "A release lists a base-image digest and exact CPython version but no host-kernel version or digest.",
+    "events": [
+     "The security review applies its statement that the host joined the release list.",
+     "The release process applies A20 rule 6, which names no Linux version."
+    ],
+    "outcomes": [
+     "The review accepts the unlisted Linux kernel because test 7 checks only that it is Linux.",
+     "The review rejects the release because the host is said to be in the exact-version-and-digest release list."
+    ],
+    "observer": "The security reviewer and release operator"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 dependencies category scope",
+   "kind": "incomplete_review_scope",
+   "text": "dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies",
+   "question": "Does the dependencies category also cover the base image, its system libraries and store engine, the Linux host kernel, and dependencies capable of loading outside code at run time?",
+   "options": [
+    "Expand “affected” to name all of those subjects.",
+    "Declare that “Registry release” includes them and state that scope explicitly.",
+    "Limit this category to Python dependencies and assign the remaining host and run-time-code guarantees to named categories."
+   ],
+   "default_guess": "Expand the affected subjects explicitly so the review cannot be read as covering Python packages alone.",
+   "witness": {
+    "initial": "A release pins every Python package but uses an unreviewed base image or a dependency that fetches executable code at run time.",
+    "events": [
+     "The security reviewer reads the affected scope as limited to the Registry release and its Python dependencies.",
+     "The release process applies A20's broader base-image, host and external-code rules."
+    ],
+    "outcomes": [
+     "The security review is considered complete because reference A20 implicitly covers every dependency subject.",
+     "The security review is incomplete because the affected list names only Python dependencies and never records review of the other subjects."
+    ],
+    "observer": "The security reviewer and the release gate maintainer"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A20 host kernel and dependency list\",\"kind\":\"scope_ambiguity\",\"text\":\"A release names every dependency it runs with, at an exact version, with its digest\\nA release runs on Linux and on no other host — the kernel that runs Registry's process is Linux's and so is the base image around it — no version named\",\"question\":\"Is the host kernel a dependency covered by rules 1–4, or a separate unversioned execution prerequisite under rule 6?\",\"options\":[\"The kernel is a dependency and must have an exact version and digest.\",\"The kernel is a separate host prerequisite; only its being Linux is fixed.\",\"The base-image digest represents both the user space and the otherwise unversioned host kernel.\"],\"default_guess\":\"Treat the kernel as a separate host prerequisite because rule 6 expressly says that no version is named.\",\"witness\":{\"initial\":\"A release image satisfying the package, Python and base-image requirements is available, and two supported-looking hosts run different Linux kernel versions.\",\"events\":[\"The release process decides whether the host kernel belongs to the dependency list.\",\"An installer attempts the same release on both hosts.\"],\"outcomes\":[\"Both installations are allowed because Linux is an unversioned host prerequisite.\",\"At least one installation is refused because every runtime dependency, including the kernel, must match an exact version and digest.\"],\"observer\":\"The release operator and anyone deploying the release\"}},{\"subject\":\"A20 Python digest identity\",\"kind\":\"missing_value_definition\",\"text\":\"Installing the release fails when the digest differs for any one dependency of each kind rule 1 names — a direct Python package, a transitive one, the Python version and the base image — and no instance of that release starts.\",\"question\":\"What artifact is hashed as the digest of the Python version, independently of the base-image digest?\",\"options\":[\"Digest the exact CPython distribution artifact used to build the image.\",\"Digest the installed interpreter and standard-library tree.\",\"Use a separately recorded digest supplied by the base-image producer.\"],\"default_guess\":\"Digest the exact CPython distribution artifact used to build the image.\",\"decision_owner\":\"generation\",\"consequences\":[\"Different builders using the same CPython version must use the same source or binary distribution artifact.\",\"The digest depends on the installed filesystem representation and build output.\",\"Trust and reproducibility depend on the base-image producer's metadata.\"],\"requirement\":\"Installing the release fails when the digest differs for any one dependency of each kind rule 1 names — a direct Python package, a transitive one, the Python version and the base image — and no instance of that release starts.\"},{\"subject\":\"A20 run-time external code prohibition\",\"kind\":\"undefined_boundary\",\"text\":\"Registry has no dependency that loads code at run time from outside its release.\",\"question\":\"What counts as “code”, “loads”, and “outside its release” for deciding whether a dependency is prohibited?\",\"options\":[\"Only executable modules fetched or imported after installation are prohibited.\",\"Native libraries supplied by the host, generated code, templates interpreted as code, and executable extensions are also prohibited unless included in the release.\",\"Every executable byte must originate in the release, including kernel-provided or host-mounted executable components.\"],\"default_guess\":\"Prohibit executable modules, native libraries, generated executable code, and executable extensions obtained after release construction, while treating the Linux kernel as the separate host prerequisite of rule 6.\",\"witness\":{\"initial\":\"A pinned dependency conditionally downloads and executes an extension on its first production request.\",\"events\":[\"The release process sees that the dependency itself is pinned and included in the release.\",\"The dependency downloads and executes the extension after the instance starts.\"],\"outcomes\":[\"The release is refused because the extension is run-time code from outside the release.\",\"The release is admitted because only the dependency package itself is classified as code that must be included.\"],\"observer\":\"The release operator and the caller whose request triggers the download\"}},{\"subject\":\"A20 non-Linux start guarantee\",\"kind\":\"test_coverage_gap\",\"text\":\"A release runs on Linux and on no other host\\nInstalling a release on a host whose kernel is not Linux's fails, and no instance of it starts (rule 6).\",\"question\":\"Must the required tests also show that an already installed or copied release cannot be started on a non-Linux kernel, or is installation the only admissible path to starting an instance?\",\"options\":[\"State that every start necessarily passes through installation and test that path.\",\"Require a test that directly attempts to start a copied or previously installed release on a non-Linux host.\",\"Limit the guarantee to installation and remove the broader claim that the release runs on no other host.\"],\"default_guess\":\"State that every admissible start passes through the checked installation path and test that no bypass starts an instance.\",\"witness\":{\"initial\":\"A release is successfully installed on Linux and its installed files are copied to a non-Linux host.\",\"events\":[\"An operator starts the copied release without invoking its installer.\"],\"outcomes\":[\"The instance must not start because the release runs on Linux and no other host.\",\"The instance may start because required test 7 governs only installation on the non-Linux host.\"],\"observer\":\"The operator and callers able to reach the started instance\"}},{\"subject\":\"A20 Linux filesystem prerequisite\",\"kind\":\"later_layer_choice\",\"text\":\"Another system, or a Linux or file system on which a call Registry's rules rely on — opening a file without following a link, binding a listening socket, renaming, flushing — does not act as Linux documents it, is unsupported: Registry neither tests for it nor defines what it does there.\",\"question\":\"How must deployment establish that the selected Linux host and filesystem provide the assumed semantics, given that Registry itself does not test them?\",\"options\":[\"Restrict deployment to a named, prequalified host and filesystem family.\",\"Run deployment or installation qualification checks for the required facilities.\",\"Treat the semantics as an operator-certified prerequisite without an executable check.\"],\"default_guess\":\"Use a named, prequalified deployment platform and filesystem, with deployment checks for properties that can be tested safely.\",\"decision_owner\":\"deploy\",\"consequences\":[\"Support is narrow but reproducible; other Linux environments remain unsupported.\",\"Deployment gains checks and may refuse environments whose relevant semantics cannot be demonstrated.\",\"Correctness relies on an operational assertion and failures may appear only during use.\"],\"requirement\":\"Another system, or a Linux or file system on which a call Registry's rules rely on — opening a file without following a link, binding a listening socket, renaming, flushing — does not act as Linux documents it, is unsupported: Registry neither tests for it nor defines what it does there.\"},{\"subject\":\"A21 review of A20 host requirement\",\"kind\":\"contradiction\",\"text\":\"Under dependencies, the host and the Python version join the release's list, and test 5 shows them.\",\"question\":\"Must this passage say that the base image and Python version are in the release list while the Linux host kernel is a separate prerequisite shown by test 7, or must A20 instead define and pin the host as a listed dependency?\",\"options\":[\"Correct A21: test 5 shows the base image and CPython family, while test 7 shows the host-kernel refusal.\",\"Change A20 so the host is a listed dependency with the exact version and digest rules require.\",\"Define “host” here to mean only the base image, and separately mention the kernel requirement and test 7.\"],\"default_guess\":\"Correct A21 to distinguish the base image from the host kernel and cite test 7 for the latter.\",\"witness\":{\"initial\":\"A release lists a base-image digest and exact CPython version but no host-kernel version or digest.\",\"events\":[\"The security review applies its statement that the host joined the release list.\",\"The release process applies A20 rule 6, which names no Linux version.\"],\"outcomes\":[\"The review accepts the unlisted Linux kernel because test 7 checks only that it is Linux.\",\"The review rejects the release because the host is said to be in the exact-version-and-digest release list.\"],\"observer\":\"The security reviewer and release operator\"}},{\"subject\":\"A21 dependencies category scope\",\"kind\":\"incomplete_review_scope\",\"text\":\"dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies\",\"question\":\"Does the dependencies category also cover the base image, its system libraries and store engine, the Linux host kernel, and dependencies capable of loading outside code at run time?\",\"options\":[\"Expand “affected” to name all of those subjects.\",\"Declare that “Registry release” includes them and state that scope explicitly.\",\"Limit this category to Python dependencies and assign the remaining host and run-time-code guarantees to named categories.\"],\"default_guess\":\"Expand the affected subjects explicitly so the review cannot be read as covering Python packages alone.\",\"witness\":{\"initial\":\"A release pins every Python package but uses an unreviewed base image or a dependency that fetches executable code at run time.\",\"events\":[\"The security reviewer reads the affected scope as limited to the Registry release and its Python dependencies.\",\"The release process applies A20's broader base-image, host and external-code rules.\"],\"outcomes\":[\"The security review is considered complete because reference A20 implicitly covers every dependency subject.\",\"The security review is incomplete because the affected list names only Python dependencies and never records review of the other subjects.\"],\"observer\":\"The security reviewer and the release gate maintainer\"}}]}",
+ "set_aside": []
+}
