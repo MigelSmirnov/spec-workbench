@@ -1,0 +1,201 @@
+{
+ "open_points": [
+  {
+   "subject": "A13 confirmation binding",
+   "kind": "contradictory_guarantee",
+   "text": "a submission's inputs are bound when their digest equals it. A submission whose action, target, version or inputs differ from those the step showed is therefore refused: the digest is a collision-resistant cryptographic digest of one unambiguous encoding of the action, the target, the version and the inputs in that order, every list in its order and an absent value told apart from an empty one, so that two different tuples never share an encoding and digest equality stands for equality of what was shown",
+   "question": "What must happen when two distinct encoded tuples have the same digest, since collision resistance makes collisions difficult to find but does not make digest equality equivalent to tuple equality?",
+   "options": [
+    "Put digest collisions outside the guarantee, as the earlier text did.",
+    "Keep enough canonical input data to compare the submitted tuple with the shown tuple and guarantee refusal despite a digest collision.",
+    "Define digest equality as the binding criterion and weaken the guarantee so a colliding changed tuple is not guaranteed to be refused."
+   ],
+   "default_guess": "Put digest collisions outside the guarantee while retaining the unambiguous-encoding requirement.",
+   "witness": {
+    "initial": "An owner session has a valid pending confirmation for tuple T with digest D, and a distinct tuple T2 has the same digest D.",
+    "events": [
+     "The owner or another actor able to submit the form sends the pending confirmation value with T2 before expiry.",
+     "Registry passes the session and CSRF checks and compares the submitted digest with D."
+    ],
+    "outcomes": [
+     "The digest-equality rule treats the inputs as bound and permits processing of T2.",
+     "The changed-submission guarantee refuses T2 and uses up the confirmation."
+    ],
+    "observer": "The owner and any reader of the resulting store state"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A21 review of the A13 change",
+   "kind": "inconsistent_review_conclusion",
+   "text": "A13 rule 6 states what the digest of a confirmation's inputs guarantees — one unambiguous encoding of the action, target, version and inputs under a collision-resistant cryptographic digest, so that a changed submission is refused — and test 12 shows that changing any of them is refused.",
+   "question": "Must A21 qualify the guarantee for digest collisions, or must A13 specify an additional comparison that makes every changed submission refuse even when its digest collides?",
+   "options": [
+    "Qualify A21 and A13 so the refusal guarantee excludes digest collisions.",
+    "Require comparison with retained canonical inputs and extend the required evidence accordingly.",
+    "Keep digest equality as decisive and state that test 12 demonstrates only the tested non-colliding changes."
+   ],
+   "default_guess": "Qualify both the guarantee and the review conclusion for digest collisions.",
+   "witness": {
+    "initial": "A confirmation is pending for tuple T, and distinct tuple T2 has the same cryptographic digest.",
+    "events": [
+     "A submission carries T2 and the pending confirmation value.",
+     "The security review assesses whether the changed submission is guaranteed to be refused."
+    ],
+    "outcomes": [
+     "A21 says the changed submission is refused.",
+     "A13's digest-equality binding accepts T2 as matching unless another comparison is added."
+    ],
+    "observer": "The security-review gate and the owner relying on its conclusion"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 monotonic-time representation",
+   "kind": "missing_time_representation",
+   "text": "its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock",
+   "question": "What representation and precision must monotonic readings and derived deadlines use, including their unit, ordering, arithmetic and overflow behavior?",
+   "options": [
+    "Integer monotonic ticks in a fixed unit such as nanoseconds.",
+    "An exact duration-capable monotonic-instant type supplied by the clock backend.",
+    "Floating-point seconds from an arbitrary monotonic origin."
+   ],
+   "default_guess": "Use integer monotonic nanoseconds or an equivalent exact monotonic-instant type, with checked duration arithmetic.",
+   "witness": {
+    "initial": "A stored last-request reading and a new reading lie on opposite sides of the 30-minute boundary by less than the precision of one possible representation.",
+    "events": [
+     "The owner sends a request at the boundary tested by Required test 8.",
+     "Registry represents and compares the two readings."
+    ],
+    "outcomes": [
+     "An exact integer representation preserves the microsecond difference and serves the request just before the boundary.",
+     "A coarser or floating representation rounds it to the boundary and refuses it."
+    ],
+    "observer": "The owner"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 clock readings per operation",
+   "kind": "missing_read_count",
+   "text": "Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).",
+   "question": "For each request, confirmation step, submission, session-cleanup pass and accepted mutation, how many monotonic and UTC wall-clock readings are taken, and which decisions and recorded instants share each reading?",
+   "options": [
+    "Take one monotonic arrival reading per request and one UTC reading per accepted mutation, sharing each reading across all decisions and timestamps of that operation.",
+    "Take separate readings for validation, expiry, state updates and each recorded timestamp.",
+    "Specify distinct read-count rules for requests, cleanup passes and transactions."
+   ],
+   "default_guess": "Use one monotonic arrival reading per request and one UTC reading per accepted transaction, with a cleanup pass taking one monotonic reading shared by all sessions.",
+   "witness": {
+    "initial": "A valid session is one microsecond short of its idle limit when a request begins.",
+    "events": [
+     "Registry reads the monotonic clock to check validity.",
+     "Processing crosses the idle boundary before Registry updates the session's last-request instant."
+    ],
+    "outcomes": [
+     "With one arrival reading, the request is served and the next idle deadline is measured from the pre-boundary arrival.",
+     "With a second reading, the request is served but the next idle deadline is measured from the later instant."
+    ],
+    "observer": "The owner at the next idle-boundary request"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A15 dated audit erasure",
+   "kind": "missing_wall_clock_snapshot",
+   "text": "The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.",
+   "question": "At what operation instant is “today” fixed, and must the same UTC reading determine date validity, the removal cutoff and the erasure entry's current instant?",
+   "options": [
+    "Take one UTC reading when the accepted erasure transaction begins and derive all three values from it.",
+    "Fix today at request arrival but take another UTC reading for the audit entry.",
+    "Read the wall clock separately at each check and write."
+   ],
+   "default_guess": "Take one UTC reading inside the erasure transaction and use it for validation and the erasure entry.",
+   "witness": {
+    "initial": "The owner submits an erasure date equal to the new UTC day immediately before midnight of the preceding day.",
+    "events": [
+     "The request is admitted before midnight.",
+     "Its transaction performs the date check after, or on opposite sides of, midnight depending on the reading policy."
+    ],
+    "outcomes": [
+     "If today is fixed at arrival, the date is later than today and the erasure is refused.",
+     "If today is read in the transaction after midnight, the erasure is accepted and entries before that date are removed."
+    ],
+    "observer": "The owner and readers of the audit log"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A13 confirmation digest construction",
+   "kind": "later_layer_choice",
+   "text": "the digest is a collision-resistant cryptographic digest of one unambiguous encoding of the action, the target, the version and the inputs in that order, every list in its order and an absent value told apart from an empty one",
+   "question": "Which digest algorithm, canonical encoding, type framing and digest representation implement this requirement?",
+   "options": [
+    "SHA-256 over a length-prefixed typed binary encoding.",
+    "SHA-512 over canonical CBOR with explicit absent-value tags.",
+    "A supported modern digest over another injective typed encoding."
+   ],
+   "default_guess": "SHA-256 over a versioned, length-prefixed typed binary encoding.",
+   "decision_owner": "generation",
+   "consequences": [
+    "The choice fixes interoperability between the confirmation-step and submission paths and determines whether type boundaries, list order and absent values remain unambiguous.",
+    "Changing the construction later invalidates pending confirmations and may require a release-level version marker.",
+    "Every choice still inherits the unresolved collision semantics unless State 2 qualifies or strengthens the guarantee."
+   ],
+   "requirement": "the digest is a collision-resistant cryptographic digest of one unambiguous encoding of the action, the target, the version and the inputs in that order, every list in its order and an absent value told apart from an empty one",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 system clock backend",
+   "kind": "later_layer_choice",
+   "text": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension; instants Registry records and A18's daily time, the imported `BACKUP_DAILY_TIME_UTC` constant, are UTC wall-clock time.",
+   "question": "Which platform clock primitives provide the required suspend-counting monotonic source and UTC wall source?",
+   "options": [
+    "Use a suspend-aware monotonic primitive such as Linux CLOCK_BOOTTIME together with the realtime UTC clock.",
+    "Use a platform clock adapter whose contract explicitly supplies suspend-aware monotonic readings and UTC readings.",
+    "Reject deployment on platforms that cannot provide a suspend-counting monotonic source."
+   ],
+   "default_guess": "Use a platform clock adapter backed by CLOCK_BOOTTIME and CLOCK_REALTIME on the target Linux deployment.",
+   "decision_owner": "generation",
+   "consequences": [
+    "A normal monotonic clock that stops during suspension would let sessions outlive a suspension and violate the accepted guarantee.",
+    "A platform-specific suspend-aware clock preserves the guarantee but constrains portability and test substitution.",
+    "Deployment rejection preserves the guarantee on unsupported systems but changes startup availability."
+   ],
+   "requirement": "Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension",
+   "unit": "?"
+  },
+  {
+   "subject": "A13 owner-interface host isolation",
+   "kind": "later_layer_choice",
+   "text": "the deployment gives the owner interface a host name of its own, under which no other HTTPS service answers",
+   "question": "Which dedicated host name, certificate and routing arrangement provide the required isolation?",
+   "options": [
+    "A dedicated VPN-only DNS name routed directly to Registry.",
+    "A dedicated virtual host on the trusted gateway with no other service routes.",
+    "A dedicated local name and address reachable only through the owner's VPN."
+   ],
+   "default_guess": "Use a dedicated VPN-only DNS name and certificate with a virtual host routing exclusively to Registry.",
+   "decision_owner": "deploy",
+   "consequences": [
+    "The DNS and certificate choice determines how the owner reaches the interface.",
+    "Routing another HTTPS service under the same host would expose the host-only session cookie to that service and violate the guarantee.",
+    "A dedicated address or virtual host preserves isolation but adds deployment and certificate configuration."
+   ],
+   "requirement": "the deployment gives the owner interface a host name of its own, under which no other HTTPS service answers",
+   "unit": "?"
+  },
+  {
+   "subject": "A09 disclosure-class ordering",
+   "kind": "standard_violation",
+   "text": "The classes are ordered `open` < `business_confidential` < `personal_data` (R0-26).",
+   "rule": "У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).",
+   "section": "15.3.1",
+   "question": "The class-order policy must reach generated code through one permitted path: a models enumeration whose defined ordering is sufficient, an imported policy constant or table, or an environment-dependent config field; the text must name that path.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A13 confirmation binding\",\"kind\":\"contradictory_guarantee\",\"text\":\"a submission's inputs are bound when their digest equals it. A submission whose action, target, version or inputs differ from those the step showed is therefore refused: the digest is a collision-resistant cryptographic digest of one unambiguous encoding of the action, the target, the version and the inputs in that order, every list in its order and an absent value told apart from an empty one, so that two different tuples never share an encoding and digest equality stands for equality of what was shown\",\"question\":\"What must happen when two distinct encoded tuples have the same digest, since collision resistance makes collisions difficult to find but does not make digest equality equivalent to tuple equality?\",\"options\":[\"Put digest collisions outside the guarantee, as the earlier text did.\",\"Keep enough canonical input data to compare the submitted tuple with the shown tuple and guarantee refusal despite a digest collision.\",\"Define digest equality as the binding criterion and weaken the guarantee so a colliding changed tuple is not guaranteed to be refused.\"],\"default_guess\":\"Put digest collisions outside the guarantee while retaining the unambiguous-encoding requirement.\",\"witness\":{\"initial\":\"An owner session has a valid pending confirmation for tuple T with digest D, and a distinct tuple T2 has the same digest D.\",\"events\":[\"The owner or another actor able to submit the form sends the pending confirmation value with T2 before expiry.\",\"Registry passes the session and CSRF checks and compares the submitted digest with D.\"],\"outcomes\":[\"The digest-equality rule treats the inputs as bound and permits processing of T2.\",\"The changed-submission guarantee refuses T2 and uses up the confirmation.\"],\"observer\":\"The owner and any reader of the resulting store state\"}},{\"subject\":\"A21 review of the A13 change\",\"kind\":\"inconsistent_review_conclusion\",\"text\":\"A13 rule 6 states what the digest of a confirmation's inputs guarantees — one unambiguous encoding of the action, target, version and inputs under a collision-resistant cryptographic digest, so that a changed submission is refused — and test 12 shows that changing any of them is refused.\",\"question\":\"Must A21 qualify the guarantee for digest collisions, or must A13 specify an additional comparison that makes every changed submission refuse even when its digest collides?\",\"options\":[\"Qualify A21 and A13 so the refusal guarantee excludes digest collisions.\",\"Require comparison with retained canonical inputs and extend the required evidence accordingly.\",\"Keep digest equality as decisive and state that test 12 demonstrates only the tested non-colliding changes.\"],\"default_guess\":\"Qualify both the guarantee and the review conclusion for digest collisions.\",\"witness\":{\"initial\":\"A confirmation is pending for tuple T, and distinct tuple T2 has the same cryptographic digest.\",\"events\":[\"A submission carries T2 and the pending confirmation value.\",\"The security review assesses whether the changed submission is guaranteed to be refused.\"],\"outcomes\":[\"A21 says the changed submission is refused.\",\"A13's digest-equality binding accepts T2 as matching unless another comparison is added.\"],\"observer\":\"The security-review gate and the owner relying on its conclusion\"}},{\"subject\":\"A13 monotonic-time representation\",\"kind\":\"missing_time_representation\",\"text\":\"its instants — when it began, its last request, when its confirmation was shown — and its expiry at the latest are held as readings of that monotonic clock\",\"question\":\"What representation and precision must monotonic readings and derived deadlines use, including their unit, ordering, arithmetic and overflow behavior?\",\"options\":[\"Integer monotonic ticks in a fixed unit such as nanoseconds.\",\"An exact duration-capable monotonic-instant type supplied by the clock backend.\",\"Floating-point seconds from an arbitrary monotonic origin.\"],\"default_guess\":\"Use integer monotonic nanoseconds or an equivalent exact monotonic-instant type, with checked duration arithmetic.\",\"witness\":{\"initial\":\"A stored last-request reading and a new reading lie on opposite sides of the 30-minute boundary by less than the precision of one possible representation.\",\"events\":[\"The owner sends a request at the boundary tested by Required test 8.\",\"Registry represents and compares the two readings.\"],\"outcomes\":[\"An exact integer representation preserves the microsecond difference and serves the request just before the boundary.\",\"A coarser or floating representation rounds it to the boundary and refuses it.\"],\"observer\":\"The owner\"}},{\"subject\":\"A13 clock readings per operation\",\"kind\":\"missing_read_count\",\"text\":\"Both readings reach the code through `clock` alone, emitted from the `system_clock_backend` IR whose `time_source_policy` the data closure declares (SPEC_STANDARD §6.8).\",\"question\":\"For each request, confirmation step, submission, session-cleanup pass and accepted mutation, how many monotonic and UTC wall-clock readings are taken, and which decisions and recorded instants share each reading?\",\"options\":[\"Take one monotonic arrival reading per request and one UTC reading per accepted mutation, sharing each reading across all decisions and timestamps of that operation.\",\"Take separate readings for validation, expiry, state updates and each recorded timestamp.\",\"Specify distinct read-count rules for requests, cleanup passes and transactions.\"],\"default_guess\":\"Use one monotonic arrival reading per request and one UTC reading per accepted transaction, with a cleanup pass taking one monotonic reading shared by all sessions.\",\"witness\":{\"initial\":\"A valid session is one microsecond short of its idle limit when a request begins.\",\"events\":[\"Registry reads the monotonic clock to check validity.\",\"Processing crosses the idle boundary before Registry updates the session's last-request instant.\"],\"outcomes\":[\"With one arrival reading, the request is served and the next idle deadline is measured from the pre-boundary arrival.\",\"With a second reading, the request is served but the next idle deadline is measured from the later instant.\"],\"observer\":\"The owner at the next idle-boundary request\"}},{\"subject\":\"A15 dated audit erasure\",\"kind\":\"missing_wall_clock_snapshot\",\"text\":\"The date of an erasure is a date not later than today, the current date in UTC; a later date is refused. Every entry whose instant is before 00:00 UTC of that date is removed.\",\"question\":\"At what operation instant is “today” fixed, and must the same UTC reading determine date validity, the removal cutoff and the erasure entry's current instant?\",\"options\":[\"Take one UTC reading when the accepted erasure transaction begins and derive all three values from it.\",\"Fix today at request arrival but take another UTC reading for the audit entry.\",\"Read the wall clock separately at each check and write.\"],\"default_guess\":\"Take one UTC reading inside the erasure transaction and use it for validation and the erasure entry.\",\"witness\":{\"initial\":\"The owner submits an erasure date equal to the new UTC day immediately before midnight of the preceding day.\",\"events\":[\"The request is admitted before midnight.\",\"Its transaction performs the date check after, or on opposite sides of, midnight depending on the reading policy.\"],\"outcomes\":[\"If today is fixed at arrival, the date is later than today and the erasure is refused.\",\"If today is read in the transaction after midnight, the erasure is accepted and entries before that date are removed.\"],\"observer\":\"The owner and readers of the audit log\"}},{\"subject\":\"A13 confirmation digest construction\",\"kind\":\"later_layer_choice\",\"text\":\"the digest is a collision-resistant cryptographic digest of one unambiguous encoding of the action, the target, the version and the inputs in that order, every list in its order and an absent value told apart from an empty one\",\"question\":\"Which digest algorithm, canonical encoding, type framing and digest representation implement this requirement?\",\"options\":[\"SHA-256 over a length-prefixed typed binary encoding.\",\"SHA-512 over canonical CBOR with explicit absent-value tags.\",\"A supported modern digest over another injective typed encoding.\"],\"default_guess\":\"SHA-256 over a versioned, length-prefixed typed binary encoding.\",\"decision_owner\":\"generation\",\"consequences\":[\"The choice fixes interoperability between the confirmation-step and submission paths and determines whether type boundaries, list order and absent values remain unambiguous.\",\"Changing the construction later invalidates pending confirmations and may require a release-level version marker.\",\"Every choice still inherits the unresolved collision semantics unless State 2 qualifies or strengthens the guarantee.\"],\"requirement\":\"the digest is a collision-resistant cryptographic digest of one unambiguous encoding of the action, the target, the version and the inputs in that order, every list in its order and an absent value told apart from an empty one\"},{\"subject\":\"A13 system clock backend\",\"kind\":\"later_layer_choice\",\"text\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension; instants Registry records and A18's daily time, the imported `BACKUP_DAILY_TIME_UTC` constant, are UTC wall-clock time.\",\"question\":\"Which platform clock primitives provide the required suspend-counting monotonic source and UTC wall source?\",\"options\":[\"Use a suspend-aware monotonic primitive such as Linux CLOCK_BOOTTIME together with the realtime UTC clock.\",\"Use a platform clock adapter whose contract explicitly supplies suspend-aware monotonic readings and UTC readings.\",\"Reject deployment on platforms that cannot provide a suspend-counting monotonic source.\"],\"default_guess\":\"Use a platform clock adapter backed by CLOCK_BOOTTIME and CLOCK_REALTIME on the target Linux deployment.\",\"decision_owner\":\"generation\",\"consequences\":[\"A normal monotonic clock that stops during suspension would let sessions outlive a suspension and violate the accepted guarantee.\",\"A platform-specific suspend-aware clock preserves the guarantee but constrains portability and test substitution.\",\"Deployment rejection preserves the guarantee on unsupported systems but changes startup availability.\"],\"requirement\":\"Every duration in this decision — the 8 hours, the 30, 15 and 10 minutes, the 60 seconds — is measured by the process's monotonic clock, which a change of the wall clock does not move and which counts the time the host or its VM was suspended, so a session does not outlive a suspension\"},{\"subject\":\"A13 owner-interface host isolation\",\"kind\":\"later_layer_choice\",\"text\":\"the deployment gives the owner interface a host name of its own, under which no other HTTPS service answers\",\"question\":\"Which dedicated host name, certificate and routing arrangement provide the required isolation?\",\"options\":[\"A dedicated VPN-only DNS name routed directly to Registry.\",\"A dedicated virtual host on the trusted gateway with no other service routes.\",\"A dedicated local name and address reachable only through the owner's VPN.\"],\"default_guess\":\"Use a dedicated VPN-only DNS name and certificate with a virtual host routing exclusively to Registry.\",\"decision_owner\":\"deploy\",\"consequences\":[\"The DNS and certificate choice determines how the owner reaches the interface.\",\"Routing another HTTPS service under the same host would expose the host-only session cookie to that service and violate the guarantee.\",\"A dedicated address or virtual host preserves isolation but adds deployment and certificate configuration.\"],\"requirement\":\"the deployment gives the owner interface a host name of its own, under which no other HTTPS service answers\"},{\"subject\":\"A09 disclosure-class ordering\",\"kind\":\"standard_violation\",\"text\":\"The classes are ordered `open` < `business_confidential` < `personal_data` (R0-26).\",\"rule\":\"У значения, которое читает генерируемый код, ровно три пути; путь выбирается по тому, что это за значение, и у значения один дом (§15.4).\",\"section\":\"15.3.1\",\"question\":\"The class-order policy must reach generated code through one permitted path: a models enumeration whose defined ordering is sufficient, an imported policy constant or table, or an environment-dependent config field; the text must name that path.\"}]}",
+ "set_aside": []
+}
