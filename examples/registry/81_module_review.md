@@ -154,6 +154,33 @@ reasons.
 Only the `backups` packet changed. The author re-read it and re-hashed it.
 No reviewer verdict changed.
 
+## Repair after the fourth Route B run (2026-11-25)
+
+Run `registry-generation-20261125T155255Z` rejected `owner_interface`:
+its page renderer told an enumeration member by `hasattr(value, "value")`
+(`reflective_attribute_access`).
+
+- **`owner_interface`.** `_render_owner_page` now tells each value's kind by
+  its declared type, never by probing an attribute, and writes an
+  enumeration member as its value. Two `[BEHAVIOR]` notes, added during this
+  review, give each answer type its own links and forms, so the code must
+  tell those types apart. The earlier rejection of the eleven answer types
+  these notes name ("renders every answer as itself") was therefore stale.
+  They are now `uses` (`inspects`). Their field types are rejected: they
+  are read by attribute.
+- **`instance_lifecycle`**, before its generation. `start_instance`
+  binds exclusively by setting no address or port reuse option, uses the
+  socket module's IPv6-only option, and names every option directly. Its
+  notes no longer name `LoadedConfiguration` or `OpenedStore`, which stay
+  rejected because they are read by attribute.
+
+A static-lens sweep of every behavioural module on the new spec is clean,
+except for `operations` and `service_api`. Both still name types they do
+not import, but both already generated and passed coverage, so they are
+left unchanged. Only the `owner_interface` and `instance_lifecycle` packets
+changed. The author re-read them and re-hashed them, and no reviewer
+verdict changed.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
