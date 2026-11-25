@@ -986,11 +986,9 @@ A09, A13, A14 and A22 (rule 2). A09 rule 1, A22 rule 2 and A14 rule 1 now
 name the release tables they rest on as imported constants
 (`SERVICE_RIGHTS`, `SERVICE_HIGHEST_CLASSES`, `ARTIFACT_TYPE_OWNERS`,
 `OWNER_AUDIT_ACTIONS`), and A14 rule 1 requires the audit table to cover
-every owner action M09 lists; A13 rule 6 states what the digest of a
-confirmation's inputs guarantees — one unambiguous encoding of the action,
-target, version and inputs under a collision-resistant cryptographic
-digest, so that a changed submission is refused — and test 12 shows that
-changing any of them is refused. Reviewed
+every owner action M09 lists; A13's new test 12 shows that a confirmation
+submitted with another action, target, version or inputs is refused.
+Reviewed
 under authentication_credential_abuse and authorization (A09: the same
 rights and classes, read from the release), browser_boundary and
 concurrency (A13: a confirmation binds what its step showed, no more),
