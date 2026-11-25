@@ -1539,6 +1539,10 @@ Candidate fields:
 - `carrier: OwnerFormCarrier`
 - `reads_as: FormValueKind`
 
+These are all its fields, none optional; their exact names and types are
+State 6's, as every field's is (State 0, "Carried to later states"), and
+State 6 declares exactly these.
+
 ### Identity
 
 value
