@@ -361,9 +361,8 @@ sees every change as a new version.
    unambiguous encoding of the action, the target, the version and the inputs
    in that order, every list in its order and an absent value told apart from
    an empty one, so that two different tuples never share an encoding; that
-   two encodings share a digest is outside the guarantee, as for the file's
-   own SHA-256 (M10, M21). Comparing the values themselves is excluded, since
-   they are not kept (round-123 T10). A session holds at most one: showing a confirmation step
+   two encodings share a digest is outside the guarantee. Comparing the
+   values themselves is excluded, since they are not kept (round-123 T10). A session holds at most one: showing a confirmation step
    replaces the one pending (M11). It is valid only in that session, while
    less than 10 minutes have passed since it was shown, and is used up by the first submission that carries it, whatever
    its answer; a refused submission needs the step shown again. A submission
@@ -446,6 +445,11 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused   -- A13-2
     appear in no URL of a page the interface serves, in no diagnostic and in
     no stored row, the audit entries among them; the identity is not in a
     page, and the CSRF and confirmation values only in its forms (rule 7).
+12. A pending confirmation shown for one action, target, version and inputs
+    is refused, and used up, when the submission carrying its value changes
+    any one of them: another action, another target, another version or
+    none, another value of any input, or the same list in another order
+    (rule 6).
 
 ### Consequence
 

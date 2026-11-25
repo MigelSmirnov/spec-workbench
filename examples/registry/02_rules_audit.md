@@ -14,8 +14,11 @@ an entry (round 28 P1) — and how the audit log is protected (R0-37).
    neither is the entry, and the reverse. Which audit action an accepted owner
    action writes — for a customer mark by its transition, for a project's
    erasure by its kind — is its row of the imported `OWNER_AUDIT_ACTIONS`
-   constant (SPEC_STANDARD §15.3.1; State 1 M28); an owner action without a
-   row writes no entry, and the table changes only with a release.
+   constant (SPEC_STANDARD §15.3.1; State 1 M28). The table has exactly one
+   row for each owner action M09 lists, for each transition and each erasure
+   kind it has — the erasure of old entries among them (A15 rule 6) — and no
+   other: an owner action M09 does not list writes no entry by rule 4 and
+   M09, never by a missing row. It changes only with a release.
 2. A refused action writes no entry — a stale revision, a failed check of
    rights, an unknown id, a refused sign-in included. Security events of the
    infrastructure are the infrastructure's (R0-58).
