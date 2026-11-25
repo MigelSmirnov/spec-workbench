@@ -495,6 +495,33 @@ is so declared and is unwrapped before its variant is chosen.
 `owner_interface` was re-hashed. The four a16 confirmations still wait on
 the fixture's `owner_confirm`.
 
+## 2026-11-25: the owner form's fields become a table (owner's decision)
+
+Six Route B samples of `owner_interface` each broke the form reader in a new
+place: `values.` in a name, a check walking with `values.`, the target read
+from a POST body, the CSRF field named by its own name, unknown names and
+fixed-length tuples, and Annotated unions. State 6's naming rule existed only
+as prose in `60_contracts.md`, which the generator never sees, and every note
+that restated it was read differently. The owner decided on 2026-11-25 to
+make it a structure:
+
+- State 1 M29 `OwnerFormField`; State 6 `OwnerFormField(name, carrier,
+  reads_as)` with the enumerations `OwnerFormCarrier` (request, values) and
+  `FormValueKind` (text, integer, boolean, member);
+- data provider `OWNER_FORM_FIELDS`, 44 rows: the three `OwnerRequest`
+  fields a form carries and every leaf path of `OwnerValues`, a tuple's
+  position written as `OWNER_FORM_POSITION_MARK` (`#`). The target and the
+  CSRF value keep their own constants;
+- State 3 (`data_provider` and `owner_interface`), State 5 (constants
+  imported; the owner surface) and State 6 (`60_contracts.md`, the form
+  paragraph) name the table;
+- the reader's three notes and the renderer's addressing note reference the
+  table instead of restating a rule. A union's variant is now chosen by
+  `OwnerValues.model_validate` on its discriminator, so the Annotated
+  sentence is gone.
+
+`owner_interface` was re-hashed. The State 1, 3 and 5 rounds follow.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants

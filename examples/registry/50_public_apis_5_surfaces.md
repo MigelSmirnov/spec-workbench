@@ -254,7 +254,9 @@ change and whether it touches an uploaded file — the confirmation step
 touching one only when the action it confirms is the import; the target is
 the query parameter the imported `OWNER_TARGET_PARAMETER` constant names;
 the CSRF value is the form field the imported `OWNER_CSRF_FIELD` constant
-names; the session is the cookie the imported `OWNER_SESSION_COOKIE_NAME`
+names; every other field a page writes or a request is read by is a row of
+the imported `OWNER_FORM_FIELDS` constant, a tuple's position in place of
+the imported `OWNER_FORM_POSITION_MARK` constant (owner, 2026-11-25); the session is the cookie the imported `OWNER_SESSION_COOKIE_NAME`
 constant names (owner, 2026-11-24). A request whose body, upload head or
 form cannot be read is handed on with no values, no CSRF value and no
 credential, nothing partly read kept: it is admitted or refused by the

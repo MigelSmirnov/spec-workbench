@@ -1518,6 +1518,46 @@ Not persisted; a constant of the release.
 
 None.
 
+## Model M29 — OwnerFormField
+
+### Meaning
+
+A row of the owner form table: one field an owner page writes into a form
+or a query, and the owner interface reads back (owner, 2026-11-25). The row
+gives the field's name, its path in the owner request or its values, with a
+tuple's position marked; which of the two it fills; and how its text is
+read: as text, as an integer, as true or false, or as an enumeration
+member's value. A field no row names is not read. The table holds the names
+so that the page and the reader cannot name a field differently (Route B
+runs of 2026-11-25).
+
+Facts: the field's name; what it fills; how its text is read.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `OWNER_FORM_FIELDS`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
 ## Declared vocabularies
 
 These are closed sets the specification declares; in State 6 they become

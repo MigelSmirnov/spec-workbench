@@ -369,7 +369,7 @@ and every one is exported.
 
 ### Knows
 
-`models`, for exactly the row models and enumerations of its seven tables:
+`models`, for exactly the row models and enumerations of its eight tables:
 `ArtifactTypeOwner` (a type with its owner service) and `ServiceName` for
 `ARTIFACT_TYPE_OWNERS`; `ServiceRight` (a service and an operation) with
 `ServiceName` and `ServiceOperation` for `SERVICE_RIGHTS`;
@@ -383,7 +383,9 @@ path, whether it is a change and whether it touches an uploaded file) with
 a customer mark's transition or a project erasure's kind where the action
 has one, and the audit action it writes) with `OwnerAction`,
 `CustomerTransition`, `ProjectErasure` and `AuditAction` for
-`OWNER_AUDIT_ACTIONS`. Its other constants are scalars and import nothing.
+`OWNER_AUDIT_ACTIONS`; `OwnerFormField` (an owner form field's name, the
+model it fills and how its text is read) with `OwnerFormCarrier` and
+`FormValueKind` for `OWNER_FORM_FIELDS`. Its other constants are scalars and import nothing.
 
 ### Must not own
 
@@ -447,6 +449,8 @@ REFUSAL_HTTP_STATUSES
 UPLOAD_FORM_HEAD_MAX_BYTES
 LISTENER_READ_TIMEOUT_SECONDS
 OWNER_ACTIONS
+OWNER_FORM_FIELDS
+OWNER_FORM_POSITION_MARK
 OWNER_TARGET_PARAMETER
 OWNER_CSRF_FIELD
 OWNER_SESSION_COOKIE_NAME
@@ -1340,7 +1344,8 @@ session, carries none (A13 rule 4). Which action a request names, by its
 method and path, and whether it is a change or touches an uploaded file, are
 the rows of the data provider's `OWNER_ACTIONS`; its target is the query
 parameter `OWNER_TARGET_PARAMETER` names, its CSRF value the form field
-`OWNER_CSRF_FIELD` names, the session cookie's name
+`OWNER_CSRF_FIELD` names, every other field it reads or a page writes a row
+of `OWNER_FORM_FIELDS` (owner, 2026-11-25), the session cookie's name
 `OWNER_SESSION_COOKIE_NAME` and its attributes
 `OWNER_SESSION_COOKIE_ATTRIBUTES`, and a page's HTTP status the service API's
 `SERVICE_ANSWER_STATUS` and `REFUSAL_HTTP_STATUSES` (owner, 2026-11-24). A
@@ -1354,13 +1359,15 @@ carried to State 7).
 
 `models`, for `HttpRequest`, `ByteStream` and `HttpResponse`, which its
 surface takes and answers, `OwnerRequest`, `OwnerValues`, `OwnerAdmission`
-and `OwnerAction`, which it reads, builds and matches; `OperationAnswer`,
+and `OwnerAction`, which it reads, builds and matches; `OwnerFormCarrier`
+and `FormValueKind`, by whose members it reads a form field's row; `OperationAnswer`,
 which it renders by its fields, and of its variants the three it checks
 by name: `RefusedAnswer`, rendered with its code's status, `SignedInAnswer`,
 whose session it sets as the cookie, and `NewestBackupAnswer`, each of whose
 outcomes it renders as itself; and `RefusalCode`, whose `UNAUTHENTICATED`
 member it renders as the sign-in page;
-`data_provider`, for `OWNER_ACTIONS`, `OWNER_TARGET_PARAMETER`,
+`data_provider`, for `OWNER_ACTIONS`, `OWNER_FORM_FIELDS`,
+`OWNER_FORM_POSITION_MARK`, `OWNER_TARGET_PARAMETER`,
 `OWNER_CSRF_FIELD`, `OWNER_SESSION_COOKIE_NAME`,
 `OWNER_SESSION_COOKIE_ATTRIBUTES`, `SERVICE_ANSWER_STATUS` and
 `REFUSAL_HTTP_STATUSES`; `random_values`, for `mint_identity`, a create

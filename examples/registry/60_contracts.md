@@ -210,15 +210,22 @@ readings, so an action's today is `operations`' (`_today_of`).
   `OWNER_TARGET_PARAMETER` (`target`) names, an identity and never a
   personal value (R0-29). A `GET` request's other fields are its query's, a
   `POST` request's the fields of its `application/x-www-form-urlencoded`
-  body, or of the upload's multipart head. Each field is named by its path:
-  an `OwnerRequest` or `OwnerValues` field by its name, a nested model's
-  field by its parent's path, a full stop and its name, a tuple's element by
-  its parent's path, a full stop and its position from 0, and a union's
-  variant by its discriminator among its fields; a field's text is the
-  field's value for text, an enumeration member's value, `true` or `false`,
-  or an integer's decimal digits, and an absent field is none. A form that
-  repeats a name, gives a text not of its field's type or leaves a gap in a
-  tuple's positions cannot be read. The CSRF value is the field
+  body, or of the upload's multipart head. Every other field is a row of the
+  data provider's `OWNER_FORM_FIELDS` (`OwnerFormField`). A row's `name` is
+  the field's name: its path in the `OwnerRequest` or `OwnerValues` it fills
+  (`carrier`), parts joined by a full stop, with a tuple's position written
+  where the row holds `OWNER_FORM_POSITION_MARK` (`#`), as decimal digits
+  from 0. A row's `reads_as` says how the field's text is read: as the text
+  itself, an integer's decimal digits, `true` or `false`, or an enumeration
+  member's value. A union's fields are the rows of all its variants, and its
+  discriminator chooses the variant. A field the form leaves out is none,
+  and a tuple none of whose positions are given is empty. A field whose name
+  no row names is not read and changes nothing. A form that repeats a name,
+  gives a text the row's `reads_as` cannot read or leaves a gap in a tuple's
+  positions cannot be read. The table holds the names the generator would
+  otherwise derive from the models, and pages write the same names (Route
+  B runs of 2026-11-25: six samples each derived them differently; owner,
+  2026-11-25). The CSRF value is the field
   `OWNER_CSRF_FIELD` (`csrf`) names, the upload's first part included, and
   `OwnerRequest.csrf_value` carries it from the form's reading to the
   request's admission, since a body is read once. The import's
