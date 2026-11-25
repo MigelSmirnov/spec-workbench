@@ -341,6 +341,32 @@ named "the body its OwnerRequestStep holds", but the step was built from a
 reads "the body the step holds". `UploadBody` is imported to annotate the
 constructor. The `operations` packet was re-read and re-hashed.
 
+## 2026-11-25: unknown service operation and the session cookie
+
+Two more State 7 notes from the fixture report disagreed with what they
+lower:
+
+- `perform_service_operation` refused an operation name that is not a
+  `ServiceOperation` member as `invalid_request` (`outside_closed_list`,
+  stage 4). A09 rule 1 says "An operation no row names for the service is
+  refused (rule 3)", and State 5 `serve_service_request` says it is refused
+  at stage (1) as `not_permitted` (`outside_service_rights`). The note now
+  says that. A request that cannot be read stays `invalid_request`. One
+  phrase in State 5 still disagrees: the owner-action Errors aside (owner,
+  2026-11-24) says the service API refuses an operation it does not know as
+  `invalid_request`. It is left for the owner, and the owner's own rule
+  there is unchanged.
+- `_render_owner_page` wrote the cookie attributes "as they stand" right
+  after the session id. The generated `Set-Cookie` had no separator before
+  `Secure`. The note now spells out the value: name, `=`, session id,
+  `; `, then the attributes constant as it stands. A13 and the constant are
+  unchanged.
+
+`operations` and `owner_interface` were re-read and re-hashed. The backup
+location diagnostic that does not name `backup_dir` is a generation defect
+and the spec is not changed for it: `probe_backup_location`'s RETURN_SHAPE
+note already requires the diagnostic to name the item.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
