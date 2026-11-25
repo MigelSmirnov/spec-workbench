@@ -261,6 +261,26 @@ declares `from pydantic import BaseModel`.
 draw. The rejected `operations` candidate, with its walker rewritten to
 the rule, passes the Factory's static gates.
 
+## The closing drain is timed by monotonic_reading (2026-11-25)
+
+Run `registry-generation-20261125T172939Z` handed `instance_lifecycle` back
+for the spec (`undeclared_elapsed_clock_access`). The staged close drains
+for at most `LISTENER_CLOSE_DRAIN_SECONDS` since the shutdown, a total
+State 6 decided (owner, 2026-11-24). The note said "measured as the
+socket's own timeout", which cannot bound a total, so the candidate read
+`time.monotonic()`.
+
+The note now times the drain by `monotonic_reading`, the module's
+elapsed-time authority. One reading is taken at the shutdown and one
+before each read. Each read waits at most the time left, and the drain ends
+when no time is left or a read waits it out. With a clock that does not
+move, as a test fixture's, a read that waits out its time still ends the
+drain.
+
+Checked on the rejected candidate with the deadline taken from
+`monotonic_reading`. The Factory's time-source gate passes it, and the
+original reproduces both findings.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
