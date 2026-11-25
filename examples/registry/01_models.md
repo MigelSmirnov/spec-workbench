@@ -1531,7 +1531,9 @@ member's value. A field no row names is not read. The table holds the names
 so that the page and the reader cannot name a field differently (Route B
 runs of 2026-11-25).
 
-Facts: the field's name; what it fills; how its text is read.
+Facts: the field's name, which holds its path and the mark of each tuple
+position in it, so that two rows of different paths are different rows; what
+it fills; how its text is read.
 
 ### Identity
 
@@ -1586,6 +1588,11 @@ These are closed sets the specification declares; in State 6 they become
   declared in State 6.
 - Disclosure classes: `open`, `business_confidential`, `personal_data`
   (R0-26), Cabinet Kernel's.
+- Owner form carrier: `request`, `values` — what an owner form field fills,
+  the owner request itself or the values it carries (M29).
+- Owner form value kind: `text`, `integer`, `boolean`, `member` — how an
+  owner form field's text is read: as itself, as an integer's decimal
+  digits, as `true` or `false`, or as an enumeration member's value (M29).
 
 ## Projections and answers
 

@@ -225,10 +225,10 @@ later line, and modules on one line do not know each other.
 
 ### Owns
 
-The models M01–M28 as the domain's vocabulary — among them the forms of a
+The models M01–M29 as the domain's vocabulary — among them the forms of a
 pointer's publisher and an audit entry's subject (M13–M19), the owner
 session's pending confirmation and uploaded file (M20, M21) and the row
-shapes of the data provider's seven tables (M22–M28), whose rows are
+shapes of the data provider's eight tables (M22–M29), whose rows are
 `data_provider`'s — and the declared vocabularies of
 State 1 as enumerations — for the artifact types only the shape of a type
 with its owner service (M22), whose rows are `data_provider`'s, so a stored
