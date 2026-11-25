@@ -1,0 +1,136 @@
+{
+ "open_points": [
+  {
+   "subject": "A20 release manifest",
+   "kind": "contradictory record contents",
+   "text": "Under dependencies, the host and the Python version join the release's list, and test 5 shows them.",
+   "question": "Does the release's dependency list contain a host-kernel requirement, or does it contain only the Python version and base-image digest while installation checks the host separately?",
+   "options": [
+    "Add Linux host/kernel as a release-list entry",
+    "Keep the host outside the dependency list as an installation constraint",
+    "Treat the base-image entry as also recording the host kernel"
+   ],
+   "default_guess": "Keep the Linux host requirement as a separate installation constraint, because A20 rule 1 lists the Python version and base image but not the host kernel.",
+   "witness": {
+    "initial": "A release has an exact CPython version and Linux base-image digest and is installed on a Linux host.",
+    "events": [
+     "The release process writes the release dependency record.",
+     "An auditor checks whether that record is complete under the changed security review."
+    ],
+    "outcomes": [
+     "The record contains an explicit Linux host/kernel requirement.",
+     "The record contains no host entry; the installer enforces Linux separately."
+    ],
+    "observer": "The release auditor and installer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A20 required-test attribution",
+   "kind": "evidence mismatch",
+   "text": "Under dependencies, the host and the Python version join the release's list, and test 5 shows them.",
+   "question": "Must the dependency review cite test 7 for the host-kernel requirement, since test 5 checks only the base image and CPython 3.12?",
+   "options": [
+    "Test 5 alone is the evidence",
+    "Tests 5 and 7 are both required",
+    "Test 7 replaces test 5 for the host while test 5 remains for the image and Python"
+   ],
+   "default_guess": "Use test 5 for the base image and Python and test 7 for the host kernel.",
+   "witness": {
+    "initial": "A release uses a Linux base image and CPython 3.12.",
+    "events": [
+     "It is installed on a host whose kernel is not Linux's.",
+     "The State 2 gate evaluates the evidence named by the review."
+    ],
+    "outcomes": [
+     "The dependency review passes because test 5 passed.",
+     "The dependency review requires test 7 and fails because installation on the non-Linux host was not rejected."
+    ],
+    "observer": "The State 2 gate and release reviewer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A20 supported-host boundary",
+   "kind": "vague platform contract",
+   "text": "Another system, or a Linux or file system on which a call Registry's rules rely on — opening a file without following a link, binding a listening socket, renaming, flushing — does not act as Linux documents it, is unsupported",
+   "question": "Which Linux documentation, version-specific guarantees and filesystem behaviours determine whether a host is supported for each named operation?",
+   "options": [
+    "The man pages shipped with the exact release environment",
+    "A fixed Linux ABI or man-pages version named by the specification",
+    "Explicit required semantics for each operation, independent of documentation version",
+    "Whatever behaviour the installed kernel and filesystem document"
+   ],
+   "default_guess": "Define the required observable semantics for each operation and test installation against them, instead of relying on an unnamed body of Linux documentation.",
+   "witness": {
+    "initial": "The host kernel is Linux, but the selected filesystem documents weaker persistence or rename behaviour than another Linux filesystem.",
+    "events": [
+     "The release is installed successfully.",
+     "A backup operation uses the filesystem behaviour in question."
+    ],
+    "outcomes": [
+     "The host is supported because it behaves as its Linux filesystem documentation permits.",
+     "The host is unsupported because it does not provide the stronger behaviour an implementer inferred from other Linux documentation."
+    ],
+    "observer": "The installer and the owner restoring a backup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "backup flushing responsibility",
+   "kind": "missing module owner",
+   "text": "Under concurrency (A17, A18), binding each listener exclusively and renaming and flushing a backup are Linux's.",
+   "question": "Which module owns the flush operation: `backups`, which owns backup-location files and renames them, or `store`, which writes and opens the SQLite copy at the temporary path?",
+   "options": [
+    "`backups` owns every flush of backup files and directories",
+    "`store` flushes the SQLite snapshot and `backups` flushes encrypted files and directory changes",
+    "`store` owns all flushing associated with the backup copy",
+    "No Registry module flushes; the phrase states only an environmental assumption"
+   ],
+   "default_guess": "Split responsibility by resource: `store` finalizes the SQLite snapshot it writes, while `backups` flushes the encrypted file and backup-directory changes it owns.",
+   "witness": {
+    "initial": "A backup run has produced a SQLite snapshot, encrypted it under a temporary name and is ready to rename it to its kept name.",
+    "events": [
+     "The implementation must decide which module performs each flush.",
+     "The process or host stops immediately after the kept-name rename."
+    ],
+    "outcomes": [
+     "`store` flushes only the SQLite snapshot and `backups` flushes the encrypted file and directory.",
+     "Each module assumes the other owns flushing, so no durability flush is performed."
+    ],
+    "observer": "The owner attempting to restore the reported kept backup"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "backup flush protocol",
+   "kind": "undefined durability semantics",
+   "text": "renaming and flushing a backup are Linux's",
+   "question": "What must be flushed, in what order, and at what point may the backup be reported as kept?",
+   "options": [
+    "Flush the encrypted temporary file, rename it, then flush the backup directory before it is kept",
+    "Flush only language and library buffers before rename",
+    "Flush the SQLite snapshot, encrypted file and relevant directories at specified stages",
+    "No durability guarantee across process or host interruption is intended"
+   ],
+   "default_guess": "Flush the completed encrypted temporary file, rename it atomically, flush the containing directory, and only then treat and report it as kept.",
+   "witness": {
+    "initial": "A backup has passed its integrity check and has been renamed to its kept name.",
+    "events": [
+     "Registry reports the backup as kept.",
+     "The host loses power before directory metadata reaches durable storage.",
+     "The owner later starts the host and asks for the newest kept backup."
+    ],
+    "outcomes": [
+     "The backup must still exist because becoming kept included the required file and directory flushes.",
+     "Its absence is allowed because `kept` required only a successful rename before the interruption."
+    ],
+    "observer": "The owner and the restore procedure"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A20 release manifest\",\"kind\":\"contradictory record contents\",\"text\":\"Under dependencies, the host and the Python version join the release's list, and test 5 shows them.\",\"question\":\"Does the release's dependency list contain a host-kernel requirement, or does it contain only the Python version and base-image digest while installation checks the host separately?\",\"options\":[\"Add Linux host/kernel as a release-list entry\",\"Keep the host outside the dependency list as an installation constraint\",\"Treat the base-image entry as also recording the host kernel\"],\"default_guess\":\"Keep the Linux host requirement as a separate installation constraint, because A20 rule 1 lists the Python version and base image but not the host kernel.\",\"witness\":{\"initial\":\"A release has an exact CPython version and Linux base-image digest and is installed on a Linux host.\",\"events\":[\"The release process writes the release dependency record.\",\"An auditor checks whether that record is complete under the changed security review.\"],\"outcomes\":[\"The record contains an explicit Linux host/kernel requirement.\",\"The record contains no host entry; the installer enforces Linux separately.\"],\"observer\":\"The release auditor and installer\"}},{\"subject\":\"A20 required-test attribution\",\"kind\":\"evidence mismatch\",\"text\":\"Under dependencies, the host and the Python version join the release's list, and test 5 shows them.\",\"question\":\"Must the dependency review cite test 7 for the host-kernel requirement, since test 5 checks only the base image and CPython 3.12?\",\"options\":[\"Test 5 alone is the evidence\",\"Tests 5 and 7 are both required\",\"Test 7 replaces test 5 for the host while test 5 remains for the image and Python\"],\"default_guess\":\"Use test 5 for the base image and Python and test 7 for the host kernel.\",\"witness\":{\"initial\":\"A release uses a Linux base image and CPython 3.12.\",\"events\":[\"It is installed on a host whose kernel is not Linux's.\",\"The State 2 gate evaluates the evidence named by the review.\"],\"outcomes\":[\"The dependency review passes because test 5 passed.\",\"The dependency review requires test 7 and fails because installation on the non-Linux host was not rejected.\"],\"observer\":\"The State 2 gate and release reviewer\"}},{\"subject\":\"A20 supported-host boundary\",\"kind\":\"vague platform contract\",\"text\":\"Another system, or a Linux or file system on which a call Registry's rules rely on — opening a file without following a link, binding a listening socket, renaming, flushing — does not act as Linux documents it, is unsupported\",\"question\":\"Which Linux documentation, version-specific guarantees and filesystem behaviours determine whether a host is supported for each named operation?\",\"options\":[\"The man pages shipped with the exact release environment\",\"A fixed Linux ABI or man-pages version named by the specification\",\"Explicit required semantics for each operation, independent of documentation version\",\"Whatever behaviour the installed kernel and filesystem document\"],\"default_guess\":\"Define the required observable semantics for each operation and test installation against them, instead of relying on an unnamed body of Linux documentation.\",\"witness\":{\"initial\":\"The host kernel is Linux, but the selected filesystem documents weaker persistence or rename behaviour than another Linux filesystem.\",\"events\":[\"The release is installed successfully.\",\"A backup operation uses the filesystem behaviour in question.\"],\"outcomes\":[\"The host is supported because it behaves as its Linux filesystem documentation permits.\",\"The host is unsupported because it does not provide the stronger behaviour an implementer inferred from other Linux documentation.\"],\"observer\":\"The installer and the owner restoring a backup\"}},{\"subject\":\"backup flushing responsibility\",\"kind\":\"missing module owner\",\"text\":\"Under concurrency (A17, A18), binding each listener exclusively and renaming and flushing a backup are Linux's.\",\"question\":\"Which module owns the flush operation: `backups`, which owns backup-location files and renames them, or `store`, which writes and opens the SQLite copy at the temporary path?\",\"options\":[\"`backups` owns every flush of backup files and directories\",\"`store` flushes the SQLite snapshot and `backups` flushes encrypted files and directory changes\",\"`store` owns all flushing associated with the backup copy\",\"No Registry module flushes; the phrase states only an environmental assumption\"],\"default_guess\":\"Split responsibility by resource: `store` finalizes the SQLite snapshot it writes, while `backups` flushes the encrypted file and backup-directory changes it owns.\",\"witness\":{\"initial\":\"A backup run has produced a SQLite snapshot, encrypted it under a temporary name and is ready to rename it to its kept name.\",\"events\":[\"The implementation must decide which module performs each flush.\",\"The process or host stops immediately after the kept-name rename.\"],\"outcomes\":[\"`store` flushes only the SQLite snapshot and `backups` flushes the encrypted file and directory.\",\"Each module assumes the other owns flushing, so no durability flush is performed.\"],\"observer\":\"The owner attempting to restore the reported kept backup\"}},{\"subject\":\"backup flush protocol\",\"kind\":\"undefined durability semantics\",\"text\":\"renaming and flushing a backup are Linux's\",\"question\":\"What must be flushed, in what order, and at what point may the backup be reported as kept?\",\"options\":[\"Flush the encrypted temporary file, rename it, then flush the backup directory before it is kept\",\"Flush only language and library buffers before rename\",\"Flush the SQLite snapshot, encrypted file and relevant directories at specified stages\",\"No durability guarantee across process or host interruption is intended\"],\"default_guess\":\"Flush the completed encrypted temporary file, rename it atomically, flush the containing directory, and only then treat and report it as kept.\",\"witness\":{\"initial\":\"A backup has passed its integrity check and has been renamed to its kept name.\",\"events\":[\"Registry reports the backup as kept.\",\"The host loses power before directory metadata reaches durable storage.\",\"The owner later starts the host and asks for the newest kept backup.\"],\"outcomes\":[\"The backup must still exist because becoming kept included the required file and directory flushes.\",\"Its absence is allowed because `kept` required only a successful rename before the interruption.\"],\"observer\":\"The owner and the restore procedure\"}}]}",
+ "set_aside": []
+}

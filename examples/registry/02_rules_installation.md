@@ -742,9 +742,9 @@ Proposed by the security review and accepted by the owner on 2026-10-31.
 6. A release runs on Linux and on no other host — the kernel that runs
    Registry's process is Linux's and so is the base image around it — no
    version named, and its Python is CPython 3.12 (owner, 2026-11-25). Another system, or a Linux or
-   file system on which a call Registry's rules rely on — opening a file
-   without following a link, binding a listening socket, renaming, flushing
-   — does not act as Linux documents it, is unsupported: Registry neither
+   file system on which a call Registry's rules rely on — binding a listener
+   exclusively and to IPv6 alone (A17), renaming a file into place (A17,
+   A18) — does not act as Linux documents it, is unsupported: Registry neither
    tests for it nor defines what it does there.
 
 ### Formal invariants
@@ -1014,11 +1014,13 @@ Performed again on 2026-11-25, after A20 rule 6 reopened it (rule 2): a
 release runs on Linux alone with CPython 3.12, and a host that does not act
 as Linux documents it is unsupported. files_artifacts and concurrency now
 name A20, because their guarantees rest on facilities rule 6 names. Under
-files_artifacts (A16, A18), opening without following a link is Linux's.
-Under concurrency (A17, A18), binding each listener exclusively and
-renaming and flushing a backup are Linux's. Under dependencies, the host and
-the Python version join the release's list, and test 5 shows them. No
-guarantee weakened: rule 6 names the host they were written for. No right,
+files_artifacts (A17, A18), renaming the store and a backup into place is
+Linux's. Under concurrency (A17), binding each listener exclusively and to
+IPv6 alone is Linux's. Under dependencies, rule 1's list holds the Python
+version and a base image, which test 5 shows to be CPython 3.12 and
+Linux's. The host kernel is no entry of that list: test 7 shows that a
+release does not start on a kernel that is not Linux's. No guarantee
+weakened: rule 6 names the host they were written for. No right,
 limit, file, path or answer moved, and no outcome changed.
 
 ### Consequence
