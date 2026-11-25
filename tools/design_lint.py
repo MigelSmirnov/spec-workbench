@@ -686,18 +686,20 @@ def _security_review_findings(
             )
 
         if outcome == "APPLICABLE":
-            accepted = [
-                entry
-                for entry in resolved
-                if entry["kind"] == "decision" and entry["state"] in {0, 1, 2}
-            ]
-            if references and not accepted and not unresolved:
+            # Every reference the category rests on must be an accepted decision
+            # of States 0–2, not only one of them: a resolved open question or
+            # later-state item beside a decision is still a reference the review
+            # claims and that decides nothing.
+            for reference in references:
+                entry = items_by_key.get(reference)
+                if entry is None or (entry["kind"] == "decision" and entry["state"] in {0, 1, 2}):
+                    continue
                 findings.append(
                     _draft(
                         "error",
                         "invalid_security_reference_kind",
                         item,
-                        f"Security category {category!r} must reference an indexed accepted decision in States 0–2.",
+                        f"Security category {category!r} references {reference!r}, which is not an indexed accepted decision in States 0–2.",
                         line=line_number,
                         section=category,
                     )
