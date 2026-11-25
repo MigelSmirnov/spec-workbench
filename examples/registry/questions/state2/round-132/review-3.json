@@ -1,0 +1,135 @@
+{
+ "open_points": [
+  {
+   "subject": "A20 rule 6 and A21 dependencies review",
+   "kind": "ambiguous_host_boundary",
+   "text": "A release runs on Linux and on no other host, no version named",
+   "question": "Does “host” mean the Registry guest or container environment fixed by the base image, the VM Platform guest operating system, or the physical or hypervisor host; and which of those must be Linux for the release to be allowed?",
+   "options": [
+    "Only the Registry execution environment represented by the base image must be Linux",
+    "The VM Platform guest operating system must be Linux regardless of the image",
+    "Every underlying host, including the hypervisor or physical host, must be Linux"
+   ],
+   "default_guess": "Treat the VM Platform guest operating system in which Registry executes as the host; the underlying hypervisor or physical operating system is outside this constraint.",
+   "witness": {
+    "initial": "VM Platform is a Linux guest made from the release's Linux base image and runs CPython 3.12, but its hypervisor runs on a non-Linux physical host.",
+    "events": [
+     "The release process builds the image and verifies required test 5.",
+     "Deployment installs that image in the Linux guest on the non-Linux hypervisor."
+    ],
+    "outcomes": [
+     "The release is allowed because Registry's execution host is the Linux guest.",
+     "The release is refused because an underlying host is not Linux."
+    ],
+    "observer": "The owner or deployment operator sees whether production may start."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A20 required test 5 and A21 review conclusion",
+   "kind": "required_test_gap",
+   "text": "Under dependencies, the host and the Python version join the release's list, and test 5 shows them.",
+   "question": "How must required test 5 show that the actual host on which the release runs is Linux, when the test as written checks only that the base image is a Linux one?",
+   "options": [
+    "Define the base image's operating system as the host, so checking the image proves the host requirement",
+    "Add a release-installation test that refuses execution when the actual Registry execution host is not Linux",
+    "Narrow A21's claim so test 5 proves only the base-image and Python constraints"
+   ],
+   "default_guess": "Add a release-installation test that refuses a non-Linux Registry execution host, while keeping the base-image check.",
+   "witness": {
+    "initial": "A Linux base image containing CPython 3.12 is available to an installation system capable of running it on a non-Linux host or compatibility layer.",
+    "events": [
+     "The release process checks the image and Python version exactly as required test 5 states.",
+     "The installation attempts to start Registry on the non-Linux execution host."
+    ],
+    "outcomes": [
+     "All written required tests pass and the instance starts because only the image was checked.",
+     "Installation is refused because rule 6 requires the actual execution host to be Linux."
+    ],
+    "observer": "The release operator sees whether an instance starts despite every stated test passing."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A20 supported-host safety boundary",
+   "kind": "vague_safety_guarantee",
+   "text": "Another system, or a Linux or file system on which a call Registry's rules rely on — opening a file without following a link, binding a listening socket, renaming, flushing — does not act as Linux documents it, is unsupported: Registry neither tests for it nor defines what it does there.",
+   "question": "Which Linux documentation and semantics determine whether a kernel, file system, mount configuration, or call result is supported, especially where durability and atomicity guarantees vary by file system, mount options, kernel version, or whether a containing directory is flushed?",
+   "options": [
+    "Use the Linux man-pages semantics for the exact calls, including every documented precondition needed for the relied-on guarantee",
+    "Use the documentation of the selected kernel, file system and mount configuration",
+    "Declare a concrete supported platform profile that states the required no-follow, exclusive-bind, rename and flush guarantees"
+   ],
+   "default_guess": "Declare a concrete supported platform profile and require the documented semantics of its selected kernel, file system and mount configuration.",
+   "witness": {
+    "initial": "Registry runs on Linux and uses a Linux file system where a file flush and rename succeed, but persistence of the renamed directory entry after power loss depends on an additional directory flush or mount guarantee.",
+    "events": [
+     "Registry writes, flushes and renames a backup.",
+     "Power is lost before any containing-directory flush.",
+     "The owner later tries to use the backup."
+    ],
+    "outcomes": [
+     "The platform is supported and the backup guarantee applies because every invoked call behaved according to one reading of Linux documentation.",
+     "The platform is unsupported and Registry defines no outcome because another reading requires stronger durability semantics."
+    ],
+    "observer": "The owner sees whether the backup is guaranteed to survive and be restorable."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "A20 exact release dependency selection",
+   "kind": "later_layer_choice",
+   "text": "the Python version; and the base image of VM Platform's Registry environment by its digest",
+   "question": "Which exact CPython 3.12 patch release and which exact Linux base-image version and digest must the generated release select?",
+   "decision_owner": "generation",
+   "options": [
+    "Select the current supported CPython 3.12 patch and a current supported Linux base image when generating the release, then pin their digests",
+    "Use owner-approved fixed CPython and base-image coordinates supplied to generation",
+    "Reuse coordinates from a previously approved release until an explicit dependency-update release changes them"
+   ],
+   "consequences": [
+    "Generation needs an authenticated dependency-resolution step and two generations at different times may select different inputs, while each resulting release remains pinned",
+    "Generation is reproducible from explicit approved inputs but cannot proceed until those inputs exist",
+    "Releases remain maximally reproducible and stable but security or compatibility updates require an explicit update decision"
+   ],
+   "requirement": "A release names every dependency it runs with, at an exact version, with its digest: every Python package, direct or transitive, by the digest of its distribution file; the Python version; and the base image of VM Platform's Registry environment by its digest, which fixes the system libraries and the store's engine.",
+   "default_guess": "Use owner-approved fixed coordinates supplied to generation and pin every resulting artifact by digest.",
+   "unit": "?"
+  },
+  {
+   "subject": "A20 release qualification checks",
+   "kind": "later_layer_choice",
+   "text": "A release whose base image is not a Linux one, or whose Python is not a CPython 3.12 release, is not made (rule 6).",
+   "question": "What release-process check proves that the selected image is Linux and that the selected interpreter is genuine CPython 3.12?",
+   "decision_owner": "factory_checks",
+   "options": [
+    "Accept only allowlisted image digests and interpreter artifacts whose signed metadata states the required platform and implementation",
+    "Inspect image metadata and the interpreter's reported implementation and version during the release build",
+    "Boot the candidate image in an isolated build environment and execute checks inside it"
+   ],
+   "consequences": [
+    "The check is deterministic and avoids executing the candidate, but the allowlist and metadata provenance must be maintained",
+    "The check supports new artifacts without an allowlist, but metadata or reported values may not establish actual runtime behavior",
+    "The check observes the candidate environment directly, but adds execution, isolation and platform requirements to the factory"
+   ],
+   "requirement": "A release whose base image is not a Linux one, or whose Python is not a CPython 3.12 release, is not made (rule 6).",
+   "default_guess": "Verify signed artifact metadata and also execute the interpreter inside the candidate image to confirm its implementation and version.",
+   "witness": {
+    "initial": "A candidate distroless Linux image has no familiar distribution marker files but contains a genuine CPython 3.12 interpreter.",
+    "events": [
+     "The factory applies its chosen Linux-image and interpreter qualification check.",
+     "The otherwise identical release is submitted for admission."
+    ],
+    "outcomes": [
+     "The release is admitted because executing the candidate proves Linux compatibility and CPython 3.12.",
+     "The release is rejected because a metadata or allowlist check does not recognize the image."
+    ],
+    "observer": "The release builder sees whether the same compliant candidate can be made into a release."
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A20 rule 6 and A21 dependencies review\",\"kind\":\"ambiguous_host_boundary\",\"text\":\"A release runs on Linux and on no other host, no version named\",\"question\":\"Does “host” mean the Registry guest or container environment fixed by the base image, the VM Platform guest operating system, or the physical or hypervisor host; and which of those must be Linux for the release to be allowed?\",\"options\":[\"Only the Registry execution environment represented by the base image must be Linux\",\"The VM Platform guest operating system must be Linux regardless of the image\",\"Every underlying host, including the hypervisor or physical host, must be Linux\"],\"default_guess\":\"Treat the VM Platform guest operating system in which Registry executes as the host; the underlying hypervisor or physical operating system is outside this constraint.\",\"witness\":{\"initial\":\"VM Platform is a Linux guest made from the release's Linux base image and runs CPython 3.12, but its hypervisor runs on a non-Linux physical host.\",\"events\":[\"The release process builds the image and verifies required test 5.\",\"Deployment installs that image in the Linux guest on the non-Linux hypervisor.\"],\"outcomes\":[\"The release is allowed because Registry's execution host is the Linux guest.\",\"The release is refused because an underlying host is not Linux.\"],\"observer\":\"The owner or deployment operator sees whether production may start.\"}},{\"subject\":\"A20 required test 5 and A21 review conclusion\",\"kind\":\"required_test_gap\",\"text\":\"Under dependencies, the host and the Python version join the release's list, and test 5 shows them.\",\"question\":\"How must required test 5 show that the actual host on which the release runs is Linux, when the test as written checks only that the base image is a Linux one?\",\"options\":[\"Define the base image's operating system as the host, so checking the image proves the host requirement\",\"Add a release-installation test that refuses execution when the actual Registry execution host is not Linux\",\"Narrow A21's claim so test 5 proves only the base-image and Python constraints\"],\"default_guess\":\"Add a release-installation test that refuses a non-Linux Registry execution host, while keeping the base-image check.\",\"witness\":{\"initial\":\"A Linux base image containing CPython 3.12 is available to an installation system capable of running it on a non-Linux host or compatibility layer.\",\"events\":[\"The release process checks the image and Python version exactly as required test 5 states.\",\"The installation attempts to start Registry on the non-Linux execution host.\"],\"outcomes\":[\"All written required tests pass and the instance starts because only the image was checked.\",\"Installation is refused because rule 6 requires the actual execution host to be Linux.\"],\"observer\":\"The release operator sees whether an instance starts despite every stated test passing.\"}},{\"subject\":\"A20 supported-host safety boundary\",\"kind\":\"vague_safety_guarantee\",\"text\":\"Another system, or a Linux or file system on which a call Registry's rules rely on — opening a file without following a link, binding a listening socket, renaming, flushing — does not act as Linux documents it, is unsupported: Registry neither tests for it nor defines what it does there.\",\"question\":\"Which Linux documentation and semantics determine whether a kernel, file system, mount configuration, or call result is supported, especially where durability and atomicity guarantees vary by file system, mount options, kernel version, or whether a containing directory is flushed?\",\"options\":[\"Use the Linux man-pages semantics for the exact calls, including every documented precondition needed for the relied-on guarantee\",\"Use the documentation of the selected kernel, file system and mount configuration\",\"Declare a concrete supported platform profile that states the required no-follow, exclusive-bind, rename and flush guarantees\"],\"default_guess\":\"Declare a concrete supported platform profile and require the documented semantics of its selected kernel, file system and mount configuration.\",\"witness\":{\"initial\":\"Registry runs on Linux and uses a Linux file system where a file flush and rename succeed, but persistence of the renamed directory entry after power loss depends on an additional directory flush or mount guarantee.\",\"events\":[\"Registry writes, flushes and renames a backup.\",\"Power is lost before any containing-directory flush.\",\"The owner later tries to use the backup.\"],\"outcomes\":[\"The platform is supported and the backup guarantee applies because every invoked call behaved according to one reading of Linux documentation.\",\"The platform is unsupported and Registry defines no outcome because another reading requires stronger durability semantics.\"],\"observer\":\"The owner sees whether the backup is guaranteed to survive and be restorable.\"}},{\"subject\":\"A20 exact release dependency selection\",\"kind\":\"later_layer_choice\",\"text\":\"the Python version; and the base image of VM Platform's Registry environment by its digest\",\"question\":\"Which exact CPython 3.12 patch release and which exact Linux base-image version and digest must the generated release select?\",\"decision_owner\":\"generation\",\"options\":[\"Select the current supported CPython 3.12 patch and a current supported Linux base image when generating the release, then pin their digests\",\"Use owner-approved fixed CPython and base-image coordinates supplied to generation\",\"Reuse coordinates from a previously approved release until an explicit dependency-update release changes them\"],\"consequences\":[\"Generation needs an authenticated dependency-resolution step and two generations at different times may select different inputs, while each resulting release remains pinned\",\"Generation is reproducible from explicit approved inputs but cannot proceed until those inputs exist\",\"Releases remain maximally reproducible and stable but security or compatibility updates require an explicit update decision\"],\"requirement\":\"A release names every dependency it runs with, at an exact version, with its digest: every Python package, direct or transitive, by the digest of its distribution file; the Python version; and the base image of VM Platform's Registry environment by its digest, which fixes the system libraries and the store's engine.\",\"default_guess\":\"Use owner-approved fixed coordinates supplied to generation and pin every resulting artifact by digest.\"},{\"subject\":\"A20 release qualification checks\",\"kind\":\"later_layer_choice\",\"text\":\"A release whose base image is not a Linux one, or whose Python is not a CPython 3.12 release, is not made (rule 6).\",\"question\":\"What release-process check proves that the selected image is Linux and that the selected interpreter is genuine CPython 3.12?\",\"decision_owner\":\"factory_checks\",\"options\":[\"Accept only allowlisted image digests and interpreter artifacts whose signed metadata states the required platform and implementation\",\"Inspect image metadata and the interpreter's reported implementation and version during the release build\",\"Boot the candidate image in an isolated build environment and execute checks inside it\"],\"consequences\":[\"The check is deterministic and avoids executing the candidate, but the allowlist and metadata provenance must be maintained\",\"The check supports new artifacts without an allowlist, but metadata or reported values may not establish actual runtime behavior\",\"The check observes the candidate environment directly, but adds execution, isolation and platform requirements to the factory\"],\"requirement\":\"A release whose base image is not a Linux one, or whose Python is not a CPython 3.12 release, is not made (rule 6).\",\"default_guess\":\"Verify signed artifact metadata and also execute the interpreter inside the candidate image to confirm its implementation and version.\",\"witness\":{\"initial\":\"A candidate distroless Linux image has no familiar distribution marker files but contains a genuine CPython 3.12 interpreter.\",\"events\":[\"The factory applies its chosen Linux-image and interpreter qualification check.\",\"The otherwise identical release is submitted for admission.\"],\"outcomes\":[\"The release is admitted because executing the candidate proves Linux compatibility and CPython 3.12.\",\"The release is rejected because a metadata or allowlist check does not recognize the image.\"],\"observer\":\"The release builder sees whether the same compliant candidate can be made into a release.\"}}]}",
+ "set_aside": []
+}

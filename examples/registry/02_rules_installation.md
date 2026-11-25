@@ -739,8 +739,9 @@ Proposed by the security review and accepted by the owner on 2026-10-31.
    therefore declares no formal invariant of Registry: no note of a module
    and no check of Registry's code can show what the installation does, and
    one claimed here would be a false witness.
-6. A release runs on Linux and on no other host, no version named, and its
-   Python is CPython 3.12 (owner, 2026-11-25). Another system, or a Linux or
+6. A release runs on Linux and on no other host — the kernel that runs
+   Registry's process is Linux's and so is the base image around it — no
+   version named, and its Python is CPython 3.12 (owner, 2026-11-25). Another system, or a Linux or
    file system on which a call Registry's rules rely on — opening a file
    without following a link, binding a listening socket, renaming, flushing
    — does not act as Linux documents it, is unsupported: Registry neither
@@ -771,7 +772,10 @@ check of Registry:
 4. A release's dependencies change only with a new release (rule 3): the
    same release installed again gives the same list.
 5. A release whose base image is not a Linux one, or whose Python is not a
-   CPython 3.12 release, is not made (rule 6).
+   CPython 3.12 release, is not made, and installing a release on a host
+   whose kernel is not Linux's fails and no instance of it starts (rule 6).
+6. A release with a dependency that loads code at run time from outside
+   the release is not made (rule 4).
 
 ### Consequence
 
