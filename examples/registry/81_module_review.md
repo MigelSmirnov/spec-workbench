@@ -200,6 +200,25 @@ value:
 Verified on the rejected candidate with that one helper replaced: the
 Factory's full static gate set reports no blocking finding.
 
+## The host is Linux (A20 rule 6, 2026-11-25)
+
+Three of the rejections above were the generator hedging on the host. A
+writer that had to open without following a link, or bind exclusively and
+to IPv6 alone, was not told where the code runs, so it probed with
+`hasattr`. As in cabinet-kernel (its A20 rule 3, 2026-10-18), the owner
+decided that Registry runs on Linux alone with CPython 3.12.
+
+- **State 2.** A20 rule 6 states the decision. Its Required tests 5–7 show
+  the base image and Python, a release with external code loading, and an
+  installation on a non-Linux kernel. A21 records the re-review. States 2–5
+  rounds 131–135, 80–82, 68 and 58 closed. Their release-process topics
+  were carried to generation, factory_checks or deploy, and the topics on a
+  Linux baseline were accepted, as for cabinet-kernel.
+- **State 7.** The no-follow notes of `backups` and the listener note of
+  `start_instance` cite A20. The `backups` and `instance_lifecycle`
+  packets changed by these words only. The author re-read and re-hashed
+  them.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
