@@ -843,7 +843,7 @@ Security review: PERFORMED
 - injection_interpreted_input: APPLICABLE; references: A02, A16, A19; affected: M03, M08, import file, every stored text value
 - external_callbacks_webhooks: NOT_APPLICABLE; rationale: Registry calls no other service and receives no callback (R0-18, R0-54), and every request is a caller's authenticated call (R0-27)
 - browser_boundary: APPLICABLE; references: A13, A19; affected: owner interface, CSRF protection, session cookie, rendering of agent-written text
-- files_artifacts: APPLICABLE; references: A07, A08, A16, A18, A19, A20, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
+- files_artifacts: APPLICABLE; references: A07, A08, A16, A17, A18, A19, A20, A22; affected: M05, M10, import file, backups, pointers as references whose payload Registry never reads (R0-02)
 - concurrency: APPLICABLE; references: A01, A04, A07, A12, A13, A14, A15, A16, A17, A18, A20; affected: M01, M03, M04, M05, M06, M09, M10, M11, a start serving nothing until every check passed and binding each listener exclusively (A17), concurrent creates, corrections, publishes, session changes, single-use confirmation values, confirmations bound to no revision, resubmitted forms on records without a revision, creates racing the erasure that removes their request id, re-uploads replacing a confirmed file, concurrent import confirmations, backup snapshots taken while transactions go on, overlapping backup runs
 - dependencies: APPLICABLE; references: A20; affected: Registry release, its Python dependencies
 
