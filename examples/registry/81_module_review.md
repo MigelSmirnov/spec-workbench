@@ -727,6 +727,103 @@ Only `backups` changed: no State 3 to 5 text, no public operation, no import
 of another module (the new scope uses nothing; the three callers' scopes
 were re-read and re-hashed).
 
+## 2026-11-26: each text form is read in one place (`given_values`)
+
+State 7 round-01 found grammars spelled character by character in notes
+(SPEC_STANDARD §2, string micro-syntax): the instant in `_read_backup_record`
+(backups T7) and `_build_mapping` (migration_import T14), the calendar date
+in `_confirmation_inputs` and `OwnerActionStep.run` (operations T2), the
+version's digits (migration_import T13), the floor area and the whole
+numbers in `check_value_forms` (given_values T2), the listener's address in
+`load_configuration` (configuration T1), and the closed set of Unicode
+general categories in `check_request_id_form` (given_values T3). Owner,
+2026-11-26: as for the model walk, a grammar is read in one place, by one
+function of `given_values`, which already owns the forms of given values;
+its note names the published format in words with the exact restrictions
+the old prose made, and what it answers for anything else.
+
+- **State 3.** `given_values` owns reading the text forms; four new
+  candidate capabilities. `configuration`, `backups` and `operations` know
+  `given_values`. Two constants join `data_provider`'s list (below and the
+  digest entry).
+- **State 4.** Named only where a step already describes the reading:
+  `flow:start_instance` step 1 (the address), `flow:import_from_vps` step 2
+  (instants and versions of malformed records), `flow:read_and_erase_audit`
+  step 3 (the owner's date).
+- **State 5.** `public_op:given_values.read_instant_text` (callers
+  `migration_import`, `backups`), `read_date_text` (`operations`),
+  `read_digits_text` (`migration_import`), `read_listen_address`
+  (`configuration`), all internal-only; the Conventions paragraph names each
+  caller's `module_internal[<caller>]["given_values"]` symbol; the constants
+  table moves `LISTEN_PORT_MIN`/`MAX` from `configuration` to
+  `given_values` and adds `REQUEST_ID_UNPRINTABLE_CATEGORIES` there.
+- **State 6.** `read_instant_text(text: str) -> datetime | None` (UTC,
+  to the microsecond), `read_date_text(text: str) -> date | None`,
+  `read_digits_text(text: str) -> int | None`,
+  `read_listen_address(text: str) -> ListenAddress | None`; and two internal
+  functions, `_read_decimal_text(text: str) -> Decimal | None` and
+  `_read_whole_number_text(text: str) -> int | None`, which only
+  `check_value_forms` calls. They are internal because made public, eleven
+  public functions of eleven trip the State 6 depth check
+  (`module_surface_not_deep`), and no other module reads those forms:
+  `projects._object_from_given` converts text `check_value_forms` already
+  passed and keeps its note. `configuration._parse_listen_address` is gone;
+  `read_listen_address` is its one reading. No new model.
+- **Data.** `REQUEST_ID_UNPRINTABLE_CATEGORIES` = (`Cc`, `Cf`, `Cs`, `Co`,
+  `Cn`): control, format, surrogate, private use and unassigned, as the note
+  named them.
+- **State 7.** New notes for the six readers; the callers' notes name them
+  instead of the grammar. Every accepted and refused input is the one the
+  old prose described: the instant is the internet date and time format
+  with capital `T` and `Z`, a fraction of at most microseconds, ASCII
+  digits and a real date and time; the date the extended calendar date
+  form; the floor area the JSON number form with no sign and no exponent;
+  the whole numbers that form with no fraction, no exponent and no minus
+  before a lone zero; the version ASCII digits alone, leading zeros allowed;
+  the address the URI authority's host and port with A17 rule 1's
+  narrowing.
+- **Imports.** New scopes for the six; `calls` rows in the callers' scopes,
+  `reads` rows for the two constants; ten stale bases renewed after their
+  uses were re-read; `configuration._parse_listen_address`'s scope removed.
+
+Not moved, for the owner: `owner_interface`:T3, the form-path encoding of
+`_read_owner_request` (parts joined by a full stop, a position as its index).
+`OWNER_FORM_FIELDS` and `OWNER_FORM_POSITION_MARK` hold the names and the
+position mark, but not the joining or the position's digits, and
+`_render_owner_page` writes the same names, so a reader alone would not be
+one place. Options: (a) a separator constant beside the mark and the
+position stated as a whole number by `read_digits_text`; (b) a pair of
+functions — read and write a form path — owned by `owner_interface` or
+`given_values`; (c) the table's names as tuples of parts, the wire name a
+derived value. Left as they were and not moved either: the
+`[TEST_EVIDENCE]` and repeat-comparison notes that write a value's text
+(`create_project`, `_run_backup`'s kept name, `_encrypt_backup`'s
+`made_at`), which are writing forms, not grammars read.
+
+## 2026-11-26: the owner-action audit subject stays in prose, pending a type
+
+Owner, 2026-11-26 (operations T9): the audit subject's form per owner
+action becomes a field `subject_kind` of `OwnerAuditAction`, filled per row
+of `OWNER_AUDIT_ACTIONS`, typed by the enumeration of `AuditSubject`'s
+kinds if `models` has one. It has none: the variants carry their kinds as
+`Literal` discriminators (`project`, `customer`, `session_project`,
+`import`, `none`). Nothing moved; the type is the owner's to choose: a new
+enumeration `AuditSubjectKind` of those five values (State 1 and State 6
+model closure), a `str` field closed by the five discriminator values, or a
+`Literal` of the five.
+
+## 2026-11-26: the digest algorithm is a constant (`DIGEST_ALGORITHM`)
+
+State 7 round-01 (migration_import T18) found SHA-256 written inline in
+`_file_digest`; `backups._key_digest` wrote it too. Owner, 2026-11-26: one
+`data_provider` constant, `DIGEST_ALGORITHM` = `sha256` (Python's name for
+it), which both read; each note keeps "its lowercase hexadecimal form" as
+behaviour. `BACKUP_KEY_DIGEST_PREFIX` (`sha256:`) keeps its value. Not
+read from it: `_encrypt_backup`'s HKDF-SHA256, a key derivation and no
+digest of this kind, and `_confirmation_binding_digest`, which names no
+algorithm. State 3 lists the constant; State 5's constants table adds it to
+`migration_import` and `backups`; their two scopes read it.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants

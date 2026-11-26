@@ -62,7 +62,9 @@ lockout, no remembered backup date (A13 rules 2, 3; A18 rule 1).
 until every check passed (A17 rule 2); it decides no check.
 `module:runtime_settings` alone reads the environment: the `REGISTRY_` items
 A17 rule 1 lists, and no other variable. `module:configuration` owns every
-check of A17 that needs no file, over the settings it loaded. `module:backups` owns the probe of the backup
+check of A17 that needs no file, over the settings it loaded;
+`module:given_values` reads an address's text form for it (owner,
+2026-11-26). `module:backups` owns the probe of the backup
 location (A17 rule 2, A18 rule 5). `module:store` owns opening or making the
 store and its integrity and version checks (A17 rule 5).
 `module:data_provider` holds, as constants its readers import, the services
@@ -101,8 +103,9 @@ diagnostic.
    read (owner, 2026-11-11) — and checks them in A17 rule 2's order: the
    service tokens of all the services the imported `SERVICE_RIGHTS` constant
    lists with the service API's address, or none, which makes an owner-only start; every other item present;
-   each well formed — an address within the imported `LISTEN_PORT_MIN` and
-   `LISTEN_PORT_MAX` constants; the two addresses' ports different; each
+   each well formed — an address as
+   `capability:given_values.read_listen_address` reads it, its port within
+   the imported `LISTEN_PORT_MIN` and `LISTEN_PORT_MAX` constants; the two addresses' ports different; each
    secret at least the imported `SECRET_MIN_BYTES`
    constant, 32 bytes (rule 3); no two secrets
    equal (rule 4); the store and the backup location apart, every link
@@ -929,6 +932,8 @@ confirming transaction and applied only when clean, and the closure (A16, M10). 
 `module:operations` opens the one transaction, mints the confirmation id and
 appends the entry. `module:data_provider` holds the file's size limit
 and the declared types as constants `module:migration_import` imports.
+`module:given_values` reads the file's instants and versions (owner,
+2026-11-26).
 
 Crossing models: the file's bytes, kept only in memory and named by their
 digest; the mapping — the picked projects by `project_id`, their rooms and
@@ -964,7 +969,9 @@ minted `customer_ref`.
    `capability:store.read_in_transaction`, what the picks bring in and
    nothing else (rule 3): their rooms and pointers, each name and alias they
    arrive under, the Customers it will make, the malformed records (rule 4,
-   an undeclared type among them, A22 rule 7) and every id production holds
+   an undeclared type among them, A22 rule 7, and an instant or a version
+   that `capability:given_values.read_instant_text` or
+   `capability:given_values.read_digits_text` does not read) and every id production holds
    (rule 5).
 3. **Show the step.** Only when the mapping shows no malformed record, no
    conflict and no missing value (rule 1),
@@ -1141,7 +1148,8 @@ give, confirming (R0-58, R0-66).
 and the erasure by date (A14, A15). `module:operations` admits the owner,
 opens the transaction, mints the confirmation id and appends the erasure's own
 entry after the removal (A15 rules 4, 6). `module:owner_sessions` owns the
-confirmation value. No service token reaches the log (A15 rule 2).
+confirmation value. `module:given_values` reads the date the owner gives
+(owner, 2026-11-26). No service token reaches the log (A15 rule 2).
 
 Crossing models: the entries (M09) in sequence order; the date the owner
 gives; the erasure's entry naming the date with its confirmation id and no
@@ -1162,8 +1170,9 @@ subject.
    `capability:owner_sessions.take_confirmation` uses the value up;
    `capability:store.run_in_transaction` opens the transaction with the
    instant from `capability:clock.recorded_now` and today's date, that
-   instant's UTC date. `capability:audit_log.erase_audit_entries_before`
-   refuses a date later than today and otherwise removes every entry whose
+   instant's UTC date. `capability:audit_log.erase_audit_entries_before`,
+   given the owner's date as `capability:given_values.read_date_text` reads
+   it, refuses a date later than today and otherwise removes every entry whose
    instant is before 00:00 UTC of it (A15 rule 3).
 4. **Record.** The erasure is accepted whatever it removed: `module:operations`
    mints the confirmation id with `capability:random_values.mint_identity`

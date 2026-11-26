@@ -146,8 +146,8 @@ second authority beside them. The values are the data closure's.
 | consumer | constants it imports from `data_provider` |
 |---|---|
 | `random_values` | `SECRET_MIN_BYTES` |
-| `given_values` | `REQUEST_ID_MAX_CHARACTERS`, `ALIAS_MAX_CHARACTERS`, `WHITE_SPACE_CODE_POINTS`, `OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, `OBJECT_ROOMS_MIN` |
-| `configuration` | `SERVICE_RIGHTS`, `SECRET_MIN_BYTES`, `LISTEN_PORT_MIN`, `LISTEN_PORT_MAX`, `TEXT_ENCODING`, `RUNTIME_SETTING_ORDER`, `RUNTIME_SETTINGS_REQUIRED`, `RUNTIME_SETTINGS_ALL_OR_NONE` |
+| `given_values` | `REQUEST_ID_MAX_CHARACTERS`, `ALIAS_MAX_CHARACTERS`, `WHITE_SPACE_CODE_POINTS`, `OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, `OBJECT_ROOMS_MIN`, `REQUEST_ID_UNPRINTABLE_CATEGORIES`, `LISTEN_PORT_MIN`, `LISTEN_PORT_MAX` |
+| `configuration` | `SERVICE_RIGHTS`, `SECRET_MIN_BYTES`, `TEXT_ENCODING`, `RUNTIME_SETTING_ORDER`, `RUNTIME_SETTINGS_REQUIRED`, `RUNTIME_SETTINGS_ALL_OR_NONE` |
 | `store` | `STORE_VERSION`, `STORE_TEMPORARY_SUFFIX`, `STORE_COMPANION_SUFFIXES` |
 | `audit_log` | `RELEASE_VERSION`, `CONTRACT_VERSION`, `REFUSAL_STAGE_VALUES` |
 | `service_access` | `SERVICE_RIGHTS`, `SERVICE_HIGHEST_CLASSES`, `REFUSAL_STAGE_AUTHENTICATION`, `TEXT_ENCODING` |
@@ -156,8 +156,8 @@ second authority beside them. The values are the data closure's.
 | `projects` | `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE`, `REVISION_FIRST`, `PROJECT_VALUE_FAILURE_KINDS`, `CUSTOMER_ELIGIBILITY_REFUSALS` |
 | `artifact_pointers` | `ARTIFACT_TYPE_OWNERS`, `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_LIFECYCLE` |
 | `agent_sessions` | `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_EXISTENCE`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_VERSION`, `REFUSAL_STAGE_LIFECYCLE`, `ACCESS_VERSION_FIRST`, `AGENT_SESSION_FAILURE_KINDS` |
-| `migration_import` | `ARTIFACT_TYPE_OWNERS`, `IMPORT_FILE_MAX_BYTES`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_LIFECYCLE`, `TEXT_ENCODING` |
-| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION`, `BACKUP_KEY_DIGEST_PREFIX`, `BACKUP_KEY_DIGEST_SEPARATOR`, `TEXT_ENCODING`, `STORE_COMPANION_SUFFIXES` |
+| `migration_import` | `ARTIFACT_TYPE_OWNERS`, `IMPORT_FILE_MAX_BYTES`, `REFUSAL_STAGE_VALUES`, `REFUSAL_STAGE_LIFECYCLE`, `TEXT_ENCODING`, `DIGEST_ALGORITHM` |
+| `backups` | `BACKUP_KEPT_PREFIX`, `BACKUP_TEMPORARY_PREFIX`, `BACKUP_DAILY_TIME_UTC`, `BACKUP_RETENTION_HOURS`, `BACKUP_RECORD_VERSION`, `BACKUP_KEY_DIGEST_DOMAIN`, `BACKUP_KEY_DERIVATION_INFO`, `RELEASE_VERSION`, `BACKUP_KEY_DIGEST_PREFIX`, `BACKUP_KEY_DIGEST_SEPARATOR`, `TEXT_ENCODING`, `STORE_COMPANION_SUFFIXES`, `DIGEST_ALGORITHM` |
 | `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES`, `PERSONAL_DATA_FIELDS`, `OWNER_AUDIT_ACTIONS`, `OWNER_CHANGE_ACTIONS`, `SERVICE_CHANGE_OPERATIONS` |
 | `service_api` | `SERVICE_AGENT_SESSION_HEADER`, `SERVICE_ANSWER_STATUS`, `REFUSAL_HTTP_STATUSES`, `SERVICE_AUTHORIZATION_HEADER`, `SERVICE_AUTHORIZATION_SCHEME`, `CONTENT_TYPE_HEADER`, `SERVICE_ANSWER_CONTENT_TYPE`, `SERVICE_INSTANT_UTC_MARK`, `TEXT_ENCODING` |
 | `upload_framing` | `UPLOAD_FORM_HEAD_MAX_BYTES`, `OWNER_CSRF_FIELD`, `UPLOAD_FORM_MEDIA_TYPE`, `UPLOAD_BOUNDARY_PARAMETER`, `UPLOAD_FILENAME_PARAMETER`, `UPLOAD_DELIMITER_PREFIX`, `UPLOAD_CLOSE_SUFFIX`, `TEXT_ENCODING` |
@@ -190,7 +190,15 @@ a model is declared the same way (owner, 2026-11-26):
 `module_internal["owner_sessions"]["model_fields"]`,
 `module_internal["service_api"]["model_fields"]` and
 `module_internal["owner_interface"]["model_fields"]` each hold
-`model_items` alone, and `imports.internal["model_fields"]` exports it. A secret such an operation returns
+`model_items` alone, and `imports.internal["model_fields"]` exports it.
+Every text form is read the same way, in `given_values` (owner,
+2026-11-26): `module_internal["configuration"]["given_values"]` holds
+`read_listen_address`, `module_internal["backups"]["given_values"]`
+`read_instant_text` and `module_internal["operations"]["given_values"]`
+`read_date_text`, each that one symbol;
+`module_internal["migration_import"]["given_values"]` holds
+`read_instant_text` and `read_digits_text` beside the readings it already
+holds; and `imports.internal["given_values"]` exports the four. A secret such an operation returns
 to its caller inside the process is not an answer in A13 rule 7's and A17
 rule 6's sense, which is what Registry gives a service or the owner
 (R0-23, R0-37); it never reaches one.

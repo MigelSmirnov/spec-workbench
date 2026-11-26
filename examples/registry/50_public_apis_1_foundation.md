@@ -16,7 +16,10 @@ the clock is emitted from `system_clock_backend` v6, which owns exactly the
 two readings, and `operations` takes an action's today as the UTC date of
 its instant (owner, 2026-11-16). Reopened on 2026-11-26: `model_fields`
 reads a model's declared fields for every generic walk (State 3, "Reading a
-model's fields"). The operations of `clock`,
+model's fields"). Reopened again on 2026-11-26: every text form Registry
+reads — an instant, a date, a version's digits, a listener's address, and
+the decimal and whole numbers `check_value_forms` checks — has one reading,
+in `given_values` (State 3). The operations of `clock`,
 `random_values`, `model_fields`, `given_values`, `runtime_settings`, `configuration`,
 `store`, `audit_log` and `service_access`. Every one follows `50_public_apis_0_conventions.md`.
 
@@ -455,6 +458,169 @@ the file brings in is a malformed record (A16 rule 4), not a missing value.
 
 Pure; touches no record.
 
+## `public_op:given_values.read_instant_text`
+
+### Owner
+
+`module:given_values`. Read an instant written in the internet date and time format, narrowed as
+Registry reads it, or answer that the text is not of that form (owner,
+2026-11-26; State 3, `given_values`).
+
+### Callers
+
+`module:migration_import`, `module:backups`.
+
+### Inputs
+
+A text.
+
+### Outputs
+
+The instant the text names, timezone-aware and in UTC to the
+microsecond, or that the text is not of the form: only the format's date
+and time with an offset, the capital letters `T` and `Z` alone, a fraction
+of a second of at most microseconds, every digit an ASCII digit, a real
+calendar date and a real time of that day.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+Every instant Registry reads from text is read here alone: the
+instants of a record the import file brings in (A16 rule 4) and the
+instant a backup's record line holds (A18 rule 1). What a caller does
+with an instant, or with a text not of the form, stays its caller's.
+
+### Errors
+
+None; a text not of its form is answered as such, never raised.
+
+### State impact
+
+Pure; touches no record.
+
+## `public_op:given_values.read_date_text`
+
+### Owner
+
+`module:given_values`. Read a calendar date written in the extended calendar date form of the
+ISO date and time standard, or answer that the text is not of that form
+(owner, 2026-11-26; State 3, `given_values`).
+
+### Callers
+
+`module:operations`.
+
+### Inputs
+
+A text.
+
+### Outputs
+
+The date the text names, or that the text is not of the form: the year,
+the month and the day in that form alone, every digit an ASCII digit, naming
+a real calendar date.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+Every date the owner gives — a Customer's end date, the date before which
+old audit entries are erased — is read here alone; whether it is later
+than today stays its caller's.
+
+### Errors
+
+None; a text not of its form is answered as such, never raised.
+
+### State impact
+
+Pure; touches no record.
+
+## `public_op:given_values.read_digits_text`
+
+### Owner
+
+`module:given_values`. Read a text of ASCII decimal digits alone as the whole number they name,
+or answer that the text is not of that form (owner, 2026-11-26).
+
+### Callers
+
+`module:migration_import`.
+
+### Inputs
+
+A text.
+
+### Outputs
+
+The whole number the digits name in decimal, leading zeros allowed, or
+that the text is not of the form: an empty text, a sign and white space are
+not of it.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+The version of a pointer the import file brings in is read here alone:
+one not of the form marks its record malformed (A16 rule 4).
+
+### Errors
+
+None; a text not of its form is answered as such, never raised.
+
+### State impact
+
+Pure; touches no record.
+
+## `public_op:given_values.read_listen_address`
+
+### Owner
+
+`module:given_values`. Read a listener's address in A17 rule 1's text form, or answer that the
+text is not of that form (A17 rule 1; owner, 2026-11-26).
+
+### Callers
+
+`module:configuration`.
+
+### Inputs
+
+A text.
+
+### Outputs
+
+The address's host, without brackets, and its port as a whole number, or
+that the text is not of the form: a host and a port as the authority of the
+URI generic syntax writes them, the host an IPv4 address in dotted decimal
+with no leading zero in a part but a lone zero or a bracketed IPv6 address in
+any text form of RFC 4291 section 2.2 with no zone identifier and not
+IPv4-mapped, the port without a leading zero from the imported
+`LISTEN_PORT_MIN` to `LISTEN_PORT_MAX` constant, no white space and no sign.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A17 rule 1's address form, read here alone; `configuration` judges an
+address item well formed exactly when this reading answers an address.
+
+### Errors
+
+None; a text not of its form is answered as such, never raised.
+
+### State impact
+
+Pure; touches no record.
+
 ## `public_op:upload_framing.read_upload_head`
 
 ### Owner
@@ -586,9 +752,10 @@ None.
 
 A17 rules 1–5: the tokens all four of the services the imported
 `SERVICE_RIGHTS` constant lists with the service API's address, or none;
-every other item present; each — an address as `host:port`, the host an IP
+every other item present; each — an address as
+`given_values.read_listen_address` reads it (`host:port`, the host an IP
 address, the port from the imported `LISTEN_PORT_MIN` to `LISTEN_PORT_MAX`
-constant, the two ports different —
+constant), the two ports different —
 well formed; each secret at least the imported `SECRET_MIN_BYTES` constant; no two secrets equal; the
 store and the backup location apart, every link resolved; no default
 applied. Each secret is handed later only to the module that uses it,

@@ -173,6 +173,18 @@ readings, so an action's today is `operations`' (`_today_of`).
   `given_values` (A02) and turns them into the model's types itself
   (`_object_from_given`). A choice from a closed list arrives as text too, so
   that a value outside it is refused (A19 rule 3) rather than unreadable.
+- **A text form is read in one place** (owner, 2026-11-26; State 3,
+  `given_values`). `given_values` reads each form from `str`:
+  `read_instant_text` answers a timezone-aware UTC `datetime`,
+  `read_date_text` a `date`, `read_digits_text` an `int` and
+  `read_listen_address` a `ListenAddress`; its internal
+  `_read_decimal_text` and `_read_whole_number_text` answer the `Decimal`
+  and the `int` `check_value_forms` checks a floor area, a number of rooms
+  and a floor by. Each answers `None` for a text not of its
+  form — not a refusal, since each caller decides what such a text is: a
+  defect, a refusal, an unreadable record, a failed start check.
+  `configuration`'s internal `_parse_listen_address` is gone; its one reading
+  is `read_listen_address`.
 - **Types.** Identities are `str`, a UUID's text or, for an agent session,
   the identity Kernel names; instants are timezone-aware UTC `datetime`
   (L16; the clock's v6 reading); dates `date`; the floor area `Decimal`

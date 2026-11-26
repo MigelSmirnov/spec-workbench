@@ -499,6 +499,8 @@ RUNTIME_SETTINGS_ALL_OR_NONE
 STORE_COMPANION_SUFFIXES
 OWNER_CHANGE_ACTIONS
 SERVICE_CHANGE_OPERATIONS
+REQUEST_ID_UNPRINTABLE_CATEGORIES
+DIGEST_ALGORITHM
 ```
 
 ### Depth assessment
@@ -524,6 +526,13 @@ answered as a failure naming every such value and its kind, which the
 caller refuses at stage (4) or, for the import's mapping, shows (A16 rule
 1).
 
+Reading the text forms a value is written in, wherever Registry reads one
+(owner, 2026-11-26): an instant, a calendar date, a decimal number, a whole
+number, a version's digits and a listener's address (A17 rule 1). Each form
+has one reading here, which answers the value the text names or that the
+text is not of its form; every module that reads such a text has it read
+here and nowhere else.
+
 ### Knows
 
 `models`, `data_provider`.
@@ -533,12 +542,14 @@ caller refuses at stage (4) or, for the import's mapping, shows (A16 rule
 Which values an action requires (each record's module says), whether a create
 is a repeat (that needs the record: `projects`, `customers`,
 `artifact_pointers`), whether a request id is random (the caller's duty, A01
-rule 1).
+rule 1), what a caller does with a value it has read: whether an instant
+or a date is in order with another, whether versions run without gaps,
+which address is listened on.
 
 ### Hides
 
 White-space classes, the printable-text check, the order-free comparison of
-composite facts.
+composite facts, the grammar of each text form.
 
 ### Candidate public capabilities
 
@@ -548,6 +559,10 @@ read_optional_text
 check_request_id_form
 check_value_forms
 facts_equal_for_repeat
+read_instant_text
+read_date_text
+read_digits_text
+read_listen_address
 ```
 
 ### Depth assessment
@@ -718,7 +733,7 @@ checks after them — the backup probe (`backups`), opening or making the store
 
 ### Knows
 
-`models`, `data_provider`, `runtime_settings`.
+`models`, `given_values`, `data_provider`, `runtime_settings`.
 
 ### Must not own
 
@@ -1282,7 +1297,7 @@ for the owner interface. No run in an owner-only start (rule 9).
 
 ### Knows
 
-`models`, `clock`, `configuration`, `data_provider`, `store`.
+`models`, `clock`, `given_values`, `configuration`, `data_provider`, `store`.
 
 ### Must not own
 
@@ -1342,7 +1357,7 @@ is shown, the ones the submitted form carries when it is confirmed (owner,
 
 ### Knows
 
-`models`, `data_provider`, `clock`, `random_values`, `model_fields`,
+`models`, `data_provider`, `clock`, `random_values`, `given_values`, `model_fields`,
 `configuration`, `store`, `audit_log`, `service_access`, `owner_sessions`, `customers`,
 `projects`, `artifact_pointers`, `agent_sessions`, `migration_import`,
 `backups`.
