@@ -1,0 +1,280 @@
+Module: owner_sessions
+Target path: app/owner_sessions.py
+Target file: owner_sessions.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from datetime import date, datetime
+from decimal import Decimal
+
+from app.clock import monotonic_reading
+from app.configuration import give_owner_credential
+from app.data_provider import CONFIRMATION_VALID_MINUTES, OWNER_SESSION_IDLE_MINUTES, OWNER_SESSION_MAX_HOURS, REFUSAL_STAGE_AUTHENTICATION, SIGN_IN_LOCKOUT_MINUTES, SIGN_IN_REFUSAL_LIMIT, SIGN_IN_WINDOW_MINUTES, TEXT_ENCODING
+from app.model_fields import model_items
+from app.models import ConfirmationInputs, ConfirmationOutcome, ConfirmationTaken, ConfirmedAction, OperationAnswer, OwnerAdmission, OwnerSession, OwnerStep, PendingConfirmation, Refusal, RefusalCode, RefusalFailure, RefusalKind, RefusedAnswer, SignInOutcome, SignedIn, UploadedFile
+from app.random_values import equal_in_constant_time, make_secret_value
+
+CONTRACTS (function signatures — follow exactly):
+def _confirmation_binding_digest(action: ConfirmedAction, target: str | None, version: int | None, inputs: ConfirmationInputs) -> str
+def _refused_sign_ins_since(reading: int) -> int
+def _session_reached_limit(session: OwnerSession, reading: int) -> bool
+def admit_owner_request(admission: OwnerAdmission, step: OwnerStep) -> OperationAnswer
+def drop_uploaded_files() -> None
+def end_expired_sessions() -> int
+def give_session_csrf(session_id: str | None) -> str | None
+def keep_uploaded_file(session_id: str, content: bytes, file_digest: str) -> int
+def read_uploaded_file(session_id: str) -> UploadedFile | None
+def show_confirmation_step(session_id: str, action: ConfirmedAction, target: str | None, shown_version: int | None, inputs: ConfirmationInputs) -> str
+def sign_in_owner(presented_credential: str | None) -> SignInOutcome
+def sign_out_owner(session_id: str) -> None
+def take_confirmation(session_id: str, presented_value: str | None, action: ConfirmedAction, target: str | None, stated_version: int | None, inputs: ConfirmationInputs) -> ConfirmationOutcome
+# OwnerStep
+def run(self, session_id: str) -> OperationAnswer
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def monotonic_reading() -> int
+def give_owner_credential() -> str
+def model_items(value: object) -> tuple[tuple[str, object], ...] | None
+def equal_in_constant_time(presented: bytes, held: bytes) -> bool
+def make_secret_value() -> str
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+CONFIRMATION_VALID_MINUTES: int
+OWNER_SESSION_IDLE_MINUTES: int
+OWNER_SESSION_MAX_HOURS: int
+REFUSAL_STAGE_AUTHENTICATION: int
+SIGN_IN_LOCKOUT_MINUTES: int
+SIGN_IN_REFUSAL_LIMIT: int
+SIGN_IN_WINDOW_MINUTES: int
+TEXT_ENCODING: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _confirmation_binding_digest: (action: ConfirmedAction, target: str | None, version: int | None, inputs: ConfirmationInputs) -> str
+- _refused_sign_ins_since: (reading: int) -> int
+- _session_reached_limit: (session: OwnerSession, reading: int) -> bool
+- admit_owner_request: (admission: OwnerAdmission, step: OwnerStep) -> OperationAnswer
+- drop_uploaded_files: () -> None
+- end_expired_sessions: () -> int
+- give_session_csrf: (session_id: str | None) -> str | None
+- keep_uploaded_file: (session_id: str, content: bytes, file_digest: str) -> int
+- read_uploaded_file: (session_id: str) -> UploadedFile | None
+- show_confirmation_step: (session_id: str, action: ConfirmedAction, target: str | None, shown_version: int | None, inputs: ConfirmationInputs) -> str
+- sign_in_owner: (presented_credential: str | None) -> SignInOutcome
+- sign_out_owner: (session_id: str) -> None
+- take_confirmation: (session_id: str, presented_value: str | None, action: ConfirmedAction, target: str | None, stated_version: int | None, inputs: ConfirmationInputs) -> ConfirmationOutcome
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+- An enum member is read only by a name the models module declares for it;
+  a member or attribute the enum does not have is rejected, read through
+  the class or through a value of the enum. Compare a value with the
+  member itself, never its .name with a text: .name is the first name the
+  models module declares for the value, and a text no member's .name is
+  is rejected.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _confirmation_binding_digest: [DETERMINISM_OR_ORDERING] MUST answer the hexadecimal text of a collision-resistant cryptographic digest of one unambiguous serialisation of the action, then the target, then the version, then every field of inputs in the order its model declares them, lists in the order given and an absent value told apart from an empty one, so that equal arguments always give equal serialisations and so equal digests, and different arguments always different serialisations, two of which share a digest only by a collision of the digest itself, never by the serialisation; walking inputs it MUST take a model's fields, each name with its value in their declared order, and tell a model from any other value only through model_items, and take a tuple's elements in their order.
+- _confirmation_binding_digest: [FORBIDDEN_ACTION] MUST NOT read a model's fields, or tell a model from any other value, with hasattr, getattr, setattr or vars, or through __dict__ or model_dump.
+- _refused_sign_ins_since: [BEHAVIOR] MUST answer how many recorded refused sign-ins have a reading less than the imported SIGN_IN_WINDOW_MINUTES constant, in nanoseconds of the monotonic reading, before reading.
+- _session_reached_limit: [BEHAVIOR] MUST answer true, whether or not the session is signed out, when reading is at or past its signed-in reading plus the imported OWNER_SESSION_MAX_HOURS constant, or when reading is at or past its last-request reading plus the imported OWNER_SESSION_IDLE_MINUTES constant, each duration in nanoseconds of the monotonic reading, and false otherwise.
+- admit_owner_request: [SECURITY_BOUNDARY] MUST at arrival take one monotonic_reading, find the session whose session_id equals admission's through equal_in_constant_time, and refuse with the UNAUTHENTICATED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the NO_OWNER_SESSION member of = models.RefusalKind with an empty path when there is none, it is signed out, or _session_reached_limit answers true at that reading; a session that passes MUST have its last-request reading raised to the arrival's reading unless a later one is already held, before any further check.
+- admit_owner_request: [VALIDATION_ERROR] MUST, for a change, refuse with the NOT_PERMITTED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the CSRF_REFUSED member of = models.RefusalKind with an empty path when admission's csrf_value is not equal, through equal_in_constant_time, to the session's; a sign-out that passes MUST mark the session signed out at once, so a later arrival is refused.
+- admit_owner_request: [ORCHESTRATION] MUST then wait for the turn it drew at arrival: for a request that touches an upload, its ticket of the instance's one import lock, and only once that lock is granted it MUST take its place on the session's lock, a place it did not draw at arrival, and wait for it; for any other change, the place on the session's lock it drew at arrival; a read takes no lock; each lock MUST grant its waiters in the order their turns were drawn; it MUST run step with the session's session_id, answer what step answers and release every lock it took on every path, a raised failure included.
+- admit_owner_request: [ORCHESTRATION] MUST fix the arrival in one hold of the module's session-table lock, taking the monotonic_reading, looking the session up, checking it, raising its last-request reading and, for a request that passed and needs a lock, drawing its turn inside that hold without waiting, a ticket of the import lock for a request that touches an upload and a place on the session's lock for any other change, and MUST release that lock before it waits for any turn; the table lock MUST be taken after the import lock, the sign-in lock and a session's lock wherever a path holds them, and its holder MUST never wait for another lock.
+- admit_owner_request: [TEST_EVIDENCE] With the monotonic reading and the wall clock replaced in the test, a test MUST show: a request a microsecond before the imported OWNER_SESSION_IDLE_MINUTES constant after the session's last request is admitted and one exactly that long after it is refused with the NO_OWNER_SESSION member of = models.RefusalKind; a session with a request at every interval shorter than that limit is refused once the imported OWNER_SESSION_MAX_HOURS constant has passed since its sign-in; a session signed out is refused at its next request within the idle limit; moving the wall clock back or forward by hours changes no session's validity; a suspension longer than the idle limit, counted by the monotonic reading, makes the next request refused; a module started anew holds no session, so that every session of the process before a restart is refused; a change without the session's CSRF value is refused with the CSRF_REFUSED member of = models.RefusalKind before any check of the action is made, so that a correction without it and stating a stale revision is refused for the CSRF value and never as stale.
+- drop_uploaded_files: [BEHAVIOR] MUST remove the uploaded file of every owner session, keeping each session's last upload number, and change nothing else.
+- end_expired_sessions: [ORCHESTRATION] MUST draw a ticket of the instance's import lock and take one monotonic_reading in one hold of the module's session-table lock, without waiting, as an arrival draws its turn, then wait for that ticket and, for each session in the order of their sign-in take its place on that session's lock and end it, with its pending confirmation and uploaded file, when _session_reached_limit answers true at that one reading; it MUST release every lock on every path and answer how many sessions it ended.
+- end_expired_sessions: [ORCHESTRATION] MUST read each session's readings and remove an ended session only under the session-table lock, taken after the import lock and that session's lock and released before the next session's lock is asked for.
+- give_session_csrf: [SECURITY_BOUNDARY] MUST, holding the module's session-table lock, find the session whose session_id equals the given one through equal_in_constant_time and answer its csrf_value while it is held and not signed out, a session that reached a limit but is not yet ended included, and None when session_id is None or no such session is held; it MUST NOT change the session's last-request reading or any session.
+- keep_uploaded_file: [BEHAVIOR] MUST number the upload one more than the session's last upload number, which sign-in leaves at no upload numbered, replace the session's uploaded file, one of the same bytes included, with an UploadedFile of content, file_digest and that number, keep it in the process's memory only, never in the store or on a disk, and answer the number.
+- read_uploaded_file: [RETURN_SHAPE] MUST answer the UploadedFile the session of session_id keeps, or None when it keeps none, and change nothing.
+- show_confirmation_step: [BEHAVIOR] MUST replace the session's pending confirmation with a new PendingConfirmation holding a new value from make_secret_value, the given action with its target and with shown_version as its stated version, the digest _confirmation_binding_digest gives for them and inputs, and the monotonic_reading it was shown at, and MUST answer that value; it MUST never keep inputs themselves.
+- sign_in_owner: [BEHAVIOR] MUST, holding the module's one sign-in lock from its monotonic_reading to its decision, refuse without counting while a lockout holds, that is while the reading is less than the imported SIGN_IN_LOCKOUT_MINUTES constant, in nanoseconds of the monotonic reading, after the refusal that started it; otherwise compare the bytes of presented_credential encoded by the imported TEXT_ENCODING constant with those of the credential give_owner_credential answers at this call, encoded the same way, through equal_in_constant_time, a missing credential counting as wrong.
+- sign_in_owner: [BEHAVIOR] MUST record a wrong credential's refusal at its reading and start a lockout at that refusal when _refused_sign_ins_since then answers the imported SIGN_IN_REFUSAL_LIMIT constant or more, never extending a lockout that holds; a right credential MUST clear every recorded refusal and make a new OwnerSession whose session_id and csrf_value come from make_secret_value, whose signed-in and last-request readings are the reading, not signed out, with no pending confirmation, no uploaded file and no upload numbered yet, leaving every other session open.
+- sign_in_owner: [RETURN_SHAPE] MUST answer SignedIn with the new session's session_id and csrf_value, or one Refusal with the UNAUTHENTICATED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the SIGN_IN_REFUSED member of = models.RefusalKind with an empty path, the same whatever was wrong, never echoing the credential.
+- sign_in_owner: [ORCHESTRATION] MUST add the new session to the module's sessions under the session-table lock, taken while it holds the sign-in lock and released before that one, so that the session check, the pass and give_session_csrf see it whole or not at all.
+- sign_in_owner: [TEST_EVIDENCE] With the monotonic reading replaced in the test, a test MUST show that once refused sign-ins within the imported SIGN_IN_WINDOW_MINUTES constant reach the imported SIGN_IN_REFUSAL_LIMIT constant, the next sign-in with the right credential is refused with the SIGN_IN_REFUSED member of = models.RefusalKind; that a sign-in during that lockout is refused and does not extend it; and that the right credential is accepted once the imported SIGN_IN_LOCKOUT_MINUTES constant has passed after the refusal that started the lockout.
+- sign_out_owner: [BEHAVIOR] MUST end the session of session_id, which admit_owner_request admitted and marked signed out and whose locks it holds, removing it with its pending confirmation and its uploaded file from the module's sessions.
+- sign_out_owner: [ORCHESTRATION] MUST remove the session from the module's sessions under the session-table lock, taken after the locks admit_owner_request holds for it, so that a later lookup finds the session ended and never half removed.
+- take_confirmation: [VALIDATION_ERROR] MUST refuse with the CONFIRMATION_REFUSED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure with an empty path: of the CONFIRMATION_NOT_PENDING member of = models.RefusalKind when the session holds no pending confirmation; of the CONFIRMATION_EXPIRED member of = models.RefusalKind, clearing the pending one whatever value is given, when the monotonic reading is at or past the reading it was shown at plus the imported CONFIRMATION_VALID_MINUTES constant, in nanoseconds of the monotonic reading; of the CONFIRMATION_OTHER_VALUE member of = models.RefusalKind, leaving the pending one as it is, when presented_value is None or not equal to it through equal_in_constant_time.
+- take_confirmation: [BEHAVIOR] MUST, once presented_value equals the pending value, clear the pending confirmation whatever follows, then answer ConfirmationTaken when action, target, stated_version and the digest _confirmation_binding_digest gives for them and inputs all equal the pending ones, and otherwise refuse with the CONFIRMATION_REFUSED member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_AUTHENTICATION constant names and one failure of the CONFIRMATION_BOUND_ELSEWHERE member of = models.RefusalKind with an empty path.
+- take_confirmation: [TEST_EVIDENCE] With the monotonic reading replaced in the test, a test MUST show that a confirmation value taken once, also by a submission refused afterwards, is refused the second time, and that one shown longer ago than the imported CONFIRMATION_VALID_MINUTES constant is refused with the CONFIRMATION_EXPIRED member of = models.RefusalKind.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- RefusalCode: omitted because it is an imported runtime model schema
+- RefusalKind: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not app.models imports.
+Only import runtime model symbols from app.models when they are explicitly listed in IMPORTS.
+- models.RefusalCode: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+- models.RefusalKind: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from app.models. Use the listed enum member names and model fields exactly.
+- ConfirmationInputs discriminated union on field 'input_kind' (exact variants, no others exist): NoConfirmationInputs (input_kind='none'), ErasureInputs (input_kind='erasure'), ImportInputs (input_kind='import'), AuditErasureInputs (input_kind='audit_erasure'); a value of ConfirmationInputs is an instance of one of these variants, never of another model, and ConfirmationInputs itself is not constructed
+- ConfirmationOutcome discriminated union on field 'outcome' (exact variants, no others exist): ConfirmationTaken (outcome='accepted'), Refusal (outcome='refused'); a value of ConfirmationOutcome is an instance of one of these variants, never of another model, and ConfirmationOutcome itself is not constructed
+- ConfirmationTaken fields (exact, no others exist): outcome: Literal['accepted']
+- ConfirmedAction enum members: ARCHIVE_PROJECT='archive_project', CONFIRM_IMPORT='confirm_import', ERASE_AUDIT_ENTRIES='erase_audit_entries', ERASE_PROJECT='erase_project'
+- OperationAnswer discriminated union on field 'answer_kind' (exact variants, no others exist): ValidationAnswer (answer_kind='validation'), ContextAnswer (answer_kind='context'), ProjectCardAnswer (answer_kind='project_card'), ProjectListAnswer (answer_kind='project_list'), ProjectErasedAnswer (answer_kind='project_erased'), RoomsAnswer (answer_kind='rooms'), RoomAnswer (answer_kind='room'), PointersAnswer (answer_kind='pointers'), LatestPointerAnswer (answer_kind='latest_pointer'), PointerAnswer (answer_kind='pointer'), BillingAnswer (answer_kind='billing'), CustomerAnswer (answer_kind='customer'), CustomerListAnswer (answer_kind='customer_list'), SessionAccessAnswer (answer_kind='session_access'), SessionListAnswer (answer_kind='session_list'), SessionEndedAnswer (answer_kind='session_ended'), RequestPendingAnswer (answer_kind='request_pending'), AgentProjectionAnswer (answer_kind='agent_projection'), AuditViewAnswer (answer_kind='audit_view'), AuditErasedAnswer (answer_kind='audit_erased'), ImportUploadAnswer (answer_kind='import_upload'), ImportMappingAnswer (answer_kind='import_mapping'), ImportAcceptedAnswer (answer_kind='import_accepted'), ConfirmationStepAnswer (answer_kind='confirmation_step'), SignedInAnswer (answer_kind='signed_in'), SignedOutAnswer (answer_kind='signed_out'), NewestBackupAnswer (answer_kind='newest_backup'), RefusedAnswer (answer_kind='refused'); a value of OperationAnswer is an instance of one of these variants, never of another model, and OperationAnswer itself is not constructed
+- OwnerAdmission fields (exact, no others exist): csrf_value: str | None, is_change: bool, is_sign_out: bool, session_id: str | None, touches_upload: bool
+- OwnerSession fields (exact, no others exist): csrf_value: str, last_request_reading: int, last_upload_number: int, pending_confirmation: PendingConfirmation | None, session_id: str, signed_in_reading: int, signed_out: bool, uploaded_file: UploadedFile | None
+- OwnerStep operations (exact, no others exist):
+    run(self, session_id: str) -> OperationAnswer
+- PendingConfirmation fields (exact, no others exist): action: ConfirmedAction, confirmation_value: str, inputs_digest: str, shown_reading: int, stated_version: int | None, target: str | None
+- Refusal fields (exact, no others exist): code: RefusalCode, failures: tuple[RefusalFailure, ...], outcome: Literal['refused'], stage: int | None
+- RefusalCode enum members: CONFIRMATION_REFUSED='confirmation_refused', INTERNAL_ERROR='internal_error', INVALID_REQUEST='invalid_request', NOT_FOUND='not_found', NOT_PERMITTED='not_permitted', REFUSED='refused', STALE='stale', UNAUTHENTICATED='unauthenticated'
+- RefusalFailure fields (exact, no others exist): kind: RefusalKind, path: tuple[PathElement, ...]
+- RefusalKind enum members: ACTIVE='active', AGENT_CALL_REFUSED='agent_call_refused', ANONYMISED='anonymised', ANSWER_ABOVE_CLASS='answer_above_class', ARCHIVED='archived', CONFIRMATION_BOUND_ELSEWHERE='confirmation_bound_elsewhere', CONFIRMATION_EXPIRED='confirmation_expired', CONFIRMATION_NOT_PENDING='confirmation_not_pending', CONFIRMATION_OTHER_VALUE='confirmation_other_value', CONFLICT='conflict', CSRF_REFUSED='csrf_refused', CUSTOMER_ENDED='customer_ended', CUSTOMER_ERASED='customer_erased', CUSTOMER_RESTRICTED='customer_restricted', DATE_AFTER_TODAY='date_after_today', DUPLICATE_PICK='duplicate_pick', ERASED='erased', FILE_MALFORMED='file_malformed', FILE_NOT_KEPT='file_not_kept', FILE_TOO_LARGE='file_too_large', FILE_UNREADABLE='file_unreadable', IMPORT_CLOSED='import_closed', MALFORMED_REQUEST_ID='malformed_request_id', MAPPING_NOT_CLEAN='mapping_not_clean', MISSING_VALUE='missing_value', NOT_GRANTED='not_granted', NOT_PENDING='not_pending', NO_OWNER_SESSION='no_owner_session', NO_PICKS='no_picks', NO_VALID_TOKEN='no_valid_token', OUTSIDE_CLOSED_LIST='outside_closed_list', OUTSIDE_FORM='outside_form', OUTSIDE_SERVICE_RIGHTS='outside_service_rights', SIGN_IN_REFUSED='sign_in_refused', STALE_ACCESS_VERSION='stale_access_version', STALE_REVISION='stale_revision', SUPERSEDED='superseded', TRANSACTION_FAILED='transaction_failed', UNKNOWN_ARTIFACT_TYPE='unknown_artifact_type', UNKNOWN_CUSTOMER='unknown_customer', UNKNOWN_POINTER='unknown_pointer', UNKNOWN_PROJECT='unknown_project', UNKNOWN_ROOM='unknown_room', UNKNOWN_SESSION='unknown_session', WITHDRAWN='withdrawn'
+- RefusedAnswer fields (exact, no others exist): answer_kind: Literal['refused'], refusal: Refusal
+- SignInOutcome discriminated union on field 'outcome' (exact variants, no others exist): SignedIn (outcome='accepted'), Refusal (outcome='refused'); a value of SignInOutcome is an instance of one of these variants, never of another model, and SignInOutcome itself is not constructed
+- SignedIn fields (exact, no others exist): csrf_value: str, outcome: Literal['accepted'], session_id: str
+- UploadedFile fields (exact, no others exist): content: bytes, file_digest: str, upload_number: int
+Field-type models reachable from the imports above (read their fields through the owning field; not imported here):
+- AgentProjectionAnswer fields (exact, no others exist): answer_kind: Literal['agent_projection'], view: AgentProjectView, pointers: tuple[PointerView, ...]
+- AuditErasedAnswer fields (exact, no others exist): answer_kind: Literal['audit_erased'], removed: int
+- AuditErasureInputs fields (exact, no others exist): input_kind: Literal['audit_erasure'], erased_before: date
+- AuditViewAnswer fields (exact, no others exist): answer_kind: Literal['audit_view'], entries: tuple[AuditEntry, ...]
+- BillingAnswer fields (exact, no others exist): answer_kind: Literal['billing'], customer_kind: CustomerKind, tax_id: str | None, legal_name: str | None
+- ConfirmationStepAnswer fields (exact, no others exist): answer_kind: Literal['confirmation_step'], action: ConfirmedAction, target: str | None, shown_version: int | None, inputs: ConfirmationInputs, confirmation_value: str
+- ContextAnswer fields (exact, no others exist): answer_kind: Literal['context'], context: ProjectContextView
+- CustomerAnswer fields (exact, no others exist): answer_kind: Literal['customer'], customer: CustomerView, changed: bool | None
+- CustomerListAnswer fields (exact, no others exist): answer_kind: Literal['customer_list'], items: tuple[CustomerListItem, ...]
+- ErasureInputs fields (exact, no others exist): input_kind: Literal['erasure'], erasure: ProjectErasure
+- ImportAcceptedAnswer fields (exact, no others exist): answer_kind: Literal['import_accepted'], file_digest: str, projects: tuple[ImportedProjectResult, ...], customers: tuple[MadeCustomer, ...]
+- ImportInputs fields (exact, no others exist): input_kind: Literal['import'], upload_number: int, file_digest: str, choices: ImportChoices
+- ImportMappingAnswer fields (exact, no others exist): answer_kind: Literal['import_mapping'], file_digest: str, mapping: ImportMapping
+- ImportUploadAnswer fields (exact, no others exist): answer_kind: Literal['import_upload'], file_digest: str, upload_number: int, projects: tuple[ExportProjectSummary, ...]
+- LatestPointerAnswer fields (exact, no others exist): answer_kind: Literal['latest_pointer'], pointer: PointerView | None
+- NewestBackupAnswer fields (exact, no others exist): answer_kind: Literal['newest_backup'], newest: NewestBackup
+- NoConfirmationInputs fields (exact, no others exist): input_kind: Literal['none']
+- PathElement fields (exact, no others exist): name: str | None, position: int | None
+- PointerAnswer fields (exact, no others exist): answer_kind: Literal['pointer'], pointer: PointerView, changed: bool | None
+- PointersAnswer fields (exact, no others exist): answer_kind: Literal['pointers'], pointers: tuple[PointerView, ...]
+- ProjectCardAnswer fields (exact, no others exist): answer_kind: Literal['project_card'], card: ProjectCardView, changed: bool | None
+- ProjectErasedAnswer fields (exact, no others exist): answer_kind: Literal['project_erased'], project_id: str, erasure: ProjectErasure, changed: bool
+- ProjectListAnswer fields (exact, no others exist): answer_kind: Literal['project_list'], items: tuple[ProjectListItem, ...]
+- RequestPendingAnswer fields (exact, no others exist): answer_kind: Literal['request_pending']
+- RoomAnswer fields (exact, no others exist): answer_kind: Literal['room'], room: RoomView, changed: bool
+- RoomsAnswer fields (exact, no others exist): answer_kind: Literal['rooms'], rooms: RoomsView
+- SessionAccessAnswer fields (exact, no others exist): answer_kind: Literal['session_access'], access: SessionAccess, changed: bool | None, project_joined: bool | None
+- SessionEndedAnswer fields (exact, no others exist): answer_kind: Literal['session_ended']
+- SessionListAnswer fields (exact, no others exist): answer_kind: Literal['session_list'], items: tuple[SessionListItem, ...]
+- SignedInAnswer fields (exact, no others exist): answer_kind: Literal['signed_in'], session_id: str, csrf_value: str
+- SignedOutAnswer fields (exact, no others exist): answer_kind: Literal['signed_out']
+- ValidationAnswer fields (exact, no others exist): answer_kind: Literal['validation'], validation: ProjectValidation
+- AgentProjectView discriminated union on field 'view_kind' (exact variants, no others exist): AgentProject (view_kind='agent'), AnonymisedProject (view_kind='anonymised'); a value of AgentProjectView is an instance of one of these variants, never of another model, and AgentProjectView itself is not constructed
+- PointerView fields (exact, no others exist): pointer_id: str, project_id: str, artifact_type: str, version: int, status: PointerStatus, owner_service: ServiceName, uri: str | None, payload_ref: str | None, content_digest: str | None, publisher: PointerPublisher, published_at: datetime, superseded_at: datetime | None, withdrawn_by: ActingPrincipal | None, withdrawn_at: datetime | None
+- AuditEntry fields (exact, no others exist): sequence_number: int, recorded_at: datetime, principal: ActingPrincipal, action: AuditAction, subject: AuditSubject, outcome: AuditOutcome, contract_version: str, release_version: str, confirmation_id: str | None, erased_before: date | None
+- ProjectContextView discriminated union on field 'view_kind' (exact variants, no others exist): ProjectContext (view_kind='context'), AnonymisedProject (view_kind='anonymised'); a value of ProjectContextView is an instance of one of these variants, never of another model, and ProjectContextView itself is not constructed
+- CustomerView discriminated union on field 'view_kind' (exact variants, no others exist): CustomerDetail (view_kind='recorded'), ErasedCustomer (view_kind='erased'); a value of CustomerView is an instance of one of these variants, never of another model, and CustomerView itself is not constructed
+- CustomerListItem discriminated union on field 'view_kind' (exact variants, no others exist): ListedCustomer (view_kind='recorded'), ErasedCustomer (view_kind='erased'); a value of CustomerListItem is an instance of one of these variants, never of another model, and CustomerListItem itself is not constructed
+- ImportedProjectResult fields (exact, no others exist): project_id: str, display_name: str, alias: str | None, status: ProjectStatus
+- MadeCustomer fields (exact, no others exist): v1_value: str, customer_ref: str
+- ImportChoices fields (exact, no others exist): picks: tuple[ImportPick, ...] = (), customers: tuple[ImportCustomerValue, ...] = ()
+- ImportMapping fields (exact, no others exist): projects: tuple[MappedProject, ...], customers: tuple[MappedCustomer, ...], malformed: tuple[MalformedRecord, ...], conflicts: tuple[ConflictingRecord, ...], missing: tuple[MissingMappingValue, ...], form_failures: tuple[MappingFormFailure, ...], clean: bool
+- ExportProjectSummary fields (exact, no others exist): project_id: str, status: str
+- NewestBackup discriminated union on field 'newest' (exact variants, no others exist): NewestBackupFound (newest='found'), NoBackup (newest='none'), BackupsUnlisted (newest='unlisted'); a value of NewestBackup is an instance of one of these variants, never of another model, and NewestBackup itself is not constructed
+- ProjectCardView discriminated union on field 'view_kind' (exact variants, no others exist): ProjectCard (view_kind='card'), AnonymisedProject (view_kind='anonymised'); a value of ProjectCardView is an instance of one of these variants, never of another model, and ProjectCardView itself is not constructed
+- ProjectListItem fields (exact, no others exist): project_id: str, display_name: str, alias: str | None, status: ProjectStatus, customer_ref: str | None, last_changed_at: datetime, archived_on: date | None
+- RoomView fields (exact, no others exist): room_id: str, name: str, added_at: datetime
+- RoomsView discriminated union on field 'view_kind' (exact variants, no others exist): RoomList (view_kind='rooms'), AnonymisedProject (view_kind='anonymised'); a value of RoomsView is an instance of one of these variants, never of another model, and RoomsView itself is not constructed
+- SessionAccess fields (exact, no others exist): session_id: str, granted_project_ids: tuple[str, ...], active_project_id: str | None, request_pending: bool, access_version: int
+- SessionListItem fields (exact, no others exist): registered_at: datetime, access: SessionAccess, request_text: str | None
+- ProjectValidation fields (exact, no others exist): exists: bool, active: bool, reason: ValidationReason | None
+- AgentProject fields (exact, no others exist): view_kind: Literal['agent'], project_id: str, alias: str | None, status: ProjectStatus, rooms: tuple[RoomView, ...]
+- AnonymisedProject fields (exact, no others exist): view_kind: Literal['anonymised'], project_id: str, status: ProjectStatus
+- ActingPrincipal fields (exact, no others exist): principal_kind: PrincipalKind, service: ServiceName | None, session_id: str | None
+- PointerPublisher discriminated union on field 'publisher_kind' (exact variants, no others exist): PrincipalPublisher (publisher_kind='principal'), ImportPublisher (publisher_kind='import'); a value of PointerPublisher is an instance of one of these variants, never of another model, and PointerPublisher itself is not constructed
+- AuditSubject discriminated union on field 'subject_kind' (exact variants, no others exist): ProjectSubject (subject_kind='project'), CustomerSubject (subject_kind='customer'), SessionProjectSubject (subject_kind='session_project'), ImportSubject (subject_kind='import'), NoSubject (subject_kind='none'); a value of AuditSubject is an instance of one of these variants, never of another model, and AuditSubject itself is not constructed
+- ProjectContext fields (exact, no others exist): view_kind: Literal['context'], project_id: str, display_name: str, status: ProjectStatus, address: str, customer_ref: str | None, created_at: datetime, registry_updated_at: datetime
+- CustomerDetail fields (exact, no others exist): view_kind: Literal['recorded'], customer_ref: str, name: str, customer_kind: CustomerKind, phone: str | None, email: str | None, language: CustomerLanguage | None, tax_id: str | None, legal_name: str | None, revision: int, created_at: datetime, last_changed_at: datetime, restricted_at: datetime | None, relationship_ended_on: date | None
+- ErasedCustomer fields (exact, no others exist): view_kind: Literal['erased'], customer_ref: str, erased_at: datetime
+- ListedCustomer fields (exact, no others exist): view_kind: Literal['recorded'], customer_ref: str, name: str, restricted_at: datetime | None, relationship_ended_on: date | None
+- ImportCustomerValue fields (exact, no others exist): v1_value: str, name: str | None, customer_kind: str | None, is_tax_id: bool
+- ImportPick fields (exact, no others exist): project_id: str, display_name: str | None, alias: str | None
+- ConflictingRecord fields (exact, no others exist): record_kind: RecordKind, record_id: str, position: int
+- MalformedRecord fields (exact, no others exist): record_kind: RecordKind, record_id: str | None, position: int, defects: tuple[ImportDefect, ...]
+- MappedCustomer fields (exact, no others exist): v1_value: str, name: str | None, customer_kind: str | None, is_tax_id: bool, project_ids: tuple[str, ...]
+- MappedProject fields (exact, no others exist): project_id: str, display_name: str | None, alias: str | None, rooms: tuple[RoomView, ...], pointers: tuple[MappedPointer, ...]
+- MappingFormFailure fields (exact, no others exist): subject_kind: MappingSubject, subject: str, field: MappingField, kind: RefusalKind
+- MissingMappingValue fields (exact, no others exist): subject_kind: MappingSubject, subject: str, field: MappingField
+- BackupsUnlisted fields (exact, no others exist): newest: Literal['unlisted']
+- NewestBackupFound fields (exact, no others exist): newest: Literal['found'], made_at: datetime
+- NoBackup fields (exact, no others exist): newest: Literal['none']
+- ProjectCard fields (exact, no others exist): view_kind: Literal['card'], project_id: str, display_name: str, alias: str | None, status: ProjectStatus, customer_ref: str | None, object_facts: Object, revision: int, created_at: datetime, last_changed_at: datetime, archived_on: date | None, rooms: tuple[RoomView, ...]
+- RoomList fields (exact, no others exist): view_kind: Literal['rooms'], rooms: tuple[RoomView, ...]
+- ImportPublisher fields (exact, no others exist): publisher_kind: Literal['import'], file_digest: str
+- PrincipalPublisher fields (exact, no others exist): publisher_kind: Literal['principal'], principal: ActingPrincipal
+- CustomerSubject fields (exact, no others exist): subject_kind: Literal['customer'], customer_ref: str
+- ImportSubject fields (exact, no others exist): subject_kind: Literal['import'], file_digest: str
+- NoSubject fields (exact, no others exist): subject_kind: Literal['none']
+- ProjectSubject fields (exact, no others exist): subject_kind: Literal['project'], project_id: str
+- SessionProjectSubject fields (exact, no others exist): subject_kind: Literal['session_project'], session_id: str, project_id: str
+- MappedPointer fields (exact, no others exist): pointer_id: str, artifact_type: str, version: int, status: PointerStatus, owner_service: ServiceName, uri: str | None, payload_ref: str | None, content_digest: str | None, published_at: datetime, superseded_at: datetime | None
+- Object fields (exact, no others exist): address: str, object_kind: ObjectKind | None, floor_area_m2: Decimal | None, rooms_count: int | None, floor: int | None
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_confirmation_binding_digest, _refused_sign_ins_since, _session_reached_limit, admit_owner_request, drop_uploaded_files, end_expired_sessions, give_session_csrf, keep_uploaded_file, read_uploaded_file, show_confirmation_step, sign_in_owner, sign_out_owner, take_confirmation
+
+MODELS CONTEXT:
+Runtime models live in app.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete owner_sessions.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in app.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and app.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

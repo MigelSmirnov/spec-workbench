@@ -1,0 +1,168 @@
+Module: instance_lifecycle
+Target path: app/instance_lifecycle.py
+Target file: instance_lifecycle.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from app.backups import probe_backup_location, run_daily_backup_if_due
+from app.clock import monotonic_reading
+from app.configuration import load_configuration
+from app.data_provider import BACKUP_LOOK_SECONDS, LISTENER_CLOSE_DRAIN_MAX_BYTES, LISTENER_CLOSE_DRAIN_SECONDS, LISTENER_READ_TIMEOUT_SECONDS, SESSION_PASS_SECONDS, TEXT_ENCODING, TEXT_REPLACEMENT_CHARACTER
+from app.models import ByteStream, ConfigurationLoad, DiscardResult, HeaderField, HttpRequest, HttpResponse, LoadedConfiguration, ProbeOutcome, StoreOpening
+from app.owner_interface import serve_owner_request
+from app.owner_sessions import end_expired_sessions
+from app.service_api import serve_service_request
+from app.store import RegistryStore, discard_new_store, open_store
+
+CONTRACTS (function signatures — follow exactly):
+def _start_passes(configuration: LoadedConfiguration, registry_store: RegistryStore) -> None
+def _stop_start(diagnostic: str) -> int
+def start_instance() -> int
+# ByteStream
+def read(self, size: int) -> bytes
+# RegistryStore
+def __init__(self, store_path: str) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def probe_backup_location(backup_dir: str) -> ProbeOutcome
+def run_daily_backup_if_due(backup_dir: str, registry_store: RegistryStore) -> None
+def monotonic_reading() -> int
+def load_configuration() -> ConfigurationLoad
+def serve_owner_request(request: HttpRequest, body: ByteStream) -> HttpResponse
+def end_expired_sessions() -> int
+def serve_service_request(request: HttpRequest, body: bytes) -> HttpResponse
+def discard_new_store(registry_store: RegistryStore) -> DiscardResult
+def open_store(registry_store: RegistryStore) -> StoreOpening
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+BACKUP_LOOK_SECONDS: int
+LISTENER_CLOSE_DRAIN_MAX_BYTES: int
+LISTENER_CLOSE_DRAIN_SECONDS: int
+LISTENER_READ_TIMEOUT_SECONDS: int
+SESSION_PASS_SECONDS: int
+TEXT_ENCODING: str
+TEXT_REPLACEMENT_CHARACTER: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _start_passes: (configuration: LoadedConfiguration, registry_store: RegistryStore) -> None
+- _stop_start: (diagnostic: str) -> int
+- start_instance: () -> int
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+- An enum member is read only by a name the models module declares for it;
+  a member or attribute the enum does not have is rejected, read through
+  the class or through a value of the enum. Compare a value with the
+  member itself, never its .name with a text: .name is the first name the
+  models module declares for the value, and a text no member's .name is
+  is rejected.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _start_passes: [ORCHESTRATION] MUST take one monotonic_reading as the passes' origin and start two passes, each on a thread of its own and neither waiting for the other: end_expired_sessions at the interval of the imported SESSION_PASS_SECONDS constant and, only when the service_listen of configuration is not None, run_daily_backup_if_due with its backup_dir and registry_store at the interval of the imported BACKUP_LOOK_SECONDS constant; an owner-only start MUST start the session pass alone and make no backup run; it MUST return once the passes' threads are started.
+- _start_passes: [DETERMINISM_OR_ORDERING] A pass's deadlines MUST be its origin plus a whole positive number of its intervals, in nanoseconds of monotonic_reading, the first one interval after the origin; each time a call returns the pass MUST take one monotonic_reading and wait for the first deadline at or after it, and when that wait ends, on time or late after a suspension, MUST make exactly one call whatever deadlines the wait passed, never making up a passed deadline and never calling while its previous call runs.
+- _stop_start: [BEHAVIOR] MUST write diagnostic unchanged, followed by one line end, on the process's standard error, nothing else and no value added to it, a diagnostic being one line naming no value as every step that answers one makes it, and MUST answer a non-zero exit status for the process.
+- start_instance: [ORCHESTRATION] MUST start in this order, going no further at the first step whose answer is its stopped variant, told by the answer's result field: load_configuration; probe_backup_location with the backup_dir of the configuration it answered; open_store with a RegistryStore made from its store_path; then the listeners. A stopped answer of any step MUST end the start through _stop_start with its diagnostic unchanged, and nothing MUST be served before every step passed.
+- start_instance: [BEHAVIOR] MUST open the owner interface's listener at the loaded configuration's owner_listen first and then, only when its service_listen is not None, the service API's listener at service_listen, each a listening TCP socket of its host's address family, bound exclusively so that no other socket shares its address and port, by setting no option that reuses an address or a port, an IPv6 listener accepting IPv6 connections alone, by the socket module's IPv6-only option, every option Linux's and named directly, never probed for, since Registry runs on Linux alone (A20), bound and listening but accepting no connection until every listener of this start is open; an owner-only start, whose service_listen is None, MUST open the owner interface's listener alone.
+- start_instance: [VALIDATION_ERROR] When a listener cannot be opened it MUST close every listener already opened, a close that fails being neither retried nor named, then, only when open_store answered an opened store whose made_new is true, call discard_new_store with the RegistryStore, and MUST end through _stop_start with one diagnostic that names the surface that could not be opened, never its address, and, when the DiscardResult's removed is false, says that the new store was left and, when its failure is not None, the step of = models.DiscardStep and the kind of = models.DiscardFailureKind that failure names; a store this start did not make new MUST be left as it is.
+- start_instance: [ORCHESTRATION] Once every listener is open it MUST accept connections on each and serve every connection on a thread of its own, so that a request waiting for a lock holds no other: a request on the service API's listener MUST be read into an HttpRequest, every field of = models.HttpRequest taken from its request line and header fields, each header field's value its bytes decoded by the imported TEXT_ENCODING constant with every byte that is not part of a valid sequence replaced by the imported TEXT_REPLACEMENT_CHARACTER constant, a request line or header block it cannot read ending the connection without an answer, and handed to serve_service_request with its body read whole as bytes, an empty body when it declares none; a request on the owner interface's listener MUST be read into an HttpRequest the same way and handed to serve_owner_request with the connection's body stream unread, a stream that ends at the request's declared length or, for a body framed in chunks, gives the decoded bytes as they are read; the HttpResponse either answers MUST be written back with its status, header fields and body unchanged.
+- start_instance: [BEHAVIOR] After writing the answer to an owner interface request that carried a body, and to any request whose body was not read to its framed end, it MUST serve no further request on that connection and close it in stages: shut the socket's writing side, then read and drop into nothing what the client still sends until the client closes, the imported LISTENER_CLOSE_DRAIN_SECONDS constant of seconds has passed since the shutdown, or the imported LISTENER_CLOSE_DRAIN_MAX_BYTES constant of bytes has been dropped, whichever comes first, and only then close the socket; the time since the shutdown MUST be measured by monotonic_reading, one reading taken at the shutdown and one before each read, and each read MUST wait at most the time then left as the socket's timeout, the drain ending when no time is left or a read waits it out, never with another clock of the host; it MUST NOT close a socket with unread bytes at once.
+- start_instance: [ORCHESTRATION] Once serving began it MUST call _start_passes once with the LoadedConfiguration load_configuration answered and the RegistryStore it opened, naming _start_passes through the module's own name at the moment of the call, and MUST start no pass in any other way.
+- start_instance: [BEHAVIOR] Every connection's socket MUST wait at most the imported LISTENER_READ_TIMEOUT_SECONDS constant of seconds for the next bytes of a request — its request line, its header fields or its body, an owner interface upload's included — measured as the socket's own timeout; a wait that reaches it MUST end the request's body stream with a failure, which serve_owner_request sees as any failure of that stream, or, before the request was read whole, end the connection without an answer, and the connection MUST then be closed as a request whose body was not read to its framed end.
+- start_instance: [RETURN_SHAPE] MUST answer what _stop_start answers for a stopped start, and otherwise keep the process serving and its passes running until the host ends it.
+- start_instance: [TEST_EVIDENCE] A test MUST show that a start for which a check made before the listeners answers its stopped variant opens no listener and serves no request: a configuration item load_configuration refuses, a backup location probe_backup_location cannot write, an existing store open_store finds failing its integrity check or of another version, and a new store it cannot make; and that a start whose service API listener cannot be opened after the owner interface's was opened closes the owner interface's listener and serves no request on it, and a start whose listener cannot be opened serves nothing and, over a store it made new, removes that store or leaves it an empty store of the release's version, while over an existing store it leaves that store's records as they were; so that Registry serves only after every start check passed.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- DiscardFailureKind: omitted because it is an imported runtime model schema
+- DiscardStep: omitted because it is an imported runtime model schema
+- HttpRequest: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not app.models imports.
+Only import runtime model symbols from app.models when they are explicitly listed in IMPORTS.
+- models.DiscardFailureKind: runtime model schema omitted from non-model prompt; not exported from app.models by IMPORTS.
+- models.DiscardStep: runtime model schema omitted from non-model prompt; not exported from app.models by IMPORTS.
+- models.HttpRequest: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from app.models. Use the listed enum member names and model fields exactly.
+- ByteStream operations (exact, no others exist):
+    read(self, size: int) -> bytes
+- ConfigurationLoad discriminated union on field 'result' (exact variants, no others exist): LoadedConfiguration (result='loaded'), StartDiagnostic (result='stopped'); a value of ConfigurationLoad is an instance of one of these variants, never of another model, and ConfigurationLoad itself is not constructed
+- DiscardResult fields (exact, no others exist): failure: DiscardFailure | None, removed: bool
+- HeaderField fields (exact, no others exist): name: str, value: str
+- HttpRequest fields (exact, no others exist): headers: tuple[HeaderField, ...], method: str, path: str, query: str
+- HttpResponse fields (exact, no others exist): body: bytes, headers: tuple[HeaderField, ...], status: int
+- LoadedConfiguration fields (exact, no others exist): backup_dir: str, owner_listen: ListenAddress, result: Literal['loaded'], service_listen: ListenAddress | None, store_path: str
+- ProbeOutcome discriminated union on field 'result' (exact variants, no others exist): ProbePassed (result='probed'), StartDiagnostic (result='stopped'); a value of ProbeOutcome is an instance of one of these variants, never of another model, and ProbeOutcome itself is not constructed
+- StoreOpening discriminated union on field 'result' (exact variants, no others exist): OpenedStore (result='opened'), StartDiagnostic (result='stopped'); a value of StoreOpening is an instance of one of these variants, never of another model, and StoreOpening itself is not constructed
+Field-type models reachable from the imports above (read their fields through the owning field; not imported here):
+- DiscardFailure fields (exact, no others exist): step: DiscardStep, failure: DiscardFailureKind
+- ListenAddress fields (exact, no others exist): host: str, port: int
+- OpenedStore fields (exact, no others exist): result: Literal['opened'], made_new: bool
+- ProbePassed fields (exact, no others exist): result: Literal['probed']
+- StartDiagnostic fields (exact, no others exist): result: Literal['stopped'], diagnostic: str
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_start_passes, _stop_start, start_instance
+
+MODELS CONTEXT:
+Runtime models live in app.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete instance_lifecycle.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in app.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and app.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
