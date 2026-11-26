@@ -703,6 +703,30 @@ hidden as pseudocode in a note. Owner, 2026-11-26: keep the substance of the
 rounds for the changed texts, State 8 assembly, the import table's
 third-party lines, and a review of the `model_fields` packet.
 
+## 2026-11-26: one contract opens a file without following a link (`_open_without_link`)
+
+State 7's question round 01 found that three `backups` notes —
+`probe_backup_location`, `_run_backup` and `_read_backup_record` — prescribed
+the means as prose: "Linux's no-follow open flag of the os module, named
+directly and never probed for" (backups T8, SPEC_STANDARD §2). That prose
+was the repair of 2026-11-25 ("The no-follow flag was probed with
+`hasattr`"). Its substance stays; its place moves, as for the model walk
+above (owner, 2026-11-26).
+
+- `backups` gains one internal contract,
+  `_open_without_link(path: str, create: bool) -> int`: it opens a path for
+  reading, or creates a new regular file exclusively, and a symbolic link at
+  the path makes the open fail rather than be followed. Its
+  `[FORBIDDEN_ACTION]` note forbids testing whether the platform offers such
+  an open and falling back to one that follows links (A20 rule 6: Linux
+  alone).
+- The three callers open their files through `_open_without_link`; the
+  flag is no longer described in their notes.
+
+Only `backups` changed: no State 3 to 5 text, no public operation, no import
+of another module (the new scope uses nothing; the three callers' scopes
+were re-read and re-hashed).
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
