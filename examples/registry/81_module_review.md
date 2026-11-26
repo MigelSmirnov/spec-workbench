@@ -551,6 +551,29 @@ On the deployed app of `e83d653b`, with the fixture complete (Factory
 
 Re-hashed: models, backups, operations, service_api, owner_interface.
 
+## 2026-11-26: the CSRF field is read, from run 20261126_091939
+
+Route B on spec 063010fd (Factory `agent/registry@3e7d4f1d`) blocked 98 of
+114 checks: every owner POST was refused at stage 1 as `csrf_refused`. The
+generated `_read_owner_request` read a form only by the rows of
+`OWNER_FORM_FIELDS` and left `csrf_value` None. The prompt allowed it: the
+FIELD_ASSIGNMENT note named the CSRF field by `OWNER_CSRF_FIELD`, but the
+SCHEMA_CONSTRAINT note said the reader names no field "in any other way" and
+the VALIDATION_ERROR note said a field no row names "MUST be left unread" —
+and the CSRF field is in no row by the decision of 2026-11-25 above ("The
+target and the CSRF value keep their own constants"). `_render_owner_page`
+already wrote it as the exception ("but the target and the CSRF value").
+
+- State 7: the three notes of `_read_owner_request` now except the field
+  `OWNER_CSRF_FIELD` names, and the reader reads it from the query or the
+  body as it reads the rows' fields. State 6 prose (`60_contracts.md`) says
+  the same; State 5 already did. A13 and the models are unchanged.
+- Imports: the scope's candidates re-read, none new; basis renewed.
+
+`owner_interface` re-read on its new slice: one reading of the CSRF value
+remains, no note lets it stay None when the form carries it, A13 rule 5's
+refusal is still where it was. PASS. Re-hashed: owner_interface.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
