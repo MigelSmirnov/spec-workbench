@@ -624,6 +624,34 @@ rule to the table.
 refuses a gap inside a tuple's positions; the renderer writes tuples by the
 same path rule. PASS. Re-hashed: owner_interface.
 
+## 2026-11-26: ImportChoices' tuples default to the empty tuple, from run 20261126_153637
+
+The fourth sample of `owner_interface` in a row (`4f28456f`, Route B on
+30b90f96) failed the nested tuple again: its helper marked an existing empty
+node but never created `import_choices.customers` when an import form sends
+`picks` only, and `OwnerValues.model_validate` refused the form (7 of 114
+checks). Samples 3 and 4 left the tuple out; `ImportChoices` declared both
+tuples required. State 5 already decides that picks may be empty and that a
+Customer value not yet given is no refusal. Owner, 2026-11-26: option 1.
+
+- State 6: `ImportChoices.picks` and `.customers` are
+  `tuple[…, ...] = ()` (SPEC_STANDARD §5, a default in the type; the
+  models emitter writes it). Projected into `global_spec.json`.
+- State 7: the SCHEMA_CONSTRAINT note of `_read_owner_request` lets a tuple
+  with no position reach `model_validate` as `()` or not at all, never as
+  None or a mapping (samples 1 and 2 passed `{}`, which the default does not
+  cure and pydantic still refuses).
+- Imports: `ImportChoices`, now named by the note, rejected for the reader
+  (it neither constructs nor inspects it).
+
+Re-read: `models` (the emitted class holds both defaults; `{'picks': [...]}`
+validates with `customers=()`, `customers={}` is still refused);
+`migration_import` (it checks picks and Customer values; empty is valid by
+State 5, `no_picks` still refuses an import of nothing); `operations` (it
+hands `import_choices` on, a None still refused as a missing value);
+`owner_interface` (the new clause). PASS. Re-hashed: models,
+migration_import, operations, owner_interface.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
