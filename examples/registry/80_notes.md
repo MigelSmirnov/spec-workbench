@@ -1,3 +1,5 @@
+# State 7 — Registry notes
+
 ## random_values
 
 mint_identity: [BEHAVIOR] MUST return the canonical text of a new random UUID on every call, its randomness taken only from the operating system's random source, never from a seeded pseudo-random generator, the clock, a counter or any input; whether the identity is free is left to the writing module, which checks it.
