@@ -429,3 +429,47 @@ def test_admission_blocks_a_case_with_no_round_and_skips_an_explicit_spec(tmp_pa
     check = _question_rounds_check(case, tmp_path)
     assert check.status == CHECK_BLOCK and "no question round yet" in check.summary
     assert _question_rounds_check(None, tmp_path).status == CHECK_NOT_APPLICABLE
+
+
+# A document a state holds without the heading that names it (registry, 2026-11-16 to 11-26)
+
+UNNAMED_NOTES = "## random_values\n\nmint_identity: [BEHAVIOR] MUST return a new identity.\n"
+
+
+def test_notes_without_a_state_heading_stop_the_chain_instead_of_being_skipped(tmp_path, monkeypatch):
+    case = _closed_as_one_text(tmp_path)
+    monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
+    monkeypatch.setattr(design_authoring_next, "_post_state5_step", _assembly_step)
+    assert design_authoring_next.next_step(case)["phase"] == "state8_assembly"
+    _write(case / documents.NOTES_SOURCE, UNNAMED_NOTES)
+    report = design_authoring_next.next_step(case)
+    assert report["phase"] == "state7_notes" and report["blocked"] is True
+    assert "first heading does not name it" in report["reason"]
+    assert report["summary"]["unnamed_document"] == documents.NOTES_SOURCE
+
+
+def test_admission_blocks_unnamed_notes_and_names_the_heading_to_give(tmp_path):
+    case = _closed_as_one_text(tmp_path)
+    assert _question_rounds_check(case, tmp_path).status == CHECK_PASS
+    _write(case / documents.NOTES_SOURCE, UNNAMED_NOTES)
+    check = _question_rounds_check(case, tmp_path)
+    assert check.status == CHECK_BLOCK and check.evidence["open"] == ["state7"]
+    assert "'# State 7 — <title>'" in check.summary
+    assert check.evidence["states"]["state7"]["unnamed_document"] == documents.NOTES_SOURCE
+
+
+def test_named_notes_are_a_state_7_document_and_unnamed_ones_are_refused_by_name(tmp_path):
+    case = tmp_path / "demo"
+    _write(case / documents.NOTES_SOURCE, UNNAMED_NOTES)
+    assert documents.unnamed_state_document(case, 7) == case / documents.NOTES_SOURCE
+    assert documents.unnamed_state_document(case, 3) is None
+    with pytest.raises(service.QuestionRoundError, match="first heading does not name it"):
+        service.state_texts(case, 7)
+    _write(case / documents.NOTES_SOURCE, "# State 7 — Demo notes\n\n" + UNNAMED_NOTES)
+    assert documents.unnamed_state_document(case, 7) is None
+    assert [state for state, _ in documents.design_documents(case, 7)] == [7]
+
+
+def test_the_notes_source_is_the_one_propagation_reads():
+    from notes_workbench import propagation
+    assert documents.NOTES_SOURCE == propagation.DEFAULT_SOURCE
