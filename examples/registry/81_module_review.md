@@ -522,6 +522,35 @@ make it a structure:
 
 `owner_interface` was re-hashed. The State 1, 3 and 5 rounds follow.
 
+## 2026-11-26: the six findings left once the fixture was complete
+
+On the deployed app of `e83d653b`, with the fixture complete (Factory
+`aff05084`), 147 tests passed and 6 failed:
+
+- **a09, service refusal order.** An owner action's name sent as a service
+  operation, with inputs the service wire format does not declare, was
+  refused `invalid_request` at stage (4). `_read_service_request` answered
+  None for the whole body, so the operation was lost before the rights
+  check. State 5 orders stage (1) first. Now `ServiceRequest.inputs` may be
+  none: a readable envelope with unreadable inputs keeps its operation,
+  and `perform_service_operation` refuses the inputs only after the token
+  and the rights (State 6 model and wire-format paragraph; the reader's
+  SCHEMA_CONSTRAINT and VALIDATION_ERROR notes; the operation's
+  SECURITY_BOUNDARY note).
+- **a13, the session on the page.** The sign-in page listed the answer's
+  `session_id`. A13 rule 7 carries the identity in the cookie alone. The
+  renderer's SECURITY_BOUNDARY note now forbids writing it into the page.
+- **a15, witness.** Its control called `validate_project_reference` as
+  Cabinet Kernel for a project the agent session did not hold. A10 refuses
+  that, so the kernel's control is now `read_session_access`.
+- **a18 ×3, SQLite's companion files.** The decrypted copy, opened for the
+  check, left `-wal` and `-shm` files in the backup location. The
+  `_run_backup` notes now remove both unencrypted copies together with
+  their companion files, as `discard_new_store` already does for a new
+  store.
+
+Re-hashed: models, backups, operations, service_api, owner_interface.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants

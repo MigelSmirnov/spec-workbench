@@ -180,7 +180,12 @@ readings, so an action's today is `operations`' (`_today_of`).
   2026-11-17): a request is one JSON object, `{"operation": <name>,
   "inputs": {...}}`, the session Kernel names in the header the data
   provider's `SERVICE_AGENT_SESSION_HEADER` names (`Registry-Agent-Session`)
-  beside the bearer token, never among the inputs (R0-53). An answer is one
+  beside the bearer token, never among the inputs (R0-53). A request whose
+  envelope is read but whose `inputs` are not of the wire format still
+  names its operation: `ServiceRequest.inputs` is then none, so the token
+  and the service's rights are checked at stage (1) first and the inputs
+  are refused at stage (4) after them (State 5 `serve_service_request`,
+  "Errors"; owner, 2026-11-26). An answer is one
   JSON object:
   - for a refusal, `{"code", "stage", "failures": [{"kind", "path"}]}`, its
     `stage` JSON `null` for `internal_error`, the one refusal without a

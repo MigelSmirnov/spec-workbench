@@ -328,10 +328,14 @@ def test_no_service_operation_reads_log(semantic_runtime):
             answer = rt.service(name, operation, {}, kernel_session=session)
             assert _refusal(answer) == outside, (name, operation)
             assert "entries" not in answer
-        # Control: validate_project_reference is in every row of A09 rule 2.
-        control = rt.service(
-            name, "validate_project_reference", {"project_id": pid}, kernel_session=session
-        )
+        # Control: a read in the token's own row is answered. For the other
+        # services validate_project_reference (in every row of A09 rule 2);
+        # Cabinet Kernel acts for its agent session, which holds no project
+        # here, so its control is the session's own access (A10).
+        if name == "cabinet_kernel":
+            control = rt.service(name, "read_session_access", {}, kernel_session=session)
+        else:
+            control = rt.service(name, "validate_project_reference", {"project_id": pid})
         assert control["answer_kind"] != "refused", (name, control)
 
     # Only the owner reads it, and no read wrote an entry (A14 rule 4).
