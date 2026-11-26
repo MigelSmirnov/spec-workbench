@@ -1,0 +1,230 @@
+Module: service_api
+Target path: app/service_api.py
+Target file: service_api.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from datetime import date, datetime
+from decimal import Decimal
+
+from pydantic import BaseModel
+
+from app.data_provider import REFUSAL_HTTP_STATUSES, SERVICE_AGENT_SESSION_HEADER, SERVICE_ANSWER_STATUS
+from app.models import ContextAnswer, GivenPointer, HttpRequest, HttpResponse, OperationAnswer, RefusedAnswer, ServiceInputs, ServiceRequest, ValidationAnswer
+from app.operations import perform_service_operation
+
+CONTRACTS (function signatures — follow exactly):
+def _read_service_request(request: HttpRequest, body: bytes) -> ServiceRequest | None
+def _write_service_answer(answer: OperationAnswer) -> HttpResponse
+def serve_service_request(request: HttpRequest, body: bytes) -> HttpResponse
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def perform_service_operation(presented_token: str | None, request: ServiceRequest | None, kernel_session_id: str | None) -> OperationAnswer
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+REFUSAL_HTTP_STATUSES: tuple[RefusalHttpStatus, ...]
+SERVICE_AGENT_SESSION_HEADER: str
+SERVICE_ANSWER_STATUS: int
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _read_service_request: (request: HttpRequest, body: bytes) -> ServiceRequest | None
+- _write_service_answer: (answer: OperationAnswer) -> HttpResponse
+- serve_service_request: (request: HttpRequest, body: bytes) -> HttpResponse
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+- An enum member is read only by a name the models module declares for it;
+  a member or attribute the enum does not have is rejected, read through
+  the class or through a value of the enum. Compare a value with the
+  member itself, never its .name with a text: .name is the first name the
+  models module declares for the value, and a text no member's .name is
+  is rejected.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _read_service_request: [SCHEMA_CONSTRAINT] MUST read body as one strict UTF-8 JSON object whose members are exactly operation, a JSON string, and inputs, and MUST answer a ServiceRequest of that operation text, unchecked against = models.ServiceOperation, and of the ServiceInputs the inputs member gives, or of None as its inputs when only the inputs member cannot be read.
+- _read_service_request: [FIELD_PROJECTION] MUST fill each field of = models.ServiceInputs from the inputs member of the same name, a JSON null or a member left out answered as None, a text field only from a JSON string, and pointer only from a JSON object read the same way into = models.GivenPointer, whose own fields are each a JSON string, a JSON null or left out.
+- _read_service_request: [VALIDATION_ERROR] MUST answer None, and no part of what it decoded, when body is not a single strict UTF-8 JSON object, repeats an envelope member's name, lacks or adds an envelope member, or its operation member is not a JSON string; and when only the inputs member cannot be read, being no JSON object, repeating a member name at any level within it, holding an inputs member or a pointer member that is not a field of its model, or a value of another JSON type than its field's, it MUST answer the ServiceRequest of the operation text with None as its inputs, keeping no part of what it decoded of them; it MUST NOT raise for any body.
+- _write_service_answer: [RETURN_SHAPE] MUST answer, for a RefusedAnswer, an HttpResponse whose status is the status of the row of the refusal's code in the imported REFUSAL_HTTP_STATUSES constant and whose body is one UTF-8 JSON object of exactly code, stage and failures: the code's value, the stage as a JSON number or JSON null when it is None, and each failure in its order as an object of its kind's value and its path, a JSON array of its elements, a name as a JSON string and a position as a JSON number; and for every other variant of = models.OperationAnswer, an HttpResponse whose status is the imported SERVICE_ANSWER_STATUS constant and whose body is one UTF-8 JSON object of the variant's own fields without answer_kind, each nested model written as an object of its fields without view_kind; for a ValidationAnswer and a ContextAnswer the body MUST be the nested view alone, not wrapped in its field.
+- _write_service_answer: [SCHEMA_CONSTRAINT] MUST write every instant as the text Python's datetime isoformat gives for it in UTC with the letter Z in place of its UTC offset, every date as the text Python's date isoformat gives, every Decimal as a JSON string of its stored form, every enumeration member as its value, every None as JSON null and every tuple as a JSON array in its order, walking the answer it MUST tell a model from any other value by isinstance against the pydantic base model class, take its fields by iterating the model, which yields each field's name and value in their declared order, take a tuple's elements in their order and tell an enumeration member by isinstance against the enum module's enumeration class, never with hasattr, getattr, setattr or vars and never through __dict__ or model_dump, and MUST give the response one Content-Type header field naming application/json with the UTF-8 charset.
+- serve_service_request: [SECURITY_BOUNDARY] MUST read the presented token as the credential of the request's one Authorization header field under the Bearer scheme, header names and the scheme's name compared without regard to case, the credential being the rest of the field's value after the one or more spaces that follow the scheme, exactly as given, and MUST hand None as the token when that field is absent, appears more than once, or carries no Bearer credential, so that a request without exactly one token is refused by perform_service_operation and never served from anything else.
+- serve_service_request: [FIELD_PROJECTION] MUST read the agent session Kernel names as the value of the request's one header field whose name, compared without regard to case, is the imported SERVICE_AGENT_SESSION_HEADER constant, and MUST hand None as kernel_session_id when no such field is present or more than one is; it MUST never take the session from the body's inputs.
+- serve_service_request: [ORCHESTRATION] MUST, for every request it is given, whatever its method, path or query, call perform_service_operation once with the presented token, the request _read_service_request answers for the headers and body, and the agent session, and MUST answer the HttpResponse _write_service_answer gives for the OperationAnswer it returns; it MUST check, refuse and decide nothing itself.
+- serve_service_request: [FALLBACK] MUST, when _read_service_request answers None because the body cannot be read as the wire format, still call perform_service_operation with the presented token, None as the request and the agent session, so that the request passes the ordinary stage order and its refusal is written and answered like any other answer; it MUST NOT close the connection, raise, or answer anything of its own instead, and MUST NOT hand on any value partly decoded from that body.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- GivenPointer: omitted because it is an imported runtime model schema
+- OperationAnswer: omitted because it is an imported runtime model schema
+- ServiceInputs: omitted because it is an imported runtime model schema
+- ServiceOperation: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not app.models imports.
+Only import runtime model symbols from app.models when they are explicitly listed in IMPORTS.
+- models.GivenPointer: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+- models.OperationAnswer: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+- models.ServiceInputs: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+- models.ServiceOperation: runtime model schema omitted from non-model prompt; not exported from app.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from app.models. Use the listed enum member names and model fields exactly.
+- ContextAnswer fields (exact, no others exist): answer_kind: Literal['context'], context: ProjectContextView
+- GivenPointer fields (exact, no others exist): artifact_type: str | None, content_digest: str | None, payload_ref: str | None, uri: str | None
+- HttpRequest fields (exact, no others exist): headers: tuple[HeaderField, ...], method: str, path: str, query: str
+- HttpResponse fields (exact, no others exist): body: bytes, headers: tuple[HeaderField, ...], status: int
+- OperationAnswer discriminated union on field 'answer_kind' (exact variants, no others exist): ValidationAnswer (answer_kind='validation'), ContextAnswer (answer_kind='context'), ProjectCardAnswer (answer_kind='project_card'), ProjectListAnswer (answer_kind='project_list'), ProjectErasedAnswer (answer_kind='project_erased'), RoomsAnswer (answer_kind='rooms'), RoomAnswer (answer_kind='room'), PointersAnswer (answer_kind='pointers'), LatestPointerAnswer (answer_kind='latest_pointer'), PointerAnswer (answer_kind='pointer'), BillingAnswer (answer_kind='billing'), CustomerAnswer (answer_kind='customer'), CustomerListAnswer (answer_kind='customer_list'), SessionAccessAnswer (answer_kind='session_access'), SessionListAnswer (answer_kind='session_list'), SessionEndedAnswer (answer_kind='session_ended'), RequestPendingAnswer (answer_kind='request_pending'), AgentProjectionAnswer (answer_kind='agent_projection'), AuditViewAnswer (answer_kind='audit_view'), AuditErasedAnswer (answer_kind='audit_erased'), ImportUploadAnswer (answer_kind='import_upload'), ImportMappingAnswer (answer_kind='import_mapping'), ImportAcceptedAnswer (answer_kind='import_accepted'), ConfirmationStepAnswer (answer_kind='confirmation_step'), SignedInAnswer (answer_kind='signed_in'), SignedOutAnswer (answer_kind='signed_out'), NewestBackupAnswer (answer_kind='newest_backup'), RefusedAnswer (answer_kind='refused'); a value of OperationAnswer is an instance of one of these variants, never of another model, and OperationAnswer itself is not constructed
+- RefusedAnswer fields (exact, no others exist): answer_kind: Literal['refused'], refusal: Refusal
+- ServiceInputs fields (exact, no others exist): artifact_type: str | None, customer_ref: str | None, list_choice: str | None, pointer: GivenPointer | None, pointer_id: str | None, project_id: str | None, request_id: str | None, request_text: str | None, room_name: str | None
+- ServiceRequest fields (exact, no others exist): inputs: ServiceInputs | None, operation: str
+- ValidationAnswer fields (exact, no others exist): answer_kind: Literal['validation'], validation: ProjectValidation
+Field-type models reachable from the imports above (read their fields through the owning field; not imported here):
+- AgentProjectionAnswer fields (exact, no others exist): answer_kind: Literal['agent_projection'], view: AgentProjectView, pointers: tuple[PointerView, ...]
+- AuditErasedAnswer fields (exact, no others exist): answer_kind: Literal['audit_erased'], removed: int
+- AuditViewAnswer fields (exact, no others exist): answer_kind: Literal['audit_view'], entries: tuple[AuditEntry, ...]
+- BillingAnswer fields (exact, no others exist): answer_kind: Literal['billing'], customer_kind: CustomerKind, tax_id: str | None, legal_name: str | None
+- ConfirmationStepAnswer fields (exact, no others exist): answer_kind: Literal['confirmation_step'], action: ConfirmedAction, target: str | None, shown_version: int | None, inputs: ConfirmationInputs, confirmation_value: str
+- CustomerAnswer fields (exact, no others exist): answer_kind: Literal['customer'], customer: CustomerView, changed: bool | None
+- CustomerListAnswer fields (exact, no others exist): answer_kind: Literal['customer_list'], items: tuple[CustomerListItem, ...]
+- HeaderField fields (exact, no others exist): name: str, value: str
+- ImportAcceptedAnswer fields (exact, no others exist): answer_kind: Literal['import_accepted'], file_digest: str, projects: tuple[ImportedProjectResult, ...], customers: tuple[MadeCustomer, ...]
+- ImportMappingAnswer fields (exact, no others exist): answer_kind: Literal['import_mapping'], file_digest: str, mapping: ImportMapping
+- ImportUploadAnswer fields (exact, no others exist): answer_kind: Literal['import_upload'], file_digest: str, upload_number: int, projects: tuple[ExportProjectSummary, ...]
+- LatestPointerAnswer fields (exact, no others exist): answer_kind: Literal['latest_pointer'], pointer: PointerView | None
+- NewestBackupAnswer fields (exact, no others exist): answer_kind: Literal['newest_backup'], newest: NewestBackup
+- PointerAnswer fields (exact, no others exist): answer_kind: Literal['pointer'], pointer: PointerView, changed: bool | None
+- PointersAnswer fields (exact, no others exist): answer_kind: Literal['pointers'], pointers: tuple[PointerView, ...]
+- ProjectCardAnswer fields (exact, no others exist): answer_kind: Literal['project_card'], card: ProjectCardView, changed: bool | None
+- ProjectContextView discriminated union on field 'view_kind' (exact variants, no others exist): ProjectContext (view_kind='context'), AnonymisedProject (view_kind='anonymised'); a value of ProjectContextView is an instance of one of these variants, never of another model, and ProjectContextView itself is not constructed
+- ProjectErasedAnswer fields (exact, no others exist): answer_kind: Literal['project_erased'], project_id: str, erasure: ProjectErasure, changed: bool
+- ProjectListAnswer fields (exact, no others exist): answer_kind: Literal['project_list'], items: tuple[ProjectListItem, ...]
+- ProjectValidation fields (exact, no others exist): exists: bool, active: bool, reason: ValidationReason | None
+- Refusal fields (exact, no others exist): outcome: Literal['refused'], code: RefusalCode, stage: int | None, failures: tuple[RefusalFailure, ...]
+- RequestPendingAnswer fields (exact, no others exist): answer_kind: Literal['request_pending']
+- RoomAnswer fields (exact, no others exist): answer_kind: Literal['room'], room: RoomView, changed: bool
+- RoomsAnswer fields (exact, no others exist): answer_kind: Literal['rooms'], rooms: RoomsView
+- SessionAccessAnswer fields (exact, no others exist): answer_kind: Literal['session_access'], access: SessionAccess, changed: bool | None, project_joined: bool | None
+- SessionEndedAnswer fields (exact, no others exist): answer_kind: Literal['session_ended']
+- SessionListAnswer fields (exact, no others exist): answer_kind: Literal['session_list'], items: tuple[SessionListItem, ...]
+- SignedInAnswer fields (exact, no others exist): answer_kind: Literal['signed_in'], session_id: str, csrf_value: str
+- SignedOutAnswer fields (exact, no others exist): answer_kind: Literal['signed_out']
+- AgentProjectView discriminated union on field 'view_kind' (exact variants, no others exist): AgentProject (view_kind='agent'), AnonymisedProject (view_kind='anonymised'); a value of AgentProjectView is an instance of one of these variants, never of another model, and AgentProjectView itself is not constructed
+- PointerView fields (exact, no others exist): pointer_id: str, project_id: str, artifact_type: str, version: int, status: PointerStatus, owner_service: ServiceName, uri: str | None, payload_ref: str | None, content_digest: str | None, publisher: PointerPublisher, published_at: datetime, superseded_at: datetime | None, withdrawn_by: ActingPrincipal | None, withdrawn_at: datetime | None
+- AuditEntry fields (exact, no others exist): sequence_number: int, recorded_at: datetime, principal: ActingPrincipal, action: AuditAction, subject: AuditSubject, outcome: AuditOutcome, contract_version: str, release_version: str, confirmation_id: str | None, erased_before: date | None
+- ConfirmationInputs discriminated union on field 'input_kind' (exact variants, no others exist): NoConfirmationInputs (input_kind='none'), ErasureInputs (input_kind='erasure'), ImportInputs (input_kind='import'), AuditErasureInputs (input_kind='audit_erasure'); a value of ConfirmationInputs is an instance of one of these variants, never of another model, and ConfirmationInputs itself is not constructed
+- CustomerView discriminated union on field 'view_kind' (exact variants, no others exist): CustomerDetail (view_kind='recorded'), ErasedCustomer (view_kind='erased'); a value of CustomerView is an instance of one of these variants, never of another model, and CustomerView itself is not constructed
+- CustomerListItem discriminated union on field 'view_kind' (exact variants, no others exist): ListedCustomer (view_kind='recorded'), ErasedCustomer (view_kind='erased'); a value of CustomerListItem is an instance of one of these variants, never of another model, and CustomerListItem itself is not constructed
+- ImportedProjectResult fields (exact, no others exist): project_id: str, display_name: str, alias: str | None, status: ProjectStatus
+- MadeCustomer fields (exact, no others exist): v1_value: str, customer_ref: str
+- ImportMapping fields (exact, no others exist): projects: tuple[MappedProject, ...], customers: tuple[MappedCustomer, ...], malformed: tuple[MalformedRecord, ...], conflicts: tuple[ConflictingRecord, ...], missing: tuple[MissingMappingValue, ...], form_failures: tuple[MappingFormFailure, ...], clean: bool
+- ExportProjectSummary fields (exact, no others exist): project_id: str, status: str
+- NewestBackup discriminated union on field 'newest' (exact variants, no others exist): NewestBackupFound (newest='found'), NoBackup (newest='none'), BackupsUnlisted (newest='unlisted'); a value of NewestBackup is an instance of one of these variants, never of another model, and NewestBackup itself is not constructed
+- ProjectCardView discriminated union on field 'view_kind' (exact variants, no others exist): ProjectCard (view_kind='card'), AnonymisedProject (view_kind='anonymised'); a value of ProjectCardView is an instance of one of these variants, never of another model, and ProjectCardView itself is not constructed
+- AnonymisedProject fields (exact, no others exist): view_kind: Literal['anonymised'], project_id: str, status: ProjectStatus
+- ProjectContext fields (exact, no others exist): view_kind: Literal['context'], project_id: str, display_name: str, status: ProjectStatus, address: str, customer_ref: str | None, created_at: datetime, registry_updated_at: datetime
+- ProjectListItem fields (exact, no others exist): project_id: str, display_name: str, alias: str | None, status: ProjectStatus, customer_ref: str | None, last_changed_at: datetime, archived_on: date | None
+- RefusalFailure fields (exact, no others exist): kind: RefusalKind, path: tuple[PathElement, ...]
+- RoomView fields (exact, no others exist): room_id: str, name: str, added_at: datetime
+- RoomsView discriminated union on field 'view_kind' (exact variants, no others exist): RoomList (view_kind='rooms'), AnonymisedProject (view_kind='anonymised'); a value of RoomsView is an instance of one of these variants, never of another model, and RoomsView itself is not constructed
+- SessionAccess fields (exact, no others exist): session_id: str, granted_project_ids: tuple[str, ...], active_project_id: str | None, request_pending: bool, access_version: int
+- SessionListItem fields (exact, no others exist): registered_at: datetime, access: SessionAccess, request_text: str | None
+- AgentProject fields (exact, no others exist): view_kind: Literal['agent'], project_id: str, alias: str | None, status: ProjectStatus, rooms: tuple[RoomView, ...]
+- ActingPrincipal fields (exact, no others exist): principal_kind: PrincipalKind, service: ServiceName | None, session_id: str | None
+- PointerPublisher discriminated union on field 'publisher_kind' (exact variants, no others exist): PrincipalPublisher (publisher_kind='principal'), ImportPublisher (publisher_kind='import'); a value of PointerPublisher is an instance of one of these variants, never of another model, and PointerPublisher itself is not constructed
+- AuditSubject discriminated union on field 'subject_kind' (exact variants, no others exist): ProjectSubject (subject_kind='project'), CustomerSubject (subject_kind='customer'), SessionProjectSubject (subject_kind='session_project'), ImportSubject (subject_kind='import'), NoSubject (subject_kind='none'); a value of AuditSubject is an instance of one of these variants, never of another model, and AuditSubject itself is not constructed
+- AuditErasureInputs fields (exact, no others exist): input_kind: Literal['audit_erasure'], erased_before: date
+- ErasureInputs fields (exact, no others exist): input_kind: Literal['erasure'], erasure: ProjectErasure
+- ImportInputs fields (exact, no others exist): input_kind: Literal['import'], upload_number: int, file_digest: str, choices: ImportChoices
+- NoConfirmationInputs fields (exact, no others exist): input_kind: Literal['none']
+- CustomerDetail fields (exact, no others exist): view_kind: Literal['recorded'], customer_ref: str, name: str, customer_kind: CustomerKind, phone: str | None, email: str | None, language: CustomerLanguage | None, tax_id: str | None, legal_name: str | None, revision: int, created_at: datetime, last_changed_at: datetime, restricted_at: datetime | None, relationship_ended_on: date | None
+- ErasedCustomer fields (exact, no others exist): view_kind: Literal['erased'], customer_ref: str, erased_at: datetime
+- ListedCustomer fields (exact, no others exist): view_kind: Literal['recorded'], customer_ref: str, name: str, restricted_at: datetime | None, relationship_ended_on: date | None
+- ConflictingRecord fields (exact, no others exist): record_kind: RecordKind, record_id: str, position: int
+- MalformedRecord fields (exact, no others exist): record_kind: RecordKind, record_id: str | None, position: int, defects: tuple[ImportDefect, ...]
+- MappedCustomer fields (exact, no others exist): v1_value: str, name: str | None, customer_kind: str | None, is_tax_id: bool, project_ids: tuple[str, ...]
+- MappedProject fields (exact, no others exist): project_id: str, display_name: str | None, alias: str | None, rooms: tuple[RoomView, ...], pointers: tuple[MappedPointer, ...]
+- MappingFormFailure fields (exact, no others exist): subject_kind: MappingSubject, subject: str, field: MappingField, kind: RefusalKind
+- MissingMappingValue fields (exact, no others exist): subject_kind: MappingSubject, subject: str, field: MappingField
+- BackupsUnlisted fields (exact, no others exist): newest: Literal['unlisted']
+- NewestBackupFound fields (exact, no others exist): newest: Literal['found'], made_at: datetime
+- NoBackup fields (exact, no others exist): newest: Literal['none']
+- ProjectCard fields (exact, no others exist): view_kind: Literal['card'], project_id: str, display_name: str, alias: str | None, status: ProjectStatus, customer_ref: str | None, object_facts: Object, revision: int, created_at: datetime, last_changed_at: datetime, archived_on: date | None, rooms: tuple[RoomView, ...]
+- PathElement fields (exact, no others exist): name: str | None, position: int | None
+- RoomList fields (exact, no others exist): view_kind: Literal['rooms'], rooms: tuple[RoomView, ...]
+- ImportPublisher fields (exact, no others exist): publisher_kind: Literal['import'], file_digest: str
+- PrincipalPublisher fields (exact, no others exist): publisher_kind: Literal['principal'], principal: ActingPrincipal
+- CustomerSubject fields (exact, no others exist): subject_kind: Literal['customer'], customer_ref: str
+- ImportSubject fields (exact, no others exist): subject_kind: Literal['import'], file_digest: str
+- NoSubject fields (exact, no others exist): subject_kind: Literal['none']
+- ProjectSubject fields (exact, no others exist): subject_kind: Literal['project'], project_id: str
+- SessionProjectSubject fields (exact, no others exist): subject_kind: Literal['session_project'], session_id: str, project_id: str
+- ImportChoices fields (exact, no others exist): picks: tuple[ImportPick, ...] = (), customers: tuple[ImportCustomerValue, ...] = ()
+- MappedPointer fields (exact, no others exist): pointer_id: str, artifact_type: str, version: int, status: PointerStatus, owner_service: ServiceName, uri: str | None, payload_ref: str | None, content_digest: str | None, published_at: datetime, superseded_at: datetime | None
+- Object fields (exact, no others exist): address: str, object_kind: ObjectKind | None, floor_area_m2: Decimal | None, rooms_count: int | None, floor: int | None
+- ImportCustomerValue fields (exact, no others exist): v1_value: str, name: str | None, customer_kind: str | None, is_tax_id: bool
+- ImportPick fields (exact, no others exist): project_id: str, display_name: str | None, alias: str | None
+Models named by the signatures above (read their fields on the values those signatures give; not imported here unless listed above):
+- RefusalHttpStatus fields (exact, no others exist): code: RefusalCode, status: int
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_read_service_request, _write_service_answer, serve_service_request
+
+MODELS CONTEXT:
+Runtime models live in app.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete service_api.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing.
+Never import from a top-level models module or models.*; runtime models live in app.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and app.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
