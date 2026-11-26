@@ -288,7 +288,8 @@ def _question_gate(sequence: dict[str, Any], project: Path, project_text: str, r
 
     Once the chain is past State 5, every state with a question_scope whose own
     phase the chain has passed, and that has a document, must be closed on the
-    texts it has now (QUESTIONS.md). A late edit — Cabinet Kernel decisions 25
+    texts it has now (QUESTIONS.md). A document the state holds without a
+    heading that names it stops the chain too: unnamed, it would be skipped. A late edit — Cabinet Kernel decisions 25
     and 26 rewrote States 3–7 after their rounds — reopens the units it touched,
     and the chain stops at the earliest such state instead of assembling.
     """
@@ -298,6 +299,14 @@ def _question_gate(sequence: dict[str, Any], project: Path, project_text: str, r
         if not phase.get("question_scope") or order.index(phase["id"]) >= reached_at:
             continue
         state = int(phase["semantic_state"])
+        unnamed = question_documents.unnamed_state_document(project, state)
+        if unnamed is not None:
+            return _result(
+                sequence=sequence, project=project, project_text=project_text,
+                phase=phase["id"], blocked=True,
+                reason=question_documents.unnamed_state_reason(unnamed, state) + ".",
+                summary={"state": state, "unnamed_document": unnamed.name},
+            )
         if not any(found == state for found, _ in question_documents.design_documents(project, state)):
             continue
         status = question_rounds.status(project, state)
