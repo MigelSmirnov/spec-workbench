@@ -115,6 +115,10 @@ not carry:
 | `projects` | `Customer` | rejected: named only to forbid reading it |
 | `projects` | `ALIAS_MAX_CHARACTERS`, `OBJECT_FLOOR_AREA_MIN_EXCLUSIVE`, `OBJECT_ROOMS_MIN` | rejected: named only by a test clause |
 
+The two `PathElement` rows were revised on 2026-11-26 (owner): see
+"2026-11-26: a module that builds a path or a header imports its model"
+below. The other rows stand.
+
 Every decision stands, so the notes no longer name the symbols. The same
 paths, fields and bounds are described in words, and the meaning is
 unchanged. The `create_project` test clause now names its bounds through
@@ -823,6 +827,81 @@ read from it: `_encrypt_backup`'s HKDF-SHA256, a key derivation and no
 digest of this kind, and `_confirmation_binding_digest`, which names no
 algorithm. State 3 lists the constant; State 5's constants table adds it to
 `migration_import` and `backups`; their two scopes read it.
+
+## 2026-11-26: the form path is written and read in one place (`owner_interface` T3)
+
+Owner, 2026-11-26, option (b) of the entry above: `owner_interface` gains
+two internal functions, `_read_form_path` (`(text: str) ->
+tuple[PathElement, ...]`) and `_write_form_path` (`(path:
+tuple[PathElement, ...]) -> str`). `_read_owner_request` reads both a submitted field's name and a
+row's name of `OWNER_FORM_FIELDS` through the reader, and
+`_render_owner_page` writes every field name through the writer, so the
+encoding has one statement in each direction. The full stop had no home
+(`find_value_homes`: none) and becomes the `data_provider` constant
+`OWNER_FORM_PATH_SEPARATOR` (`.`), as in `be3da67e`: State 3's
+`data_provider` list and State 5's constants table only. The position is
+read as ASCII decimal digits in `_read_form_path`'s own note, not through
+`given_values.read_digits_text`: `owner_interface` does not know
+`given_values` in State 3, and this change adds no State 3 text. A path is
+`tuple[PathElement, ...]`, a name or a position in each element, the
+existing model of a refusal's path: the Factory's spec check refuses an
+untagged union such as `tuple[str | int, ...]` (`forbidden_type_form`), and
+no model was added. Behaviour is unchanged: the names on the wire and the
+positions from zero are those of before.
+
+## 2026-11-26: `subject_kind` as a `Literal` cannot be a table row's field (`operations` T9)
+
+Owner, 2026-11-26, option (c) of the entry above: a field `subject_kind`
+of `OwnerAuditAction` typed `Literal['project', 'customer',
+'session_project', 'import', 'none']`. Applied in the working tree, it was
+refused by the Factory's spec check (`deterministic_boundary_ir_invalid`):
+a field of a `data_provider` table's row model must be `bool`, `int`,
+`str`, a declared enumeration or a declared enumeration or None, so the
+emitter cannot write a `Literal` row field. Nothing moved; the prose
+mapping in `OwnerActionStep.run` stands. Left for the owner: option (a), a
+new enumeration of the five kinds (State 1 and State 6 model closure), or
+option (b), a `str` field closed by the five discriminator values.
+
+## 2026-11-26: a module that builds a path or a header imports its model
+
+State 7 round-01 found six contradictions of one class: `projects` T9,
+`artifact_pointers` T1, `migration_import` T7 (`RefusalFailure.path` and
+`GivenFormValue.path` are `tuple[PathElement, ...]`, `PathElement` a model
+of `name` and `position`), `service_api` T2 and `owner_interface` T6
+(`HttpResponse.headers` is `tuple[HeaderField, ...]`), and `operations` T1
+(a note named `SERVICE_RIGHTS`, which `operations` does not import).
+
+The decision of 2026-11-25 ("`PathElement` never named in code", and the
+`65_imports.json` rejections "literal tuples of field names") is revised by
+the owner. It rested on pydantic: a model field typed `tuple[PathElement,
+...]` would coerce a tuple of names or a dict into `PathElement` values,
+so the code need never name the model. The Factory's generation prompt
+says otherwise: its `IMPORTS` are exhaustive, a model is constructed with
+values of its declared field types, and a value of another type is not
+substituted. A generator held to that prompt cannot build a path or a
+header it may not import, so every reviewer of round-01 asked the same
+question. The record bent to the coercion; the prompt does not.
+
+Now every scope whose notes build a `RefusalFailure` or a
+`GivenFormValue` with a non-empty path uses `PathElement` (`creates`):
+`agent_sessions.request_project_access`; the four `artifact_pointers`
+operations; `customers`' six operations and `_customer_input_failures`;
+`migration_import.read_import_mapping` and `_build_mapping`; `projects`'
+ten operations and `_project_input_failures`. The scopes that already
+used it (`agent_sessions`, `audit_log`, `operations`) keep it. Scopes whose
+paths are empty, or which only copy or read a path (`check_value_forms`,
+`_write_service_answer`), keep their rejection, the last now with a reason
+true of the model. `owner_interface`'s `_read_form_path` and
+`_render_owner_page` build form paths of `PathElement` (entry above) and
+use it too. `HeaderField` is
+`creates` in `service_api._write_service_answer` and
+`owner_interface._render_owner_page`, beside
+`instance_lifecycle.start_instance`; `serve_service_request` only reads
+header fields and keeps its rejection. `operations` does not read
+`SERVICE_RIGHTS`: its one note naming it was a test clause, which now
+names `service_may_call`, the function `perform_service_operation`
+calls. No State 3 or State 5 text names these imports: State 3's round is
+given SPEC_STANDARD §7, and the imports are State 6's to record.
 
 ## Known tooling limits met in the review
 

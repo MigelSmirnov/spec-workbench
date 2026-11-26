@@ -238,9 +238,16 @@ readings, so an action's today is `operations`' (`_today_of`).
   body, or of the upload's multipart head. Every other field is a row of the
   data provider's `OWNER_FORM_FIELDS` (`OwnerFormField`). A row's `name` is
   the field's name: its path in the `OwnerRequest` or `OwnerValues` it fills
-  (`carrier`), parts joined by a full stop, with a tuple's position written
-  where the row holds `OWNER_FORM_POSITION_MARK` (`#`), as decimal digits
-  from 0. A row's `reads_as` says how the field's text is read: as the text
+  (`carrier`), parts joined by `OWNER_FORM_PATH_SEPARATOR` (a full stop),
+  with a tuple's position written where the row holds
+  `OWNER_FORM_POSITION_MARK` (`#`), as decimal digits from 0. The text is
+  read in one place and written in one place (owner, 2026-11-26):
+  `owner_interface`'s internal `_read_form_path` reads a name into its path
+  (`tuple[PathElement, ...]`, a name or a position in each element, the
+  model a refusal's path is made of) and `_write_form_path` writes a path
+  as a name; the request's reading and the page's rendering
+  both call them, a row's name read by the same function as a submitted
+  field's. A row's `reads_as` says how the field's text is read: as the text
   itself, an integer's decimal digits, `true` or `false`, or an enumeration
   member's value. A union's fields are the rows of all its variants, and its
   discriminator chooses the variant. A field the form leaves out is none,
