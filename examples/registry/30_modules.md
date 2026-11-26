@@ -257,7 +257,11 @@ with its owner service (M22), whose rows are `data_provider`'s, so a stored
 pointer of a type a later release removed still reads (A22 rule 4) — and the disclosure class
 of every fact ("Disclosure classes by field"),
 the order of the classes (A09 rule 4), and the refusal vocabulary: each refusal
-kind with the stage of A04 rule 6 it belongs to.
+kind with the stage of A04 rule 6 it belongs to. The module is emitted,
+not generated: the Factory's models emitter writes it from the
+specification's `models` and writes its own imports, pydantic's base model
+class among them, so the specification declares no import for it and
+`imports.third_party_by_module` names only generated modules.
 
 ### Knows
 
