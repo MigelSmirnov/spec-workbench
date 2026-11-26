@@ -483,6 +483,7 @@ SERVICE_INSTANT_UTC_MARK
 OWNER_COOKIE_HEADER
 OWNER_SET_COOKIE_HEADER
 OWNER_CONTENT_SECURITY_POLICY_HEADER
+OWNER_CONTENT_SECURITY_POLICY
 OWNER_FORM_MEDIA_TYPE
 UPLOAD_FORM_MEDIA_TYPE
 UPLOAD_BOUNDARY_PARAMETER
@@ -494,10 +495,9 @@ BACKUP_KEY_DIGEST_SEPARATOR
 PROJECT_VALUE_FAILURE_KINDS
 CUSTOMER_ELIGIBILITY_REFUSALS
 AGENT_SESSION_FAILURE_KINDS
-RUNTIME_SETTING_ORDER
 RUNTIME_SETTINGS_REQUIRED
 RUNTIME_SETTINGS_ALL_OR_NONE
-STORE_COMPANION_SUFFIXES
+STORE_COMPANION_STEP_SUFFIXES
 OWNER_CHANGE_ACTIONS
 SERVICE_CHANGE_OPERATIONS
 REQUEST_ID_UNPRINTABLE_CATEGORIES
@@ -734,7 +734,7 @@ checks after them — the backup probe (`backups`), opening or making the store
 
 ### Knows
 
-`models`, `given_values`, `data_provider`, `runtime_settings`.
+`models`, `given_values`, `data_provider`, `runtime_settings`, `model_fields`.
 
 ### Must not own
 
@@ -1476,7 +1476,7 @@ member it renders as the sign-in page;
 `OWNER_SESSION_COOKIE_ATTRIBUTES`, `SERVICE_ANSWER_STATUS` and
 `REFUSAL_HTTP_STATUSES`; `random_values`, for `mint_identity`, a create
 form's request id; `model_fields`, for `model_items`, by which it reads a
-model's fields when it renders a page or builds a request's values; `upload_framing`, for `read_upload_head` and
+model's fields when it renders a page or builds a request's values; `given_values`; `upload_framing`, for `read_upload_head` and
 `MultipartFileBody`; `owner_sessions`, for `give_session_csrf`;
 `operations`, for `perform_owner_operation`.
 
