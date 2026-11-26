@@ -574,6 +574,30 @@ already wrote it as the exception ("but the target and the CSRF value").
 remains, no note lets it stay None when the form carries it, A13 rule 5's
 refusal is still where it was. PASS. Re-hashed: owner_interface.
 
+## 2026-11-26: the file part is read in delimiter-length pieces, from run 20261126_101151
+
+Route B on spec 1cb1c0f4 (Factory `agent/registry@1a6ba1d8`) timed out its
+aggregate check at 900 s on
+`test_a19_data_not_code::test_import_file_size_limit_counted_over_received_bytes`:
+five uploads of about 50 MiB. The reused `upload_framing` draft (`f78d959d`)
+read the file part with `stream.read(1)`, about 53 s per upload before the
+socket's own costs; the earlier draft (`8e010271`) asked for the delimiter's
+length less the bytes it held, and the whole suite took 302 s. The note bound
+only what is held, so both were legal. Owner, 2026-11-26: name the read size.
+
+- State 7: `MultipartFileBody.read` calls `stream.read` only while it holds
+  fewer bytes than the delimiter's length, each time asking for that length
+  less the bytes held. The second clause came out of this re-read: asking
+  for "the length less the bytes held" alone asks for zero bytes when the
+  whole length is held, and the VALIDATION_ERROR note takes empty bytes
+  before the delimiter for a stream that ended. The hold bound and A13 are
+  unchanged; State 6 states only the bound.
+- Imports: the scope re-read, `uses` still empty; basis renewed.
+
+`upload_framing` re-read on its new slice: one read size, no zero-byte read,
+the end of the stream still told from the delimiter. PASS. Re-hashed:
+upload_framing.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
