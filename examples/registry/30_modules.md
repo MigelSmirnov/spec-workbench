@@ -606,15 +606,18 @@ declared order, which `owner_sessions` binds; for A19 rule 1, the fields of
 each model whose values `owner_interface` renders. It serves in the same way
 the walks of two State 3 decisions that no State 2 decision states:
 `service_api`'s wire format (owner, 2026-11-17) and `owner_interface`'s
-reading of a request by the paths of `OWNER_FORM_FIELDS` (owner,
+reading of a request by the paths of the owner form table (owner,
 2026-11-25); it owns no rule of either.
 
 ### Knows
 
-`models`, whose models are the values it reads. It imports pydantic's base
-model class as the third-party import `from pydantic import BaseModel`,
-declared as `imports.third_party_by_module["model_fields"]`; no other module
-imports it.
+No module of the specification. The values it reads are instances of the
+models of `models`, but it names none of them: it tells a model by
+pydantic's base model class alone, which it imports as the third-party
+import `from pydantic import BaseModel`, listed in `imports.third_party`
+and declared as `imports.third_party_by_module["model_fields"]`. No other
+generated module imports it; `models`, which the Factory's models emitter
+writes, defines its classes on that base class by itself.
 
 ### Must not own
 

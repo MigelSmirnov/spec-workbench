@@ -226,7 +226,12 @@ Any value.
 
 For a model, its declared fields as name and value pairs in their declared
 order, a nested model given as a value and not opened; for any other value,
-that it is no model.
+that it is no model. A model's declared fields are the fields its model in
+the specification lists, each by the name written there and in that order:
+a model of `models` derives from no other model (SPEC_STANDARD §12) and
+declares no alias, computed field, private attribute or extra field, so
+there is no inherited field, second name or further member to place. Its
+values are those the model holds for those fields.
 
 ### Observable effect
 
