@@ -652,6 +652,57 @@ hands `import_choices` on, a None still refused as a missing value);
 `owner_interface` (the new clause). PASS. Re-hashed: models,
 migration_import, operations, owner_interface.
 
+## 2026-11-26: one contract reads a model's fields (`model_fields`)
+
+"Every generic model walk states its means (2026-11-25)" wrote the means of a
+walk — `isinstance` against pydantic's base model class, the model's own
+iteration for its fields, never `hasattr`, `getattr`, `setattr`, `vars`,
+`__dict__` or `model_dump` — as prose into the notes of `_answer_class`
+(`operations`), `_confirmation_binding_digest` (`owner_sessions`),
+`_write_service_answer` (`service_api`) and `owner_interface`'s walker
+(`_read_owner_request`, which `_render_owner_page` follows). Question round
+State 7 round-01 flagged that prose as a SPEC_STANDARD §2 violation
+(`owner_sessions`:T2, `operations`:T3, `service_api`:T3): an exact means that
+is part of the contract is declared as a port or a contract of its own, not
+hidden as pseudocode in a note. Owner, 2026-11-26: keep the substance of the
+25.11 decision and move the means into one contract of a new module.
+
+- **State 3.** `model_fields`, on the line of `clock`, `random_values`,
+  `given_values`, `upload_framing`; it knows `models` alone and imports
+  pydantic's base model class. It owns reading a model value's declared
+  fields in declared order and telling a model from any other value, and
+  nothing of what its callers do with them. It consumes A09 (rule 4, the
+  answer's fields at any depth), A13 (rule 6, the confirmation's inputs in
+  declared order) and A19 (rule 1, the values a page renders); it serves
+  `service_api`'s wire format and `owner_interface`'s request reading, State 3
+  decisions of 2026-11-17 and 2026-11-25, owning no rule of them. New fact
+  "Reading a model's fields"; `30_trace.json` agrees.
+- **State 4.** `capability:model_fields.model_items` in the steps that walk:
+  `flow:service_reads_project` step 3 (the class),
+  `flow:archive_and_erase_project` step 1, `flow:import_from_vps` step 3 and
+  `flow:read_and_erase_audit` step 2 (the binding). No flow describes
+  `service_api` writing an answer or `owner_interface` rendering a page field
+  by field, so none names it there.
+- **State 5.** `public_op:model_fields.model_items`, internal-only; callers
+  `operations`, `owner_sessions`, `service_api`, `owner_interface`.
+- **State 6.** `model_items(value: object) -> tuple[tuple[str, object], ...] | None`.
+- **State 7.** `model_items` notes: declared fields in declared order, None
+  for a non-model, a nested model answered as a value, never an undeclared
+  field, and a `[FORBIDDEN_ACTION]` against the probes. The callers' notes
+  now take a model's fields and tell a model only through `model_items` and
+  keep the probe ban as `[FORBIDDEN_ACTION]` — except `_answer_class`, where
+  the ban stays a clause of its `[BEHAVIOR]` note, since the State 7 gate
+  refuses `[BEHAVIOR]` beside `[FORBIDDEN_ACTION]` in one scope
+  (`behavior_prohibition_overlap`). `_write_service_answer` and
+  `_read_owner_request` still tell an enumeration member by `isinstance`
+  against the enum class: that is no model walk and is unchanged.
+- **Imports.** `model_items` is a `calls` use of the five walker scopes;
+  `model_fields` rejects its `models` edge (it names no model).
+
+`PERSONAL_DATA_FIELDS` and A09 rule 4 are unchanged. Pending: question
+rounds for the changed texts, State 8 assembly, the import table's
+third-party lines, and a review of the `model_fields` packet.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants

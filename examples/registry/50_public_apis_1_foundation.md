@@ -14,8 +14,10 @@ recipient asks): `configuration.give_service_tokens` and
 and `clock.today_in_utc` removed —
 the clock is emitted from `system_clock_backend` v6, which owns exactly the
 two readings, and `operations` takes an action's today as the UTC date of
-its instant (owner, 2026-11-16). The operations of `clock`,
-`random_values`, `given_values`, `runtime_settings`, `configuration`,
+its instant (owner, 2026-11-16). Reopened on 2026-11-26: `model_fields`
+reads a model's declared fields for every generic walk (State 3, "Reading a
+model's fields"). The operations of `clock`,
+`random_values`, `model_fields`, `given_values`, `runtime_settings`, `configuration`,
 `store`, `audit_log` and `service_access`. Every one follows `50_public_apis_0_conventions.md`.
 
 ## `public_op:clock.recorded_now`
@@ -199,6 +201,49 @@ CSRF value or a confirmation value goes through it.
 ### Errors
 
 None; values of different lengths answer unequal.
+
+### State impact
+
+Pure; touches no record.
+
+## `public_op:model_fields.model_items`
+
+### Owner
+
+`module:model_fields`. Read a model value's declared fields, each name with
+its value in the order the model declares them, or answer that the value is
+no model (owner, 2026-11-26; State 3, "Reading a model's fields").
+
+### Callers
+
+`module:operations`, `module:owner_sessions`, `module:service_api`, `module:owner_interface`.
+
+### Inputs
+
+Any value.
+
+### Outputs
+
+For a model, its declared fields as name and value pairs in their declared
+order, a nested model given as a value and not opened; for any other value,
+that it is no model.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+Every generic walk of a model takes its fields here and nowhere else:
+`operations` classing an answer at any depth (A09 rule 4), `owner_sessions`
+binding a confirmation to its inputs in their declared order (A13 rule 6),
+`service_api` writing an answer, `owner_interface` rendering a page (A19
+rule 1) and building a request's values. Which field is `personal_data`,
+and how a value is written, digested or rendered, stay its callers'.
+
+### Errors
+
+None; a value that is no model is answered as such.
 
 ### State impact
 

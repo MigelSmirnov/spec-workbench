@@ -26,17 +26,17 @@ which no module owns. The table is the one mapping; `30_trace.json` records the 
 | A06 | `store` | `projects`, `customers`, `artifact_pointers`, `agent_sessions`, `audit_log`, `migration_import` |
 | A07 | `artifact_pointers` | `store` |
 | A08 | `artifact_pointers` | `operations`, `service_access` |
-| A09 | `service_access` | `data_provider`, `operations` |
+| A09 | `service_access` | `data_provider`, `operations`, `model_fields` |
 | A10 | `agent_sessions` | `operations` |
 | A11 | `agent_sessions` | `operations`, `owner_interface` |
 | A12 | `agent_sessions` | `owner_interface` |
-| A13 | `owner_sessions` | `data_provider`, `clock`, `random_values`, `upload_framing`, `owner_interface`, `operations` |
+| A13 | `owner_sessions` | `data_provider`, `clock`, `random_values`, `upload_framing`, `owner_interface`, `operations`, `model_fields` |
 | A14 | `audit_log` | `operations` |
 | A15 | `audit_log` | `store`, `backups` |
 | A16 | `migration_import` | `owner_sessions`, `owner_interface`, `projects`, `customers`, `artifact_pointers` |
 | A17 | `configuration` | `runtime_settings`, `data_provider`, `store`, `backups`, `service_access`, `owner_sessions`, `instance_lifecycle` |
 | A18 | `backups` | `data_provider`, `store`, `clock`, `instance_lifecycle`, `owner_interface` |
-| A19 | `owner_interface` | `data_provider`, `store`, `migration_import` |
+| A19 | `owner_interface` | `data_provider`, `store`, `migration_import`, `model_fields` |
 | A22 | `artifact_pointers` | `data_provider`, `migration_import` |
 
 A20 and A21 have no runtime owner. A20 is a property of the release — which
@@ -68,7 +68,7 @@ which only `store` calls, over that connection (below). The dependency direction
 ```text
 models
 data_provider
-clock, random_values, given_values, upload_framing
+clock, random_values, given_values, upload_framing, model_fields
 runtime_settings
 configuration
 store_persistence
@@ -220,6 +220,25 @@ later line, and modules on one line do not know each other.
   owner credential to `owner_sessions`, the backup key to `backups`.
   `random_values` compares a presented secret with a held one when asked and
   keeps neither.
+- **Reading a model's fields.** Every callable that walks model values
+  generically — `operations` classing an answer at any depth (A09 rule 4),
+  `owner_sessions` binding a confirmation to every field of its inputs in
+  their declared order (A13 rule 6), `service_api` writing an answer in its
+  wire format, `owner_interface` rendering a page's values (A19 rule 1) and
+  building a request's values from its form's paths — takes a model's
+  fields only through `model_fields.model_items`, and tells a model from any
+  other value by its answer alone (owner, 2026-11-26). Each caller keeps its
+  own traversal: what it does with a field's value, how deep it goes, a
+  tuple's elements, an enumeration member. Before, the means — `isinstance`
+  against pydantic's base model, the model's own iteration, never `hasattr`,
+  `getattr`, `setattr`, `vars`, `__dict__` or `model_dump` — stood as prose
+  in four callers' notes (2026-11-25), after Route B rejected a walk by
+  `hasattr(value, "__dict__")`; State 7's question round 01 found that prose
+  against SPEC_STANDARD §2, by which an exact means that is part of the
+  contract is declared as a port or a contract of its own and not hidden as
+  pseudocode in a note. The decision of 2026-11-25 is kept: its means moved
+  into one contract, and which field is `personal_data` is still
+  `data_provider`'s `PERSONAL_DATA_FIELDS` (A09 rule 4).
 
 ## `models`
 
@@ -567,6 +586,51 @@ read_upload_head
 - kind: deep
 - hidden mechanism: the multipart framing of an upload's body
 
+## `model_fields`
+
+### Owns
+
+Reading the declared fields of a model value — each field's name and value,
+in the order the model declares them — and telling a model from any other
+value (owner, 2026-11-26; "Reading a model's fields"). Of the decisions whose
+rules need a walk it owns that reading alone, as a consumer: for A09 rule 4,
+the fields of an answer and of every model nested in it, which `operations`
+classes; for A13 rule 6, the fields of a confirmation's inputs in their
+declared order, which `owner_sessions` binds; for A19 rule 1, the fields of
+each model whose values `owner_interface` renders. It serves in the same way
+the walks of two State 3 decisions that no State 2 decision states:
+`service_api`'s wire format (owner, 2026-11-17) and `owner_interface`'s
+reading of a request by the paths of `OWNER_FORM_FIELDS` (owner,
+2026-11-25); it owns no rule of either.
+
+### Knows
+
+`models`, whose models are the values it reads. It imports pydantic's base
+model class as a third-party import.
+
+### Must not own
+
+Which field is `personal_data` (`data_provider`'s `PERSONAL_DATA_FIELDS`,
+classed by `operations`), how a value is encoded, digested, written or
+rendered, or any traversal policy of its callers: how deep a walk goes, what
+it does with a tuple's elements, an enumeration member or a nested model.
+
+### Hides
+
+pydantic's reflection API: how a model's declared fields and their order are
+found.
+
+### Candidate public capabilities
+
+```text
+model_items
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: the one reading of a model's declared fields that every generic walk shares
+
 ## `runtime_settings`
 
 ### Owns
@@ -888,7 +952,8 @@ session's lock.
 
 ### Knows
 
-`models`, `data_provider`, `clock`, `random_values`, `configuration`.
+`models`, `data_provider`, `clock`, `random_values`, `model_fields`,
+`configuration`.
 
 ### Must not own
 
@@ -1254,8 +1319,8 @@ is shown, the ones the submitted form carries when it is confirmed (owner,
 
 ### Knows
 
-`models`, `data_provider`, `clock`, `random_values`, `configuration`,
-`store`, `audit_log`, `service_access`, `owner_sessions`, `customers`,
+`models`, `data_provider`, `clock`, `random_values`, `model_fields`,
+`configuration`, `store`, `audit_log`, `service_access`, `owner_sessions`, `customers`,
 `projects`, `artifact_pointers`, `agent_sessions`, `migration_import`,
 `backups`.
 
@@ -1292,7 +1357,7 @@ provider's; nothing reachable without a token.
 
 ### Knows
 
-`models`, `data_provider`, `operations`.
+`models`, `data_provider`, `model_fields`, `operations`.
 
 ### Must not own
 
@@ -1371,7 +1436,8 @@ member it renders as the sign-in page;
 `OWNER_CSRF_FIELD`, `OWNER_SESSION_COOKIE_NAME`,
 `OWNER_SESSION_COOKIE_ATTRIBUTES`, `SERVICE_ANSWER_STATUS` and
 `REFUSAL_HTTP_STATUSES`; `random_values`, for `mint_identity`, a create
-form's request id; `upload_framing`, for `read_upload_head` and
+form's request id; `model_fields`, for `model_items`, by which it reads a
+model's fields when it renders a page or builds a request's values; `upload_framing`, for `read_upload_head` and
 `MultipartFileBody`; `owner_sessions`, for `give_session_csrf`;
 `operations`, for `perform_owner_operation`.
 

@@ -38,6 +38,14 @@ readings, so an action's today is `operations`' (`_today_of`).
   reads and `RefusedAnswer`; `service_api` writes it in its wire format and
   `owner_interface` renders it. The ports that run an action's step answer it
   too.
+- **A model's fields are one contract** (owner, 2026-11-26; State 3,
+  "Reading a model's fields"). `model_fields.model_items` takes `object`,
+  since a walk meets every type a model may hold, and answers the declared
+  fields as `(name, value)` pairs in declared order, or `None` for a value
+  that is no model. The type language has no generic (§12), so a field's
+  value is `object` and each caller tells its kind as its own walk needs.
+  `None` is the answer for a non-model, not a refusal: being no model is
+  what a walk asks, and no caller fails on it.
 - **Steps are ports.** The type language has no callable and no generic
   (SPEC_STANDARD §12), so "the step to run, which receives the transaction"
   (State 5) is the `TransactionStep` interface, "the request's step, which

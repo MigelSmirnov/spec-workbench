@@ -446,8 +446,9 @@ confirmation id, written into the entry only.
 1. **Show the step.** `capability:owner_sessions.show_confirmation_step`
    makes a confirmation value with `capability:random_values.make_secret_value`,
    bound to the action, the project, the revision the step shows or that it
-   shows none, and the digest of its inputs — the erasure's choice — and
-   replaces the session's pending one; it is valid 10 minutes by
+   shows none, and the digest of its inputs — the erasure's choice — whose
+   fields `capability:model_fields.model_items` gives in their declared
+   order, and replaces the session's pending one; it is valid 10 minutes by
    `capability:clock.monotonic_reading` (A13 rule 6). No store transaction is
    opened.
 2. **Submit.** `capability:operations.perform_owner_operation` admits the
@@ -678,7 +679,9 @@ pointers.
      the imported `ARTIFACT_TYPE_OWNERS` constant does not
      declare as unknown (A22 rule 5).
 3. **Class.** `module:operations` computes the answer's class as the highest
-   of its facts' and refuses it whole when it is above
+   of its facts', the fields of the answer and of every model nested in it
+   read through `capability:model_fields.model_items`, and refuses it whole
+   when it is above
    `capability:service_access.highest_class_of_service` (A09 rule 4).
 
 ### Outcomes
@@ -968,7 +971,9 @@ minted `customer_ref`.
    `capability:owner_sessions.show_confirmation_step` binds a confirmation
    value to the import and the digest of the kept upload's number and the
    file's digest and the picks, names, aliases and Customer values (A13
-   rule 6), which the step's form carries (owner, 2026-11-24). A mapping or
+   rule 6), which the step's form carries (owner, 2026-11-24); the digest
+   takes the inputs' fields from `capability:model_fields.model_items` in
+   their declared order. A mapping or
    a step asked for while no file is kept is refused (`file_not_kept`) by
    `capability:migration_import.read_import_mapping`, after the closure.
 4. **Confirm.** Under the import lock and the session's lock,
@@ -1150,7 +1155,8 @@ subject.
    number, ascending (A06 rule 6), in `capability:store.read_in_transaction`
    on the store `capability:store.opened_store` gives.
 2. **Show the step.** `capability:owner_sessions.show_confirmation_step`
-   binds a value to the erasure and the digest of the date; the step shows
+   binds a value to the erasure and the digest of the date, the inputs'
+   fields given by `capability:model_fields.model_items`; the step shows
    no revision (A13 rule 6).
 3. **Erase.** The submission is admitted and
    `capability:owner_sessions.take_confirmation` uses the value up;
