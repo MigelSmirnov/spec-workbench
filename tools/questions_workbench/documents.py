@@ -13,6 +13,8 @@ STATE_HEADING = re.compile(r"^#\s+State\s+(\d+)\b", re.IGNORECASE)
 MODULE_STATE = 7
 SPEC_FILE = "global_spec.json"
 FACTORY_ROOT_ENV = "SPEC_WORKBENCH_FACTORY_ROOT"
+# The canonical State 7 source (notes_workbench.propagation.DEFAULT_SOURCE).
+NOTES_SOURCE = "80_notes.md"
 
 
 class QuestionScopeError(ValueError):
@@ -31,6 +33,32 @@ def text_state(text: str) -> int | None:
 def document_state(path: Path) -> int | None:
     """The state a design document belongs to, read from its first heading."""
     return text_state(path.read_text(encoding="utf-8"))
+
+
+def unnamed_state_document(case: Path, state: int) -> Path | None:
+    """A document the case holds for ``state`` whose first heading does not name it.
+
+    A state is found by its document's first heading (``# State N — …``); a
+    document without one is invisible to the rounds, and every check that
+    asks only the states it finds - the chain's question gate, admission
+    FA019 - passed that state over without a word. registry's 80_notes.md
+    began with ``## random_values`` from 2026-11-16 to 2026-11-26: State 7 was
+    never asked while its notes went through ten Route B runs, and its first
+    round found 117 blocking topics, 84 of them in the first accepted spec.
+    Today the one document known by its name is State 7's notes source.
+    """
+    if state != MODULE_STATE:
+        return None
+    path = case / NOTES_SOURCE
+    if path.is_file() and document_state(path) != MODULE_STATE:
+        return path
+    return None
+
+
+def unnamed_state_reason(path: Path, state: int) -> str:
+    return (f"{path.name} holds State {state} but its first heading does not name it "
+            f"('# State {state} — <title>'), so no question round can see it and State {state} "
+            "would pass unasked; give it that heading")
 
 
 def design_documents(case: Path, state: int) -> list[tuple[int, Path]]:

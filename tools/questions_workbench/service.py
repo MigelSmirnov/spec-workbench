@@ -615,6 +615,9 @@ def state_texts(case: Path, state: int, factory_root: Path | None = None) -> Sta
     state has no document, or for State 7, when its prompts cannot be built."""
     docs = documents.design_documents(case, state)
     if not any(found_state == state for found_state, _ in docs):
+        unnamed = documents.unnamed_state_document(case, state)
+        if unnamed is not None:
+            raise QuestionRoundError(f"{case.name}: {documents.unnamed_state_reason(unnamed, state)}")
         raise QuestionRoundError(f"{case.name} has no State {state} document")
     if state != documents.MODULE_STATE:
         texts = [(s, p.name, p.read_text(encoding="utf-8")) for s, p in docs]

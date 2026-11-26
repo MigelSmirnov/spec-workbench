@@ -945,6 +945,14 @@ def _question_rounds_check(case_root: Path | None, factory_root: Path) -> Admiss
         )
     states: dict[str, Any] = {}
     for state in question_documents.question_states():
+        unnamed = question_documents.unnamed_state_document(case_root, state)
+        if unnamed is not None:
+            states[f"state{state}"] = {
+                "closed": False,
+                "reason": question_documents.unnamed_state_reason(unnamed, state),
+                "unnamed_document": unnamed.name,
+            }
+            continue
         if not any(found == state for found, _ in question_documents.design_documents(case_root, state)):
             continue
         status = question_rounds.status(case_root, state, factory_root)
