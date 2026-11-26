@@ -226,22 +226,13 @@ later line, and modules on one line do not know each other.
   their declared order (A13 rule 6), `service_api` writing an answer in its
   wire format, `owner_interface` rendering a page's values (A19 rule 1) and
   building a request's values from its form's paths — takes a model's
-  fields only through `model_fields.model_items`, and tells a model from any
-  other value by its answer alone (owner, 2026-11-26); each of the four
-  imports it, declared as `module_internal[<caller>]["model_fields"]`
-  holding `model_items` alone (State 5, Conventions, "Constants each module
-  imports"). Each caller keeps its
+  fields only from `model_fields`, and tells a model from any other value
+  by `model_fields`' answer alone (owner, 2026-11-26). Each caller keeps its
   own traversal: what it does with a field's value, how deep it goes, a
-  tuple's elements, an enumeration member. Before, the means — `isinstance`
-  against pydantic's base model, the model's own iteration, never `hasattr`,
-  `getattr`, `setattr`, `vars`, `__dict__` or `model_dump` — stood as prose
-  in four callers' notes (2026-11-25), after Route B rejected a walk by
-  `hasattr(value, "__dict__")`; State 7's question round 01 found that prose
-  against SPEC_STANDARD §2, by which an exact means that is part of the
-  contract is declared as a port or a contract of its own and not hidden as
-  pseudocode in a note. The decision of 2026-11-25 is kept: its means moved
-  into one contract, and which field is `personal_data` is still
-  `data_provider`'s `PERSONAL_DATA_FIELDS` (A09 rule 4).
+  tuple's elements, an enumeration member. Which field is `personal_data`
+  stays `data_provider`'s personal data table, classed by `operations` (A09
+  rule 4). Why the reading is one module's, and the repairs that led to it,
+  are recorded in `81_module_review.md` (2026-11-25 and 2026-11-26).
 
 ## `models`
 
@@ -257,11 +248,7 @@ with its owner service (M22), whose rows are `data_provider`'s, so a stored
 pointer of a type a later release removed still reads (A22 rule 4) — and the disclosure class
 of every fact ("Disclosure classes by field"),
 the order of the classes (A09 rule 4), and the refusal vocabulary: each refusal
-kind with the stage of A04 rule 6 it belongs to. The module is emitted,
-not generated: the Factory's models emitter writes it from the
-specification's `models` and writes its own imports, pydantic's base model
-class among them, so the specification declares no import for it and
-`imports.third_party_by_module` names only generated modules.
+kind with the stage of A04 rule 6 it belongs to.
 
 ### Knows
 
@@ -599,10 +586,9 @@ read_upload_head
 
 Reading the declared fields of a model value — each field's name and value,
 in the order the model declares them — and telling a model from any other
-value (owner, 2026-11-26; "Reading a model's fields"). A model is any
-instance of pydantic's base model class, which every model of `models` is;
-`model_items` tells no class of models apart from another, and answers
-`None` for every value that is no such instance. Of the decisions whose
+value (owner, 2026-11-26; "Reading a model's fields"). A model is a value
+of one of the models of `models`, whichever it is; every other value is
+answered as no model. Of the decisions whose
 rules need a walk it owns that reading alone, as a consumer: for A09 rule 4,
 the fields of an answer and of every model nested in it, which `operations`
 classes; for A13 rule 6, the fields of a confirmation's inputs in their
@@ -615,23 +601,19 @@ reading of a request by the paths of the owner form table (owner,
 
 ### Knows
 
-No module of the specification. The values it reads are instances of the
-models of `models`, but it names none of them: it tells a model by
-pydantic's base model class alone, which it imports as the third-party
-import `from pydantic import BaseModel`, listed in `imports.third_party`
-and declared as `imports.third_party_by_module["model_fields"]`.
+Nothing. It reads values of the models of `models` without naming any of
+them.
 
 ### Must not own
 
-Which field is `personal_data` (`data_provider`'s `PERSONAL_DATA_FIELDS`,
+Which field is `personal_data` (`data_provider`'s personal data table,
 classed by `operations`), how a value is encoded, digested, written or
 rendered, or any traversal policy of its callers: how deep a walk goes, what
 it does with a tuple's elements, an enumeration member or a nested model.
 
 ### Hides
 
-pydantic's reflection API: how a model's declared fields and their order are
-found.
+How a model's declared fields and their order are found.
 
 ### Candidate public capabilities
 
