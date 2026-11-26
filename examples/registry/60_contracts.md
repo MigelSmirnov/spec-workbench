@@ -225,7 +225,9 @@ readings, so an action's today is `operations`' (`_today_of`).
   member's value. A union's fields are the rows of all its variants, and its
   discriminator chooses the variant. A field the form leaves out is none,
   and a tuple none of whose positions are given is empty. A field whose name
-  no row names is not read and changes nothing. A form that repeats a name,
+  neither a row nor `OWNER_CSRF_FIELD` names is not read and changes nothing
+  (Route B run 20261126_091939: notes that said "no row" without the CSRF
+  field left the CSRF value unread). A form that repeats a name,
   gives a text the row's `reads_as` cannot read or leaves a gap in a tuple's
   positions cannot be read. The table holds the names the generator would
   otherwise derive from the models, and pages write the same names (Route
