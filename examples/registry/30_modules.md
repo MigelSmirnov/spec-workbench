@@ -615,9 +615,7 @@ No module of the specification. The values it reads are instances of the
 models of `models`, but it names none of them: it tells a model by
 pydantic's base model class alone, which it imports as the third-party
 import `from pydantic import BaseModel`, listed in `imports.third_party`
-and declared as `imports.third_party_by_module["model_fields"]`. No other
-generated module imports it; `models`, which the Factory's models emitter
-writes, defines its classes on that base class by itself.
+and declared as `imports.third_party_by_module["model_fields"]`.
 
 ### Must not own
 
