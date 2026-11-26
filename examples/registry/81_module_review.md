@@ -598,6 +598,32 @@ only what is held, so both were legal. Owner, 2026-11-26: name the read size.
 the end of the stream still told from the delimiter. PASS. Re-hashed:
 upload_framing.
 
+## 2026-11-26: the reader's tuples come from the form table, from runs 27-29
+
+Route B on spec 82396eb8: three samples of `owner_interface` in a row
+(`a935ec97` twice, `803487a7`) failed the same clause of the
+SCHEMA_CONSTRAINT note of `_read_owner_request` — "a tuple none of whose
+positions is given being the empty tuple" — on a nested tuple. An import
+form sends `import_choices` with `picks` only; `customers` came out `{}`,
+`{}`, then left out, and `OwnerValues.model_validate` refused the form, which
+reached the owner as `csrf_refused` (a16 x8, a14 x2) or a 500 (a19).
+`OwnerValues` has no tuple of its own: the form's only tuples are
+`import_choices.picks` and `import_choices.customers`, the parts before the
+position mark in rows of `OWNER_FORM_FIELDS`. The last sample filled empty
+tuples on the top level, where there are none. Owner, 2026-11-26: tie the
+rule to the table.
+
+- State 7: the clause now says the part of a row's name before
+  `OWNER_FORM_POSITION_MARK` names a tuple at whatever depth, and when the
+  model holding it is built because another of its fields is given, the
+  tuple is `()` if none of its positions is given — never None, never left
+  out. A model none of whose fields is given is still not built.
+- Imports: the scope re-read, none new; basis renewed.
+
+`owner_interface` re-read on its new slice: the VALIDATION_ERROR note still
+refuses a gap inside a tuple's positions; the renderer writes tuples by the
+same path rule. PASS. Re-hashed: owner_interface.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
