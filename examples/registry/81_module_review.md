@@ -849,7 +849,7 @@ untagged union such as `tuple[str | int, ...]` (`forbidden_type_form`), and
 no model was added. Behaviour is unchanged: the names on the wire and the
 positions from zero are those of before.
 
-## 2026-11-26: `subject_kind` as a `Literal` cannot be a table row's field (`operations` T9)
+## 2026-11-26: `subject_kind` — a `Literal` refused, an enumeration applied (`operations` T9)
 
 Owner, 2026-11-26, option (c) of the entry above: a field `subject_kind`
 of `OwnerAuditAction` typed `Literal['project', 'customer',
@@ -861,6 +861,28 @@ emitter cannot write a `Literal` row field. Nothing moved; the prose
 mapping in `OwnerActionStep.run` stands. Left for the owner: option (a), a
 new enumeration of the five kinds (State 1 and State 6 model closure), or
 option (b), a `str` field closed by the five discriminator values.
+
+Owner, 2026-11-26, option (a), applied: `models` gains the enumeration
+`AuditSubjectKind` (`project`, `customer`, `session_project`, `import`,
+`none`), exactly the `subject_kind` discriminators of `AuditSubject`'s five
+variants (M15–M19), declared in State 1 as the audit subject kind
+vocabulary and in State 6's domain model closure beside `AuditOutcome`.
+`OwnerAuditAction` gains `subject_kind: AuditSubjectKind` (State 1 M28's
+facts; State 3's `data_provider` passage names the field and the
+enumeration among the table's, as for `OwnerFormCarrier`), and each row of
+`OWNER_AUDIT_ACTIONS` carries the kind the prose gave: `project` for the
+project actions and both erasure kinds, `customer` for the customer actions
+and all four marks, `session_project` for `answer_access_request`,
+`grant_project` and `revoke_project`, `import` for `confirm_import`, `none`
+for `erase_audit_entries`. `OwnerActionStep.run`'s `[BEHAVIOR]` note takes
+the subject's form from the `subject_kind` of the row `_audit_action_of`
+matches, naming each member of `= models.AuditSubjectKind`; what each form
+carries is unchanged. Its scope reads `OWNER_AUDIT_ACTIONS`, inspects
+`AuditSubjectKind`, rejects the weak `MappingSubject` (field name only) and
+has its basis renewed. A14 rule 1 (one row per listed action, transition
+and erasure kind) engaged: no row added or removed, the key unchanged. No
+value or behaviour changed; State 2, 4 and 5 texts unchanged. State 7
+round-01 `operations` T9 closed.
 
 ## 2026-11-26: a module that builds a path or a header imports its model
 

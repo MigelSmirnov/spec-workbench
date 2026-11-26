@@ -1488,11 +1488,12 @@ None.
 
 A row of the owner audit table: which audit action (M09, R0-58) an accepted
 owner action writes — for a customer mark, by its transition; for a project's
-erasure, by its kind (owner, 2026-11-24).
+erasure, by its kind (owner, 2026-11-24) — and the form of that entry's
+subject (M15–M19; owner, 2026-11-26).
 
 Facts: the owner action; the customer mark's transition, where the action has
 one; the project erasure's kind, where the action has one; the audit action it
-writes.
+writes; the kind of its entry's subject.
 
 ### Identity
 
@@ -1596,6 +1597,9 @@ These are closed sets the specification declares; in State 6 they become
   declared in State 6.
 - Disclosure classes: `open`, `business_confidential`, `personal_data`
   (R0-26), Cabinet Kernel's.
+- Audit subject kind: `project`, `customer`, `session_project`, `import`,
+  `none` — the form of an audit entry's subject, one for each of its forms
+  M15–M19 (M09, M28; owner, 2026-11-26).
 - Owner form carrier: `request`, `values` — what an owner form field fills,
   the owner request itself or the values it carries (M29).
 - Owner form value kind: `text`, `integer`, `boolean`, `member` — how an

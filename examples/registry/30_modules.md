@@ -394,9 +394,9 @@ answer model's name and a field's) for `PERSONAL_DATA_FIELDS`;
 path, whether it is a change and whether it touches an uploaded file) with
 `OwnerAction` for `OWNER_ACTIONS`; `OwnerAuditAction` (an owner action,
 a customer mark's transition or a project erasure's kind where the action
-has one, and the audit action it writes) with `OwnerAction`,
-`CustomerTransition`, `ProjectErasure` and `AuditAction` for
-`OWNER_AUDIT_ACTIONS`; `OwnerFormField` (an owner form field's name, the
+has one, the audit action it writes and the kind of its entry's subject)
+with `OwnerAction`, `CustomerTransition`, `ProjectErasure`, `AuditAction`
+and `AuditSubjectKind` for `OWNER_AUDIT_ACTIONS`; `OwnerFormField` (an owner form field's name, the
 model it fills and how its text is read) with `OwnerFormCarrier` and
 `FormValueKind` for `OWNER_FORM_FIELDS`. Its other constants are scalars and import nothing.
 
