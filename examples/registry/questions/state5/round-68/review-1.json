@@ -1,0 +1,177 @@
+{
+ "open_points": [
+  {
+   "subject": "model_fields.model_items result",
+   "kind": "missing_boundary_guarantee",
+   "text": "For a model, its declared fields as name and value pairs in their declared order, a nested model given as a value and not opened; for any other value, that it is no model.",
+   "question": "How does a caller learn the model's identity needed to match `PERSONAL_DATA_FIELDS`, whose keys are an answer model's name and a field's name?",
+   "options": [
+    "Return the model identity together with its ordered field pairs.",
+    "Provide a separate public operation that returns the model identity.",
+    "Guarantee that callers may inspect the runtime model type independently while using `model_items` only for fields.",
+    "Change `PERSONAL_DATA_FIELDS` to classify globally by field name."
+   ],
+   "default_guess": "Return a stable model identity together with the ordered pairs; State 6 may choose the exact result shape.",
+   "witness": {
+    "initial": "Two answer models each declare a field named `value`; only the first model's `value` is listed in `PERSONAL_DATA_FIELDS`.",
+    "events": [
+     "A service operation returns an instance of the second model with `value` populated.",
+     "`operations` calls `model_fields.model_items` and receives the same field name and value it would receive for the first model."
+    ],
+    "outcomes": [
+     "An implementation that separately inspects the runtime model identity classifies the answer as `business_confidential` and returns it.",
+     "An implementation that can use only the returned field name treats it as the listed personal-data field and refuses the answer above the service's class."
+    ],
+    "observer": "The service caller sees an answer in one implementation and a refusal in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "model_fields.model_items model recognition",
+   "kind": "ambiguous_input_meaning",
+   "text": "Any value.",
+   "question": "Which values count as a model: only instances of Registry models declared by `module:models`, every instance of pydantic's base model including subclasses from elsewhere, or another closed set?",
+   "options": [
+    "Recognize every pydantic base-model instance.",
+    "Recognize only model classes exported by `module:models`.",
+    "Recognize only the concrete answer and request model classes listed by the release."
+   ],
+   "default_guess": "Recognize every pydantic base-model instance, matching the stated use of pydantic's base model class.",
+   "witness": {
+    "initial": "A nested value is an instance of a pydantic model class not exported by Registry's `models` module.",
+    "events": [
+     "A generic caller passes that value to `model_items`."
+    ],
+    "outcomes": [
+     "The base-class interpretation returns its declared fields and the caller traverses them.",
+     "The Registry-model-only interpretation answers that it is no model and the caller treats it as an opaque value."
+    ],
+    "observer": "A service sees different wire output or disclosure classification, and a confirmation may bind different input content."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "model_fields.model_items field membership",
+   "kind": "vague_result_semantics",
+   "text": "its declared fields",
+   "question": "Does “declared fields” mean only pydantic schema fields, and does it include computed fields, permitted extra fields, aliases, inherited fields or private attributes?",
+   "options": [
+    "Return only pydantic schema fields, under their Python field names, including inherited schema fields but excluding computed, extra and private values.",
+    "Include computed fields as declared fields.",
+    "Include runtime extra fields accepted by a model.",
+    "Use serialization aliases instead of declared field names."
+   ],
+   "default_guess": "Return schema fields under their declared Python names, including inherited schema fields and excluding computed, extra and private values.",
+   "witness": {
+    "initial": "A model has one schema field and one computed field, or permits one runtime extra field.",
+    "events": [
+     "The model is passed to `model_items` for wire writing, disclosure classification or confirmation binding."
+    ],
+    "outcomes": [
+     "One implementation returns only the schema field.",
+     "Another also returns the computed or extra field."
+    ],
+    "observer": "The service response, disclosure decision or confirmation-binding result differs."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface request construction through model_fields",
+   "kind": "missing_caller_callee_protocol",
+   "text": "`owner_interface` rendering a page (A19 rule 1) and building a request's values.",
+   "question": "What model value does `owner_interface` supply to `model_items` while it is still building request values, especially when required fields are absent and no valid instance can yet be constructed?",
+   "options": [
+    "`model_items` also accepts a model class and returns its declared field definitions.",
+    "`owner_interface` constructs a permissive intermediate model and walks that instance.",
+    "`owner_interface` uses `OWNER_FORM_FIELDS` to build values and calls `model_items` only after a request model has been constructed.",
+    "A separate public capability exposes the fields needed for construction."
+   ],
+   "default_guess": "Use `OWNER_FORM_FIELDS` for construction and call `model_items` only on an already constructed model instance; revise the claim that request construction itself takes fields through `model_items`.",
+   "witness": {
+    "initial": "A submitted form omits a required request field.",
+    "events": [
+     "`owner_interface` must build the request values before `operations` can return `missing_value`.",
+     "It attempts to obtain the target model's fields through `model_items`."
+    ],
+    "outcomes": [
+     "An implementation supporting model classes can discover the missing field before an instance exists.",
+     "An instance-only implementation cannot construct the required model and must use an undeclared alternative or fail before the ordinary refusal path."
+    ],
+    "observer": "The browser receives the specified `missing_value` refusal in one implementation but may receive a transport failure or a differently built request in the other."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "model_fields.model_items non-model result",
+   "kind": "later_layer_choice",
+   "text": "for any other value, that it is no model.",
+   "question": "What exact contract form distinguishes a non-model from a model with zero declared fields?",
+   "decision_owner": "State 6",
+   "options": [
+    "A tagged result with separate model and non-model variants.",
+    "An optional ordered sequence, with null meaning non-model and an empty sequence meaning an empty model.",
+    "A boolean model flag beside the ordered field pairs."
+   ],
+   "consequences": [
+    "A tagged result is explicit but adds result variants.",
+    "An optional sequence is compact but gives null contractual meaning.",
+    "A flag keeps one shape but permits invalid flag-and-fields combinations unless constrained."
+   ],
+   "requirement": "for any other value, that it is no model.",
+   "default_guess": "Use a tagged result so an empty model and a non-model cannot be confused.",
+   "unit": "?"
+  },
+  {
+   "subject": "operations generic traversal",
+   "kind": "later_layer_choice",
+   "text": "Each caller keeps its own traversal: what it does with a field's value, how deep it goes, a tuple's elements, an enumeration member.",
+   "question": "What traversal policy must `operations` use for lists, tuples, mappings, union variants and nested models so that every nested answer fact is classified?",
+   "decision_owner": "State 7",
+   "options": [
+    "Recursively traverse every model and every supported collection value, treating mappings as their values.",
+    "Traverse only models and the exact collection types appearing in State 6 answer models.",
+    "Have State 6 generate a per-answer traversal from the declared model graph."
+   ],
+   "consequences": [
+    "A fully generic traversal covers future nesting but must define cycles and mapping treatment.",
+    "A closed runtime traversal is simpler but must be updated whenever answer shapes change.",
+    "Generated per-answer traversal is precise but couples generation to the complete model graph."
+   ],
+   "requirement": "An answer's class is `personal_data` when one of the fields the imported `PERSONAL_DATA_FIELDS` constant lists holds a value in it, nested views included, and `business_confidential` otherwise, never `open` (owner, 2026-11-17); an answer above `service_access.highest_class_of_service` is refused whole (A09 rule 4).",
+   "default_guess": "Generate traversal from the State 6 answer-model graph and recurse through every collection type that graph declares.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner_sessions confirmation-input traversal and digest",
+   "kind": "later_layer_choice",
+   "text": "Each caller keeps its own traversal: what it does with a field's value, how deep it goes, a tuple's elements, an enumeration member.",
+   "question": "What unambiguous traversal and digest encoding binds nested models, collection order, absent values, enumeration members and values of different types?",
+   "decision_owner": "State 7",
+   "options": [
+    "A recursively typed, length-prefixed canonical encoding in declared field and collection order.",
+    "A canonical structured serialization with explicit type and absence tags.",
+    "A digest assembled directly from textual representations of values."
+   ],
+   "consequences": [
+    "Length-prefixed encoding avoids boundary ambiguity but requires a complete type-tag vocabulary.",
+    "Canonical structured serialization is inspectable but must fix its canonicalization rules.",
+    "Textual representations are simple but can collide across types or change with library representations."
+   ],
+   "requirement": "a submission whose action, target, version or inputs differ from those shown is not bound (A13 rule 6, test 12)",
+   "default_guess": "Use a recursively typed, length-prefixed encoding with explicit tags for model, field, collection, enumeration, scalar and absence.",
+   "unit": "?"
+  },
+  {
+   "subject": "model_fields consumers' internal imports",
+   "kind": "standard_violation",
+   "text": "Every generic walk of a model takes its fields here and nowhere else:\n`operations` classing an answer at any depth (A09 rule 4), `owner_sessions`\nbinding a confirmation to its inputs in their declared order (A13 rule 6),\n`service_api` writing an answer, `owner_interface` rendering a page (A19\nrule 1) and building a request's values.",
+   "rule": "`module_internal` — явный граф зависимостей: consumer → provider → список\n  импортируемых символов. Имена consumer/provider — логические ключи из\n  `module_functions`; каждый символ обязан принадлежать provider. Это\n  **единственный авторитетный источник** внутренних импортов consumer-а:\n  объявленные символы входят в его локальную спеку всегда",
+   "section": "7",
+   "question": "The passage must be accompanied by authoritative `module_internal` entries importing `model_items` from `model_fields` for `operations`, `owner_sessions`, `service_api` and `owner_interface`, or it must remove any consumer that does not directly name that symbol.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"model_fields.model_items result\",\"kind\":\"missing_boundary_guarantee\",\"text\":\"For a model, its declared fields as name and value pairs in their declared order, a nested model given as a value and not opened; for any other value, that it is no model.\",\"question\":\"How does a caller learn the model's identity needed to match `PERSONAL_DATA_FIELDS`, whose keys are an answer model's name and a field's name?\",\"options\":[\"Return the model identity together with its ordered field pairs.\",\"Provide a separate public operation that returns the model identity.\",\"Guarantee that callers may inspect the runtime model type independently while using `model_items` only for fields.\",\"Change `PERSONAL_DATA_FIELDS` to classify globally by field name.\"],\"default_guess\":\"Return a stable model identity together with the ordered pairs; State 6 may choose the exact result shape.\",\"witness\":{\"initial\":\"Two answer models each declare a field named `value`; only the first model's `value` is listed in `PERSONAL_DATA_FIELDS`.\",\"events\":[\"A service operation returns an instance of the second model with `value` populated.\",\"`operations` calls `model_fields.model_items` and receives the same field name and value it would receive for the first model.\"],\"outcomes\":[\"An implementation that separately inspects the runtime model identity classifies the answer as `business_confidential` and returns it.\",\"An implementation that can use only the returned field name treats it as the listed personal-data field and refuses the answer above the service's class.\"],\"observer\":\"The service caller sees an answer in one implementation and a refusal in the other.\"}},{\"subject\":\"model_fields.model_items model recognition\",\"kind\":\"ambiguous_input_meaning\",\"text\":\"Any value.\",\"question\":\"Which values count as a model: only instances of Registry models declared by `module:models`, every instance of pydantic's base model including subclasses from elsewhere, or another closed set?\",\"options\":[\"Recognize every pydantic base-model instance.\",\"Recognize only model classes exported by `module:models`.\",\"Recognize only the concrete answer and request model classes listed by the release.\"],\"default_guess\":\"Recognize every pydantic base-model instance, matching the stated use of pydantic's base model class.\",\"witness\":{\"initial\":\"A nested value is an instance of a pydantic model class not exported by Registry's `models` module.\",\"events\":[\"A generic caller passes that value to `model_items`.\"],\"outcomes\":[\"The base-class interpretation returns its declared fields and the caller traverses them.\",\"The Registry-model-only interpretation answers that it is no model and the caller treats it as an opaque value.\"],\"observer\":\"A service sees different wire output or disclosure classification, and a confirmation may bind different input content.\"}},{\"subject\":\"model_fields.model_items field membership\",\"kind\":\"vague_result_semantics\",\"text\":\"its declared fields\",\"question\":\"Does “declared fields” mean only pydantic schema fields, and does it include computed fields, permitted extra fields, aliases, inherited fields or private attributes?\",\"options\":[\"Return only pydantic schema fields, under their Python field names, including inherited schema fields but excluding computed, extra and private values.\",\"Include computed fields as declared fields.\",\"Include runtime extra fields accepted by a model.\",\"Use serialization aliases instead of declared field names.\"],\"default_guess\":\"Return schema fields under their declared Python names, including inherited schema fields and excluding computed, extra and private values.\",\"witness\":{\"initial\":\"A model has one schema field and one computed field, or permits one runtime extra field.\",\"events\":[\"The model is passed to `model_items` for wire writing, disclosure classification or confirmation binding.\"],\"outcomes\":[\"One implementation returns only the schema field.\",\"Another also returns the computed or extra field.\"],\"observer\":\"The service response, disclosure decision or confirmation-binding result differs.\"}},{\"subject\":\"owner_interface request construction through model_fields\",\"kind\":\"missing_caller_callee_protocol\",\"text\":\"`owner_interface` rendering a page (A19 rule 1) and building a request's values.\",\"question\":\"What model value does `owner_interface` supply to `model_items` while it is still building request values, especially when required fields are absent and no valid instance can yet be constructed?\",\"options\":[\"`model_items` also accepts a model class and returns its declared field definitions.\",\"`owner_interface` constructs a permissive intermediate model and walks that instance.\",\"`owner_interface` uses `OWNER_FORM_FIELDS` to build values and calls `model_items` only after a request model has been constructed.\",\"A separate public capability exposes the fields needed for construction.\"],\"default_guess\":\"Use `OWNER_FORM_FIELDS` for construction and call `model_items` only on an already constructed model instance; revise the claim that request construction itself takes fields through `model_items`.\",\"witness\":{\"initial\":\"A submitted form omits a required request field.\",\"events\":[\"`owner_interface` must build the request values before `operations` can return `missing_value`.\",\"It attempts to obtain the target model's fields through `model_items`.\"],\"outcomes\":[\"An implementation supporting model classes can discover the missing field before an instance exists.\",\"An instance-only implementation cannot construct the required model and must use an undeclared alternative or fail before the ordinary refusal path.\"],\"observer\":\"The browser receives the specified `missing_value` refusal in one implementation but may receive a transport failure or a differently built request in the other.\"}},{\"subject\":\"model_fields.model_items non-model result\",\"kind\":\"later_layer_choice\",\"text\":\"for any other value, that it is no model.\",\"question\":\"What exact contract form distinguishes a non-model from a model with zero declared fields?\",\"decision_owner\":\"State 6\",\"options\":[\"A tagged result with separate model and non-model variants.\",\"An optional ordered sequence, with null meaning non-model and an empty sequence meaning an empty model.\",\"A boolean model flag beside the ordered field pairs.\"],\"consequences\":[\"A tagged result is explicit but adds result variants.\",\"An optional sequence is compact but gives null contractual meaning.\",\"A flag keeps one shape but permits invalid flag-and-fields combinations unless constrained.\"],\"requirement\":\"for any other value, that it is no model.\",\"default_guess\":\"Use a tagged result so an empty model and a non-model cannot be confused.\"},{\"subject\":\"operations generic traversal\",\"kind\":\"later_layer_choice\",\"text\":\"Each caller keeps its own traversal: what it does with a field's value, how deep it goes, a tuple's elements, an enumeration member.\",\"question\":\"What traversal policy must `operations` use for lists, tuples, mappings, union variants and nested models so that every nested answer fact is classified?\",\"decision_owner\":\"State 7\",\"options\":[\"Recursively traverse every model and every supported collection value, treating mappings as their values.\",\"Traverse only models and the exact collection types appearing in State 6 answer models.\",\"Have State 6 generate a per-answer traversal from the declared model graph.\"],\"consequences\":[\"A fully generic traversal covers future nesting but must define cycles and mapping treatment.\",\"A closed runtime traversal is simpler but must be updated whenever answer shapes change.\",\"Generated per-answer traversal is precise but couples generation to the complete model graph.\"],\"requirement\":\"An answer's class is `personal_data` when one of the fields the imported `PERSONAL_DATA_FIELDS` constant lists holds a value in it, nested views included, and `business_confidential` otherwise, never `open` (owner, 2026-11-17); an answer above `service_access.highest_class_of_service` is refused whole (A09 rule 4).\",\"default_guess\":\"Generate traversal from the State 6 answer-model graph and recurse through every collection type that graph declares.\"},{\"subject\":\"owner_sessions confirmation-input traversal and digest\",\"kind\":\"later_layer_choice\",\"text\":\"Each caller keeps its own traversal: what it does with a field's value, how deep it goes, a tuple's elements, an enumeration member.\",\"question\":\"What unambiguous traversal and digest encoding binds nested models, collection order, absent values, enumeration members and values of different types?\",\"decision_owner\":\"State 7\",\"options\":[\"A recursively typed, length-prefixed canonical encoding in declared field and collection order.\",\"A canonical structured serialization with explicit type and absence tags.\",\"A digest assembled directly from textual representations of values.\"],\"consequences\":[\"Length-prefixed encoding avoids boundary ambiguity but requires a complete type-tag vocabulary.\",\"Canonical structured serialization is inspectable but must fix its canonicalization rules.\",\"Textual representations are simple but can collide across types or change with library representations.\"],\"requirement\":\"a submission whose action, target, version or inputs differ from those shown is not bound (A13 rule 6, test 12)\",\"default_guess\":\"Use a recursively typed, length-prefixed encoding with explicit tags for model, field, collection, enumeration, scalar and absence.\"},{\"subject\":\"model_fields consumers' internal imports\",\"kind\":\"standard_violation\",\"text\":\"Every generic walk of a model takes its fields here and nowhere else:\\n`operations` classing an answer at any depth (A09 rule 4), `owner_sessions`\\nbinding a confirmation to its inputs in their declared order (A13 rule 6),\\n`service_api` writing an answer, `owner_interface` rendering a page (A19\\nrule 1) and building a request's values.\",\"rule\":\"`module_internal` — явный граф зависимостей: consumer → provider → список\\n  импортируемых символов. Имена consumer/provider — логические ключи из\\n  `module_functions`; каждый символ обязан принадлежать provider. Это\\n  **единственный авторитетный источник** внутренних импортов consumer-а:\\n  объявленные символы входят в его локальную спеку всегда\",\"section\":\"7\",\"question\":\"The passage must be accompanied by authoritative `module_internal` entries importing `model_items` from `model_fields` for `operations`, `owner_sessions`, `service_api` and `owner_interface`, or it must remove any consumer that does not directly name that symbol.\"}]}",
+ "set_aside": []
+}

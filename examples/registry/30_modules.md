@@ -227,7 +227,10 @@ later line, and modules on one line do not know each other.
   wire format, `owner_interface` rendering a page's values (A19 rule 1) and
   building a request's values from its form's paths — takes a model's
   fields only through `model_fields.model_items`, and tells a model from any
-  other value by its answer alone (owner, 2026-11-26). Each caller keeps its
+  other value by its answer alone (owner, 2026-11-26); each of the four
+  imports it, declared as `module_internal[<caller>]["model_fields"]`
+  holding `model_items` alone (State 5, Conventions, "Constants each module
+  imports"). Each caller keeps its
   own traversal: what it does with a field's value, how deep it goes, a
   tuple's elements, an enumeration member. Before, the means — `isinstance`
   against pydantic's base model, the model's own iteration, never `hasattr`,
@@ -592,7 +595,10 @@ read_upload_head
 
 Reading the declared fields of a model value — each field's name and value,
 in the order the model declares them — and telling a model from any other
-value (owner, 2026-11-26; "Reading a model's fields"). Of the decisions whose
+value (owner, 2026-11-26; "Reading a model's fields"). A model is any
+instance of pydantic's base model class, which every model of `models` is;
+`model_items` tells no class of models apart from another, and answers
+`None` for every value that is no such instance. Of the decisions whose
 rules need a walk it owns that reading alone, as a consumer: for A09 rule 4,
 the fields of an answer and of every model nested in it, which `operations`
 classes; for A13 rule 6, the fields of a confirmation's inputs in their
@@ -606,7 +612,9 @@ reading of a request by the paths of `OWNER_FORM_FIELDS` (owner,
 ### Knows
 
 `models`, whose models are the values it reads. It imports pydantic's base
-model class as a third-party import.
+model class as the third-party import `from pydantic import BaseModel`,
+declared as `imports.third_party_by_module["model_fields"]`; no other module
+imports it.
 
 ### Must not own
 

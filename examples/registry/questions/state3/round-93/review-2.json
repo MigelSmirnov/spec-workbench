@@ -1,0 +1,234 @@
+{
+ "open_points": [
+  {
+   "subject": "model_fields.model_items",
+   "kind": "result_contract",
+   "text": "tells a model from any other value by its answer alone",
+   "question": "What exact result distinguishes a model from a non-model, and does a non-model return a sentinel, an empty collection, or a tagged result?",
+   "options": [
+    "Return an optional ordered sequence: a sequence for a model and null for a non-model",
+    "Return an empty sequence for a non-model",
+    "Return a tagged result containing is_model and the fields",
+    "Raise for a non-model"
+   ],
+   "default_guess": "Return null for a non-model and an ordered sequence of name-value pairs for a model.",
+   "witness": {
+    "initial": "A caller receives a scalar value while recursively walking an operation answer.",
+    "events": [
+     "operations calls model_items with the scalar"
+    ],
+    "outcomes": [
+     "model_items returns null, so operations treats the scalar as a leaf",
+     "model_items returns an empty sequence, so operations treats the scalar as a fieldless model or container"
+    ],
+    "observer": "operations and the caller receiving the classified answer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "model_fields.model_items",
+   "kind": "field_projection",
+   "text": "Reading the declared fields of a model value — each field's name and value, in the order the model declares them",
+   "question": "Which Pydantic members count as declared fields, which name is returned when a field has an alias, and are computed fields, private attributes and permitted extra fields excluded?",
+   "options": [
+    "Return only declared model fields under their Python field names",
+    "Return declared fields under serialization aliases",
+    "Include computed fields",
+    "Include permitted extra fields"
+   ],
+   "default_guess": "Return only the model class's declared fields, under their Python field names and in declaration order; exclude computed, private and extra values.",
+   "witness": {
+    "initial": "A model declares Python field customer_ref with a wire alias customerRef and also exposes a computed property.",
+    "events": [
+     "service_api calls model_items while writing the answer"
+    ],
+    "outcomes": [
+     "The returned items contain customer_ref and omit the computed property",
+     "The returned items contain customerRef and may include the computed property"
+    ],
+    "observer": "The service receiving the wire answer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "model_fields model recognition",
+   "kind": "scope",
+   "text": "`models`, whose models are the values it reads. It imports pydantic's base model class as a third-party import.",
+   "question": "Does model_items recognize every instance of Pydantic's base model, or only the Registry model classes owned by models?",
+   "options": [
+    "Recognize every Pydantic BaseModel instance",
+    "Recognize only Registry models",
+    "Recognize Registry models and explicitly registered external models"
+   ],
+   "default_guess": "Recognize every Pydantic BaseModel instance, because recognition is stated in terms of Pydantic's base class.",
+   "witness": {
+    "initial": "A Pydantic model not declared by Registry reaches a generic walker through an adapter or test double.",
+    "events": [
+     "The walker passes it to model_items"
+    ],
+    "outcomes": [
+     "It is recognized and its fields are traversed",
+     "It is treated as an ordinary leaf because it is not a Registry model"
+    ],
+    "observer": "The generic walker and its resulting serialization or classification"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "operations answer classification",
+   "kind": "traversal_policy",
+   "text": "Each caller keeps its own traversal: what it does with a field's value, how deep it goes, a tuple's elements, an enumeration member.",
+   "question": "What complete traversal and leaf rules must operations use to find every populated PERSONAL_DATA_FIELDS field, including models inside tuples or other containers and enumeration members?",
+   "options": [
+    "Recurse through every nested model and every supported container, treating enumeration members as leaf values",
+    "Recurse through models and tuples only",
+    "Inspect only direct model fields",
+    "Use each answer model's separately declared traversal"
+   ],
+   "default_guess": "Recursively inspect every nested model and every sequence or mapping type admitted by answer models; treat enum members and scalars as leaves.",
+   "witness": {
+    "initial": "Kernel requests an answer containing a tuple whose element is a nested model with a populated field listed in PERSONAL_DATA_FIELDS.",
+    "events": [
+     "operations walks the answer to determine its disclosure class"
+    ],
+    "outcomes": [
+     "It descends through the tuple and refuses the personal_data answer",
+     "It does not descend through that container and answers the value as business_confidential"
+    ],
+    "observer": "Cabinet Kernel and the agent"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_sessions confirmation binding",
+   "kind": "canonicalization",
+   "text": "`owner_sessions` binding a confirmation to every field of its inputs in their declared order (A13 rule 6)",
+   "question": "What canonical traversal and byte representation bind nested models, tuples, optional values and enumeration members into the confirmation digest?",
+   "options": [
+    "Define a typed canonical encoding with model fields in declaration order and sequence elements in input order",
+    "Digest the language's ordinary representation of the values",
+    "Serialize through the service wire format",
+    "Bind only top-level fields"
+   ],
+   "default_guess": "Use a versioned typed canonical encoding, recursively ordering model fields by declaration and sequence elements by their supplied order.",
+   "witness": {
+    "initial": "A confirmation step is shown for inputs containing a nested model and a tuple.",
+    "events": [
+     "owner_sessions digests the shown inputs",
+     "The owner submits semantically equal inputs reconstructed by the form"
+    ],
+    "outcomes": [
+     "A stable canonical encoding produces the same digest and the submission proceeds",
+     "A representation-dependent encoding produces a different digest and the submission is refused"
+    ],
+    "observer": "The owner submitting the confirmed action"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "service_api answer serialization",
+   "kind": "wire_traversal",
+   "text": "`service_api` writing an answer in its wire format",
+   "question": "How does service_api recursively encode nested models, tuples, optionals and enumeration members, and which model names or discriminators are omitted from the wire?",
+   "options": [
+    "Define the complete recursive wire projection in State 3",
+    "Explicitly carry the complete projection contract to States 5 and 6",
+    "Use Pydantic's default serialization"
+   ],
+   "default_guess": "Explicitly carry a complete recursive wire projection to States 5 and 6 and prohibit reliance on Pydantic defaults.",
+   "witness": {
+    "initial": "A service answer contains a nested union variant and an enumeration-valued field.",
+    "events": [
+     "service_api walks it through model_items and writes the response"
+    ],
+    "outcomes": [
+     "The response uses the established v1 field and enum representation and omits the internal variant kind",
+     "The response uses Pydantic's default representation and exposes a discriminator or different enum representation"
+    ],
+    "observer": "PresuPro or Client Portal parsing the response"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface rendering traversal",
+   "kind": "rendering_policy",
+   "text": "`owner_interface` rendering a page's values (A19 rule 1)",
+   "question": "How are nested models, tuples, absent values and enumeration members converted into the text places that the owner interface escapes and renders?",
+   "options": [
+    "Declare one deterministic recursive rendering projection",
+    "Render only explicitly selected page fields",
+    "Use each value's language string conversion"
+   ],
+   "default_guess": "Render only fields explicitly selected by the page definition, with declared conversions for scalar, enum, absent and collection values.",
+   "witness": {
+    "initial": "An owner page displays an answer containing an optional enum and a tuple of nested models.",
+    "events": [
+     "owner_interface walks the answer with model_items and renders the page"
+    ],
+    "outcomes": [
+     "The page uses declared labels, omission rules and collection ordering",
+     "The page uses raw enum representations, a literal null, or implementation-dependent tuple text"
+    ],
+    "observer": "The owner viewing the page"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface request construction",
+   "kind": "construction_boundary",
+   "text": "building a request's values from its form's paths",
+   "question": "Does owner_interface use model_items to traverse an already constructed model, to inspect a model schema, or to locate destinations while constructing a model, and which module owns conversion of form text into typed nested values?",
+   "options": [
+    "Construct typed models first, then use model_items only to read them",
+    "Extend model_fields with schema inspection needed before construction",
+    "Have owner_interface interpret paths and construct models without model_fields"
+   ],
+   "default_guess": "owner_interface interprets OWNER_FORM_FIELDS paths and constructs typed models; model_items is used only after a model value exists.",
+   "witness": {
+    "initial": "A submitted form contains a path to a nested integer field.",
+    "events": [
+     "owner_interface reads the field row and must build the operation request"
+    ],
+    "outcomes": [
+     "owner_interface converts the text and constructs the nested model before model_items reads it",
+     "model_fields is expected to expose schema or perform construction despite owning only value reading"
+    ],
+    "observer": "operations, which receives either a typed request or an unresolved form value"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "model_fields third-party import",
+   "kind": "import_identity",
+   "text": "It imports pydantic's base model class as a third-party import.",
+   "question": "What exact import statement and symbol identify Pydantic's base model class for model_fields?",
+   "options": [
+    "from pydantic import BaseModel",
+    "Import another supported Pydantic path or alias"
+   ],
+   "default_guess": "from pydantic import BaseModel",
+   "unit": "?"
+  },
+  {
+   "subject": "model_fields third-party import",
+   "kind": "standard_violation",
+   "text": "It imports pydantic's base model class as a third-party import.",
+   "rule": "`third_party` — полные строки импорта как в коде",
+   "section": "7",
+   "question": "Replace the prose-only import description with the exact full import statement used by the code.",
+   "unit": "?"
+  },
+  {
+   "subject": "model_fields third-party import",
+   "kind": "standard_violation",
+   "text": "It imports pydantic's base model class as a third-party import.",
+   "rule": "`stdlib_by_module` и `third_party_by_module` — module → список полных import\n  строк, необходимых конкретному модулю.",
+   "section": "7",
+   "question": "Declare the exact Pydantic import structurally under model_fields in third_party_by_module.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"model_fields.model_items\",\"kind\":\"result_contract\",\"text\":\"tells a model from any other value by its answer alone\",\"question\":\"What exact result distinguishes a model from a non-model, and does a non-model return a sentinel, an empty collection, or a tagged result?\",\"options\":[\"Return an optional ordered sequence: a sequence for a model and null for a non-model\",\"Return an empty sequence for a non-model\",\"Return a tagged result containing is_model and the fields\",\"Raise for a non-model\"],\"default_guess\":\"Return null for a non-model and an ordered sequence of name-value pairs for a model.\",\"witness\":{\"initial\":\"A caller receives a scalar value while recursively walking an operation answer.\",\"events\":[\"operations calls model_items with the scalar\"],\"outcomes\":[\"model_items returns null, so operations treats the scalar as a leaf\",\"model_items returns an empty sequence, so operations treats the scalar as a fieldless model or container\"],\"observer\":\"operations and the caller receiving the classified answer\"}},{\"subject\":\"model_fields.model_items\",\"kind\":\"field_projection\",\"text\":\"Reading the declared fields of a model value — each field's name and value, in the order the model declares them\",\"question\":\"Which Pydantic members count as declared fields, which name is returned when a field has an alias, and are computed fields, private attributes and permitted extra fields excluded?\",\"options\":[\"Return only declared model fields under their Python field names\",\"Return declared fields under serialization aliases\",\"Include computed fields\",\"Include permitted extra fields\"],\"default_guess\":\"Return only the model class's declared fields, under their Python field names and in declaration order; exclude computed, private and extra values.\",\"witness\":{\"initial\":\"A model declares Python field customer_ref with a wire alias customerRef and also exposes a computed property.\",\"events\":[\"service_api calls model_items while writing the answer\"],\"outcomes\":[\"The returned items contain customer_ref and omit the computed property\",\"The returned items contain customerRef and may include the computed property\"],\"observer\":\"The service receiving the wire answer\"}},{\"subject\":\"model_fields model recognition\",\"kind\":\"scope\",\"text\":\"`models`, whose models are the values it reads. It imports pydantic's base model class as a third-party import.\",\"question\":\"Does model_items recognize every instance of Pydantic's base model, or only the Registry model classes owned by models?\",\"options\":[\"Recognize every Pydantic BaseModel instance\",\"Recognize only Registry models\",\"Recognize Registry models and explicitly registered external models\"],\"default_guess\":\"Recognize every Pydantic BaseModel instance, because recognition is stated in terms of Pydantic's base class.\",\"witness\":{\"initial\":\"A Pydantic model not declared by Registry reaches a generic walker through an adapter or test double.\",\"events\":[\"The walker passes it to model_items\"],\"outcomes\":[\"It is recognized and its fields are traversed\",\"It is treated as an ordinary leaf because it is not a Registry model\"],\"observer\":\"The generic walker and its resulting serialization or classification\"}},{\"subject\":\"operations answer classification\",\"kind\":\"traversal_policy\",\"text\":\"Each caller keeps its own traversal: what it does with a field's value, how deep it goes, a tuple's elements, an enumeration member.\",\"question\":\"What complete traversal and leaf rules must operations use to find every populated PERSONAL_DATA_FIELDS field, including models inside tuples or other containers and enumeration members?\",\"options\":[\"Recurse through every nested model and every supported container, treating enumeration members as leaf values\",\"Recurse through models and tuples only\",\"Inspect only direct model fields\",\"Use each answer model's separately declared traversal\"],\"default_guess\":\"Recursively inspect every nested model and every sequence or mapping type admitted by answer models; treat enum members and scalars as leaves.\",\"witness\":{\"initial\":\"Kernel requests an answer containing a tuple whose element is a nested model with a populated field listed in PERSONAL_DATA_FIELDS.\",\"events\":[\"operations walks the answer to determine its disclosure class\"],\"outcomes\":[\"It descends through the tuple and refuses the personal_data answer\",\"It does not descend through that container and answers the value as business_confidential\"],\"observer\":\"Cabinet Kernel and the agent\"}},{\"subject\":\"owner_sessions confirmation binding\",\"kind\":\"canonicalization\",\"text\":\"`owner_sessions` binding a confirmation to every field of its inputs in their declared order (A13 rule 6)\",\"question\":\"What canonical traversal and byte representation bind nested models, tuples, optional values and enumeration members into the confirmation digest?\",\"options\":[\"Define a typed canonical encoding with model fields in declaration order and sequence elements in input order\",\"Digest the language's ordinary representation of the values\",\"Serialize through the service wire format\",\"Bind only top-level fields\"],\"default_guess\":\"Use a versioned typed canonical encoding, recursively ordering model fields by declaration and sequence elements by their supplied order.\",\"witness\":{\"initial\":\"A confirmation step is shown for inputs containing a nested model and a tuple.\",\"events\":[\"owner_sessions digests the shown inputs\",\"The owner submits semantically equal inputs reconstructed by the form\"],\"outcomes\":[\"A stable canonical encoding produces the same digest and the submission proceeds\",\"A representation-dependent encoding produces a different digest and the submission is refused\"],\"observer\":\"The owner submitting the confirmed action\"}},{\"subject\":\"service_api answer serialization\",\"kind\":\"wire_traversal\",\"text\":\"`service_api` writing an answer in its wire format\",\"question\":\"How does service_api recursively encode nested models, tuples, optionals and enumeration members, and which model names or discriminators are omitted from the wire?\",\"options\":[\"Define the complete recursive wire projection in State 3\",\"Explicitly carry the complete projection contract to States 5 and 6\",\"Use Pydantic's default serialization\"],\"default_guess\":\"Explicitly carry a complete recursive wire projection to States 5 and 6 and prohibit reliance on Pydantic defaults.\",\"witness\":{\"initial\":\"A service answer contains a nested union variant and an enumeration-valued field.\",\"events\":[\"service_api walks it through model_items and writes the response\"],\"outcomes\":[\"The response uses the established v1 field and enum representation and omits the internal variant kind\",\"The response uses Pydantic's default representation and exposes a discriminator or different enum representation\"],\"observer\":\"PresuPro or Client Portal parsing the response\"}},{\"subject\":\"owner_interface rendering traversal\",\"kind\":\"rendering_policy\",\"text\":\"`owner_interface` rendering a page's values (A19 rule 1)\",\"question\":\"How are nested models, tuples, absent values and enumeration members converted into the text places that the owner interface escapes and renders?\",\"options\":[\"Declare one deterministic recursive rendering projection\",\"Render only explicitly selected page fields\",\"Use each value's language string conversion\"],\"default_guess\":\"Render only fields explicitly selected by the page definition, with declared conversions for scalar, enum, absent and collection values.\",\"witness\":{\"initial\":\"An owner page displays an answer containing an optional enum and a tuple of nested models.\",\"events\":[\"owner_interface walks the answer with model_items and renders the page\"],\"outcomes\":[\"The page uses declared labels, omission rules and collection ordering\",\"The page uses raw enum representations, a literal null, or implementation-dependent tuple text\"],\"observer\":\"The owner viewing the page\"}},{\"subject\":\"owner_interface request construction\",\"kind\":\"construction_boundary\",\"text\":\"building a request's values from its form's paths\",\"question\":\"Does owner_interface use model_items to traverse an already constructed model, to inspect a model schema, or to locate destinations while constructing a model, and which module owns conversion of form text into typed nested values?\",\"options\":[\"Construct typed models first, then use model_items only to read them\",\"Extend model_fields with schema inspection needed before construction\",\"Have owner_interface interpret paths and construct models without model_fields\"],\"default_guess\":\"owner_interface interprets OWNER_FORM_FIELDS paths and constructs typed models; model_items is used only after a model value exists.\",\"witness\":{\"initial\":\"A submitted form contains a path to a nested integer field.\",\"events\":[\"owner_interface reads the field row and must build the operation request\"],\"outcomes\":[\"owner_interface converts the text and constructs the nested model before model_items reads it\",\"model_fields is expected to expose schema or perform construction despite owning only value reading\"],\"observer\":\"operations, which receives either a typed request or an unresolved form value\"}},{\"subject\":\"model_fields third-party import\",\"kind\":\"import_identity\",\"text\":\"It imports pydantic's base model class as a third-party import.\",\"question\":\"What exact import statement and symbol identify Pydantic's base model class for model_fields?\",\"options\":[\"from pydantic import BaseModel\",\"Import another supported Pydantic path or alias\"],\"default_guess\":\"from pydantic import BaseModel\"},{\"subject\":\"model_fields third-party import\",\"kind\":\"standard_violation\",\"text\":\"It imports pydantic's base model class as a third-party import.\",\"rule\":\"`third_party` — полные строки импорта как в коде\",\"section\":\"7\",\"question\":\"Replace the prose-only import description with the exact full import statement used by the code.\"},{\"subject\":\"model_fields third-party import\",\"kind\":\"standard_violation\",\"text\":\"It imports pydantic's base model class as a third-party import.\",\"rule\":\"`stdlib_by_module` и `third_party_by_module` — module → список полных import\\n  строк, необходимых конкретному модулю.\",\"section\":\"7\",\"question\":\"Declare the exact Pydantic import structurally under model_fields in third_party_by_module.\"}]}",
+ "set_aside": []
+}

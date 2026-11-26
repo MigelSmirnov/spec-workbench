@@ -184,7 +184,13 @@ beside `run_in_transaction` and `read_in_transaction`;
 holds `read_upload_head` and the class `MultipartFileBody`; the provider's
 side matches: `imports.internal["upload_framing"]` exports both, and
 `module_functions["upload_framing"]` lists `read_upload_head` and the class
-`MultipartFileBody`, whose methods follow from it (State 6). A secret such an operation returns
+`MultipartFileBody`, whose methods follow from it (State 6). The walk of
+a model is declared the same way (owner, 2026-11-26):
+`module_internal["operations"]["model_fields"]`,
+`module_internal["owner_sessions"]["model_fields"]`,
+`module_internal["service_api"]["model_fields"]` and
+`module_internal["owner_interface"]["model_fields"]` each hold
+`model_items` alone, and `imports.internal["model_fields"]` exports it. A secret such an operation returns
 to its caller inside the process is not an answer in A13 rule 7's and A17
 rule 6's sense, which is what Registry gives a service or the owner
 (R0-23, R0-37); it never reaches one.
