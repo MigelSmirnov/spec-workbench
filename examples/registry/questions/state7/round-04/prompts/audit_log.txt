@@ -1,0 +1,162 @@
+Module: audit_log
+Target path: app/audit_log.py
+Target file: audit_log.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from datetime import date, datetime
+from decimal import Decimal
+
+from app.data_provider import CONTRACT_VERSION, REFUSAL_STAGE_VALUES, RELEASE_VERSION
+from app.models import ActingPrincipal, AuditAction, AuditEntry, AuditErasure, AuditOutcome, AuditSequence, AuditSubject, ErasedEntries, PathElement, Refusal, RefusalCode, RefusalFailure, RefusalKind
+from app.store import StoreTransaction
+
+CONTRACTS (function signatures — follow exactly):
+def append_audit_entry(transaction: StoreTransaction, action: AuditAction, subject: AuditSubject, principal: ActingPrincipal, instant: datetime, confirmation_id: str | None, erased_before: date | None) -> AuditEntry
+def erase_audit_entries_before(transaction: StoreTransaction, before: date, today: date) -> AuditErasure
+def read_audit_entries(transaction: StoreTransaction) -> tuple[AuditEntry, ...]
+# StoreTransaction
+def __init__(self, repository: StoreRepository) -> None
+# StoreTransaction
+def delete_audit_entries_before(self, cutoff: datetime) -> int
+# StoreTransaction
+def insert_audit_entry(self, entry: AuditEntry) -> None
+# StoreTransaction
+def list_audit_entries(self) -> tuple[AuditEntry, ...]
+# StoreTransaction
+def read_audit_sequence(self) -> AuditSequence
+# StoreTransaction
+def write_audit_sequence(self, sequence: AuditSequence) -> None
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+CONTRACT_VERSION: str
+REFUSAL_STAGE_VALUES: int
+RELEASE_VERSION: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- append_audit_entry: (transaction: StoreTransaction, action: AuditAction, subject: AuditSubject, principal: ActingPrincipal, instant: datetime, confirmation_id: str | None, erased_before: date | None) -> AuditEntry
+- erase_audit_entries_before: (transaction: StoreTransaction, before: date, today: date) -> AuditErasure
+- read_audit_entries: (transaction: StoreTransaction) -> tuple[AuditEntry, ...]
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; a declared field or operation is
+  addressed by its name, including in try/finally cleanup, and a
+  model's fields read generically come from iterating the model,
+  in place or inside an imported operation that does so.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+- An enum member is read only by a name the models module declares for it;
+  a member or attribute the enum does not have is rejected, read through
+  the class or through a value of the enum. Compare a value with the
+  member itself, never its .name with a text: .name is the first name the
+  models module declares for the value, and a text no member's .name is
+  is rejected.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- append_audit_entry: [BEHAVIOR] MUST read the counter with read_audit_sequence, take one more than its last_sequence_number as the entry's sequence number, write the raised counter with write_audit_sequence and the entry with insert_audit_entry, both on transaction, so that no number is reused after any erasure; it MUST NOT commit or roll back.
+- append_audit_entry: [FIELD_ASSIGNMENT] MUST answer and write an AuditEntry whose recorded_at is instant, whose action, subject, principal, confirmation_id and erased_before are the given ones, whose outcome is the ACCEPTED member of = models.AuditOutcome, whose release_version is the imported RELEASE_VERSION constant and whose contract_version is the imported CONTRACT_VERSION constant.
+- append_audit_entry: [TEST_EVIDENCE] A test MUST show that entries written one after another take strictly increasing sequence numbers: of two appends in two committed transactions the second takes one more than the first and leaves the counter's last_sequence_number at its own number; after erase_audit_entries_before removed entries, the next append takes one more than the last number written and never a removed one; an append whose transaction is rolled back leaves the counter as it was and the next committed append takes the number after it; two appends in two concurrent transactions take two distinct consecutive numbers, the transaction committed first holding the lower.
+- append_audit_entry: [TEST_EVIDENCE] A test MUST show that every entry append_audit_entry writes and answers, for every member of = models.AuditAction, has the ACCEPTED member of = models.AuditOutcome as its outcome, whatever the caller gives.
+- erase_audit_entries_before: [VALIDATION_ERROR] MUST answer a Refusal with the INVALID_REQUEST member of = models.RefusalCode at the stage the imported REFUSAL_STAGE_VALUES constant names and one failure of the DATE_AFTER_TODAY member of = models.RefusalKind, its path naming the before input, when before is later than today, removing nothing.
+- erase_audit_entries_before: [BEHAVIOR] MUST otherwise remove through delete_audit_entries_before on transaction every entry recorded before the start of before in UTC, answer ErasedEntries with the number it removed, and leave the counter untouched.
+- erase_audit_entries_before: [TEST_EVIDENCE] A test MUST show that after an accepted erasure no entry recorded before the start of before in UTC remains: of an entry recorded a microsecond before the start of that day and one recorded exactly at it, the first is removed and the second kept, ErasedEntries counting only the removed one; a before older than every entry removes nothing and answers that none was removed; a before later than today is refused with the DATE_AFTER_TODAY member of = models.RefusalKind and removes nothing.
+- read_audit_entries: [DETERMINISM_OR_ORDERING] MUST answer every entry list_audit_entries gives on transaction, in ascending sequence number, and change nothing.
+- read_audit_entries: [TEST_EVIDENCE] A test MUST show that the entries are answered by sequence number ascending, each once, whatever order their instants have.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- AuditAction: omitted because it is an imported runtime model schema
+- AuditOutcome: omitted because it is an imported runtime model schema
+- RefusalCode: omitted because it is an imported runtime model schema
+- RefusalKind: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not app.models imports.
+Only import runtime model symbols from app.models when they are explicitly listed in IMPORTS.
+- models.AuditAction: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+- models.AuditOutcome: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+- models.RefusalCode: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+- models.RefusalKind: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from app.models. Use the listed enum member names and model fields exactly.
+- ActingPrincipal fields (exact, no others exist): principal_kind: PrincipalKind, service: ServiceName | None, session_id: str | None
+- AuditAction enum members: AUDIT_ENTRIES_ERASED='audit_entries_erased', CUSTOMER_CORRECTED='customer_corrected', CUSTOMER_ERASED='customer_erased', CUSTOMER_RECORDED='customer_recorded', CUSTOMER_RELATIONSHIP_ENDED='customer_relationship_ended', CUSTOMER_RELATIONSHIP_RESUMED='customer_relationship_resumed', CUSTOMER_RESTRICTED='customer_restricted', CUSTOMER_RESTRICTION_LIFTED='customer_restriction_lifted', IMPORT_ACCEPTED='import_accepted', PROJECT_ANONYMISED='project_anonymised', PROJECT_ARCHIVED='project_archived', PROJECT_CORRECTED='project_corrected', PROJECT_CREATED='project_created', PROJECT_DELETED='project_deleted', SESSION_PROJECT_GRANTED='session_project_granted', SESSION_PROJECT_REVOKED='session_project_revoked'
+- AuditEntry fields (exact, no others exist): action: AuditAction, confirmation_id: str | None, contract_version: str, erased_before: date | None, outcome: AuditOutcome, principal: ActingPrincipal, recorded_at: datetime, release_version: str, sequence_number: int, subject: AuditSubject
+- AuditErasure discriminated union on field 'outcome' (exact variants, no others exist): ErasedEntries (outcome='accepted'), Refusal (outcome='refused'); a value of AuditErasure is an instance of one of these variants, never of another model, and AuditErasure itself is not constructed
+- AuditOutcome enum members: ACCEPTED='accepted'
+- AuditSequence fields (exact, no others exist): last_sequence_number: int
+- AuditSubject discriminated union on field 'subject_kind' (exact variants, no others exist): ProjectSubject (subject_kind='project'), CustomerSubject (subject_kind='customer'), SessionProjectSubject (subject_kind='session_project'), ImportSubject (subject_kind='import'), NoSubject (subject_kind='none'); a value of AuditSubject is an instance of one of these variants, never of another model, and AuditSubject itself is not constructed
+- ErasedEntries fields (exact, no others exist): outcome: Literal['accepted'], removed: int
+- PathElement fields (exact, no others exist): name: str | None, position: int | None
+- Refusal fields (exact, no others exist): code: RefusalCode, failures: tuple[RefusalFailure, ...], outcome: Literal['refused'], stage: int | None
+- RefusalCode enum members: CONFIRMATION_REFUSED='confirmation_refused', INTERNAL_ERROR='internal_error', INVALID_REQUEST='invalid_request', NOT_FOUND='not_found', NOT_PERMITTED='not_permitted', REFUSED='refused', STALE='stale', UNAUTHENTICATED='unauthenticated'
+- RefusalFailure fields (exact, no others exist): kind: RefusalKind, path: tuple[PathElement, ...]
+- RefusalKind enum members: ACTIVE='active', AGENT_CALL_REFUSED='agent_call_refused', ANONYMISED='anonymised', ANSWER_ABOVE_CLASS='answer_above_class', ARCHIVED='archived', CONFIRMATION_BOUND_ELSEWHERE='confirmation_bound_elsewhere', CONFIRMATION_EXPIRED='confirmation_expired', CONFIRMATION_NOT_PENDING='confirmation_not_pending', CONFIRMATION_OTHER_VALUE='confirmation_other_value', CONFLICT='conflict', CSRF_REFUSED='csrf_refused', CUSTOMER_ENDED='customer_ended', CUSTOMER_ERASED='customer_erased', CUSTOMER_RESTRICTED='customer_restricted', DATE_AFTER_TODAY='date_after_today', DUPLICATE_PICK='duplicate_pick', ERASED='erased', FILE_MALFORMED='file_malformed', FILE_NOT_KEPT='file_not_kept', FILE_TOO_LARGE='file_too_large', FILE_UNREADABLE='file_unreadable', IMPORT_CLOSED='import_closed', MALFORMED_REQUEST_ID='malformed_request_id', MAPPING_NOT_CLEAN='mapping_not_clean', MISSING_VALUE='missing_value', NOT_GRANTED='not_granted', NOT_PENDING='not_pending', NO_OWNER_SESSION='no_owner_session', NO_PICKS='no_picks', NO_VALID_TOKEN='no_valid_token', OUTSIDE_CLOSED_LIST='outside_closed_list', OUTSIDE_FORM='outside_form', OUTSIDE_SERVICE_RIGHTS='outside_service_rights', SIGN_IN_REFUSED='sign_in_refused', STALE_ACCESS_VERSION='stale_access_version', STALE_REVISION='stale_revision', SUPERSEDED='superseded', TRANSACTION_FAILED='transaction_failed', UNKNOWN_ARTIFACT_TYPE='unknown_artifact_type', UNKNOWN_CUSTOMER='unknown_customer', UNKNOWN_POINTER='unknown_pointer', UNKNOWN_PROJECT='unknown_project', UNKNOWN_ROOM='unknown_room', UNKNOWN_SESSION='unknown_session', WITHDRAWN='withdrawn'
+Field-type models reachable from the imports above (read their fields through the owning field; not imported here):
+- CustomerSubject fields (exact, no others exist): subject_kind: Literal['customer'], customer_ref: str
+- ImportSubject fields (exact, no others exist): subject_kind: Literal['import'], file_digest: str
+- NoSubject fields (exact, no others exist): subject_kind: Literal['none']
+- ProjectSubject fields (exact, no others exist): subject_kind: Literal['project'], project_id: str
+- SessionProjectSubject fields (exact, no others exist): subject_kind: Literal['session_project'], session_id: str, project_id: str
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+append_audit_entry, erase_audit_entries_before, read_audit_entries
+
+MODELS CONTEXT:
+Runtime models live in app.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete audit_log.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing in its place; a parameter the signature itself declares as object is annotated object.
+Never import from a top-level models module or models.*; runtime models live in app.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and app.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
