@@ -1026,9 +1026,15 @@ limit, file, path or answer moved, and no outcome changed.
 Performed again on 2026-11-27, after A13 gained Required test 13 (owner):
 each action that asks for the owner's confirmation, submitted in a valid
 session with its CSRF value and valid inputs but without the confirmation
-value, is refused, performs nothing and writes no entry. Reviewed under
-authentication_credential_abuse (A13): the test shows a refusal A13 rule 6
-already gave; no category's references changed. No right, limit, file, path or answer moved, and no outcome changed.
+value, is refused, performs nothing and writes no entry. Every category
+naming A13 was reviewed (rule 2). Under authentication_credential_abuse
+(A09, A13, A17) the test shows a refusal A13 rule 6 already gave: a
+confirmation is required for each such action. Under browser_boundary (A13,
+A19) the submission passes the session and CSRF checks and still changes
+nothing; the CSRF protection and the session cookie are as before. Under
+concurrency (A13 among its references) the test submits one request at a
+time and adds no ordering or lock. Each outcome is unchanged and no
+category's references changed. No right, limit, file, path or answer moved, and no outcome changed.
 
 ### Consequence
 
