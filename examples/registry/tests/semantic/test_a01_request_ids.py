@@ -430,9 +430,9 @@ def test_create_without_request_id_refused(semantic_runtime):
             # rule 1: blank is missing.
             answer = create(missing)
             _refused(answer, "invalid_request", STAGE_VALUES, ["missing_value"])
-            assert any(
-                element.get("name") == "request_id" for element in answer["failures"][0]["path"]
-            ), (action, answer)
+            # The wire writes a path element as its name or its position
+            # (RUNTIME_SURFACE.md "Refusals are answers").
+            assert "request_id" in answer["failures"][0]["path"], (action, answer)
     assert _store(rt) == before
 
     # Control: the same creates with a request id are accepted.
