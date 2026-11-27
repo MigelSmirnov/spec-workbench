@@ -408,7 +408,9 @@ and the mapping field its failure is reported under) with `FormField` and
 `CustomerEligibilityRefusal` (an eligibility and its refusal kind) with
 `CustomerEligibility` and `RefusalKind` for `CUSTOMER_ELIGIBILITY_REFUSALS`;
 `StoreCompanionStepSuffix` (a discard step and its file's suffix) with
-`DiscardStep` for `STORE_COMPANION_STEP_SUFFIXES`. Its other constants are scalars and import nothing.
+`DiscardStep` for `STORE_COMPANION_STEP_SUFFIXES`; `ConfirmedOwnerAction` (a confirmed action and the owner
+action that carries it) with `ConfirmedAction` and `OwnerAction` for
+`CONFIRMED_OWNER_ACTIONS`. Its other constants are scalars and import nothing.
 
 ### Must not own
 
@@ -515,6 +517,7 @@ BACKUP_KEY_BYTES
 BACKUP_KEY_DERIVATION_HASH
 PROJECT_STATUS_CONFIRMATIONS
 OWNER_NAVIGATION_ACTIONS
+CONFIRMED_OWNER_ACTIONS
 FORM_FIELD_REFUSAL_KINDS
 IMPORT_FORM_FIELD_MAPPING_FIELDS
 IMPORT_CHOICE_FAILURE_KINDS
