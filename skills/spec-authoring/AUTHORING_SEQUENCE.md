@@ -124,6 +124,10 @@ observation that demonstrates it, and its consequence. Choose `question` when
 the owner must choose between outcomes. The operation inserts one indexed
 sibling in the same document. It checks the quote and the structure; the
 existing State 2 review judges whether the source supports the outcome.
+A decision also needs a short `title` for its heading. Write the quote on one
+line: where the source wraps, join the lines with a space. When the case
+already has `30_trace.json`, a new decision is unclaimed until State 3 gives
+it a primary owner or a disposition, and the form says so after saving.
 Saving a card leaves the phase gates to the ordinary authoring sequence.
 
 The State 2 lint includes the explicit security-review gate. Unresolved security

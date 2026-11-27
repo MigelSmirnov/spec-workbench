@@ -8,6 +8,7 @@ from pathlib import Path
 
 import design_editor
 import design_index
+import design_trace
 
 
 def required(form, key, hint):
@@ -39,15 +40,17 @@ def open_form(case, anchor):
         "anchor": item["key"], "revision": hashlib.sha256(raw).hexdigest(),
         "source_location": f"{loc['path']}:{loc['start_line']}", "source_text": "\n".join(excerpt),
         "prompts": {
+            "title": "Name the promise in a few words; it becomes the decision's heading.",
             "situation": "When can the disputed outcomes occur?",
             "outcome": "Which result may each participant observe? A mechanism can permit several answers.",
-            "source_quote": "Quote the accepted fact supporting this outcome. If it leaves the choice open, select question.",
+            "source_quote": ("Quote the accepted fact supporting this outcome, on one line: where the source wraps, "
+                             "join the lines with a space. If it leaves the choice open, select question."),
             "guarantee": "What promise survives every permitted implementation?",
             "observation": "What would demonstrate that promise? Describe the observation before choosing a test mechanism.",
             "consequence": "Who owns this obligation and what follows from it?",
             "owner_question": "What choice must the owner make? State the competing outcomes.",
         },
-        "disposition": None, "situation": None, "source_quote": None, "outcome": None,
+        "disposition": None, "title": None, "situation": None, "source_quote": None, "outcome": None,
         "guarantee": None, "observation": None, "consequence": None, "owner_question": None,
         "choices": ["decision", "question"],
         "decision_id": next_id("A", 2), "question_id": next_id("OQ-", 3),
@@ -67,12 +70,14 @@ def render(form, current, level):
         raise ValueError("disposition: choose decision for a supported outcome or question to ask its owner")
     key = form["decision_id"]
     quote = required(form, "source_quote", current["prompts"]["source_quote"])
-    if quote not in current["source_text"]:
+    heading = required(form, "title", current["prompts"]["title"])
+    # The source is hard-wrapped; a quote is one line, so compare with whitespace collapsed.
+    if " ".join(quote.split()) not in " ".join(current["source_text"].split()):
         raise ValueError(f"source_quote: select an exact passage of {source}, or save a question for the owner")
     outcome, guarantee, observation, consequence = [
         required(form, k, current["prompts"][k]) for k in ("outcome", "guarantee", "observation", "consequence")]
     invariant = f"INV-{key}-1"
-    return key, (f"{title} Accepted decision {key}\n\nSource: {source} — {quote}\n\n"
+    return key, (f"{title} Accepted decision {key} — {heading}\n\nSource: {source} — {quote}\n\n"
                  f"{section} Normative rules\n\n1. {situation} {outcome}\n\n"
                  f"{section} Formal invariants\n\n- {invariant}: {guarantee}\n\n"
                  f"{section} Required tests\n\n1. {invariant}: {observation}\n\n"
@@ -105,6 +110,9 @@ def run(args):
     if args.command == "apply":
         design_editor.apply_plan(plan)
         print(f"Recorded {key} in {plan.relative_path}. Return to {current['anchor']}.")
+        if form["disposition"] == "decision" and (args.case / design_trace.DEFAULT_TRACE_FILE).exists():
+            print(f"{key} has no owner in {design_trace.DEFAULT_TRACE_FILE} yet: design_trace.py --check reports it "
+                  "as unclaimed until State 3 assigns a primary owner or a disposition.")
 
 
 def main(argv=None):
