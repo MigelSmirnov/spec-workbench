@@ -1,0 +1,171 @@
+{
+ "open_points": [
+  {
+   "subject": "types and model dependencies of the added grouped constants",
+   "kind": "unclear dependency",
+   "text": "Its other constants are scalars and import nothing.",
+   "question": "Are CUSTOMER_VALUE_FAILURE_KINDS, PROJECT_STATUS_CONFIRMATIONS, OWNER_NAVIGATION_ACTIONS, OWNER_CHANGE_ACTIONS, SERVICE_CHANGE_OPERATIONS and REQUEST_ID_UNPRINTABLE_CATEGORIES scalar encodings, collections of raw strings, or collections of model enum members; and for every enum-backed collection, which additional models does data_provider know?",
+   "options": [
+    "Keep them as raw immutable collections and revise the claim that every other constant is scalar",
+    "Make them collections of model enum members and add every directly named enum to Knows",
+    "Encode them as scalar bit masks and define the bit assignments"
+   ],
+   "default_guess": "Use immutable tuples of enum members where an enum exists, tuples of strings for Unicode categories, and extend Knows with every directly named enum.",
+   "witness": {
+    "initial": "The strict importer generates data_provider and a consumer of one of the new grouped constants.",
+    "events": [
+     "The generator interprets the constant as a collection of model enum members.",
+     "One implementer adds the enum dependency; another follows “import nothing” and represents the members as strings."
+    ],
+    "outcomes": [
+     "The consumer receives typed enum members and enum comparisons succeed.",
+     "The consumer receives strings, or strict generation fails because the enum import was never declared."
+    ],
+    "observer": "The generator, strict import validator, or generated consumer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "CUSTOMER_VALUE_FAILURE_KINDS",
+   "kind": "undefined constant contents",
+   "text": "CUSTOMER_VALUE_FAILURE_KINDS",
+   "question": "Which failure kinds does this constant contain, what is their order and type, and is it merely data consumed by validation or a second authority for which customer values fail?",
+   "options": [
+    "An exhaustive ordered tuple of failure-kind enum members for all customer value checks",
+    "A set containing only customer-specific failure kinds, with general missing/out-of-form kinds elsewhere",
+    "A mapping from each customer field to its failure kind"
+   ],
+   "default_guess": "Define one authoritative field-to-failure-kind mapping derived from A02, with no independent validation policy in data_provider.",
+   "witness": {
+    "initial": "A customer request supplies an unsupported language while all earlier checks pass.",
+    "events": [
+     "Validation constructs the stage-four refusal.",
+     "One implementation treats the new constant as all customer failure kinds; another treats it as only customer-specific kinds."
+    ],
+    "outcomes": [
+     "The refusal uses the general out-of-form failure kind.",
+     "The refusal uses a distinct customer-value failure kind."
+    ],
+    "observer": "The owner interface and any test comparing the refusal field for field"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "backup encryption suite and key derivation",
+   "kind": "undefined cryptographic parameters",
+   "text": "BACKUP_NONCE_BYTES\nBACKUP_KEY_BYTES\nBACKUP_KEY_DERIVATION_HASH",
+   "question": "What exact values and representations do these constants have, which authenticated-encryption algorithm uses the nonce and key, and which key-derivation algorithm uses the named hash and BACKUP_KEY_DERIVATION_INFO?",
+   "options": [
+    "AES-256-GCM with a 12-byte nonce, 32-byte derived key and HKDF-SHA-256",
+    "ChaCha20-Poly1305 with a 12-byte nonce, 32-byte derived key and HKDF-SHA-256",
+    "Another explicitly named suite with its nonce length, key length, KDF and hash"
+   ],
+   "default_guess": "AES-256-GCM, 12-byte random nonce, 32-byte derived key, and HKDF-SHA-256, with algorithm names stored as strings rather than imported callables.",
+   "witness": {
+    "initial": "Registry has a valid configured backup secret and an existing store.",
+    "events": [
+     "Registry makes and keeps an encrypted backup.",
+     "A restore implementation is later written from the design without access to the producing implementation.",
+     "The restore derives a key or parses a nonce using a different admissible choice."
+    ],
+    "outcomes": [
+     "The backup decrypts and passes its integrity check.",
+     "The same valid backup cannot be decrypted or parsed."
+    ],
+    "observer": "The owner performing disaster recovery"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "PROJECT_STATUS_CONFIRMATIONS",
+   "kind": "unclear authority",
+   "text": "PROJECT_STATUS_CONFIRMATIONS",
+   "question": "What does this constant map or contain, and is it a derived encoding of the already fixed confirmation actions or a new authority for deciding when a project action requires confirmation?",
+   "options": [
+    "A derived mapping from project status or transition to the confirmation-required owner actions",
+    "A set of project statuses whose actions require confirmation",
+    "Remove it and let the action-level confirmation policy remain the sole authority"
+   ],
+   "default_guess": "Represent the existing action-level confirmation policy as a derived mapping and state that it cannot override A13 or Identity formats.",
+   "unit": "?"
+  },
+  {
+   "subject": "owner action classifications",
+   "kind": "duplicate ownership",
+   "text": "OWNER_NAVIGATION_ACTIONS\nOWNER_CHANGE_ACTIONS",
+   "question": "Are these exhaustive disjoint partitions of OWNER_ACTIONS, derived projections of OwnerActionRoute.is_change and method, or independent authoritative lists; and what exactly makes an action “navigation”?",
+   "options": [
+    "Derived disjoint projections of OWNER_ACTIONS, with navigation defined explicitly",
+    "Independent authoritative sets, replacing OwnerActionRoute.is_change as the owner",
+    "Remove them because OWNER_ACTIONS already records whether each action is a change"
+   ],
+   "default_guess": "Make OWNER_ACTIONS the sole authority, derive OWNER_CHANGE_ACTIONS from is_change, and define OWNER_NAVIGATION_ACTIONS as a documented derived subset rather than stored duplicate policy.",
+   "witness": {
+    "initial": "An owner action has an OWNER_ACTIONS row whose is_change value disagrees with membership in OWNER_CHANGE_ACTIONS.",
+    "events": [
+     "The owner submits the action from the interface.",
+     "One implementation trusts the table row; another trusts the new set."
+    ],
+    "outcomes": [
+     "The action is treated as navigation and may be served as a non-change.",
+     "The action is treated as a change and requires POST and CSRF protection."
+    ],
+    "observer": "The owner and the CSRF/security tests"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "SERVICE_CHANGE_OPERATIONS",
+   "kind": "undefined classification owner",
+   "text": "SERVICE_CHANGE_OPERATIONS",
+   "question": "Which ServiceOperation members are included, what definition of “change” is used, and which module owns that classification when operation contracts and manifest effect classes already describe behavior?",
+   "options": [
+    "Every service operation that mutates Registry state",
+    "Only operations whose manifest effect class is state-transition or stronger",
+    "A derived set from a single operation metadata table rather than an independent constant"
+   ],
+   "default_guess": "Derive it from one authoritative operation metadata table and define change as mutation of Registry state; do not maintain a second hand-written classification.",
+   "witness": {
+    "initial": "Cabinet Kernel calls request access, which changes the pending request but is classified draft-write by R0-99.",
+    "events": [
+     "One implementation interprets “change” as any Registry state mutation.",
+     "Another interprets it as the manifest's state-transition-or-stronger classes."
+    ],
+    "outcomes": [
+     "Request access belongs to SERVICE_CHANGE_OPERATIONS.",
+     "Request access does not belong to SERVICE_CHANGE_OPERATIONS."
+    ],
+    "observer": "The operation dispatcher, locking behavior, and generated manifest consumer"
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "request-id printability",
+   "kind": "undefined Unicode classification",
+   "text": "REQUEST_ID_UNPRINTABLE_CATEGORIES",
+   "question": "Which exact Unicode general categories are unprintable, whether category alone is sufficient, and how this constant implements A01's requirement that a request id be printable text?",
+   "options": [
+    "Reject Unicode categories Cc, Cf, Cs, Co and Cn",
+    "Match Python str.isprintable semantics, including its treatment of separators",
+    "Declare an explicit code-point predicate or allowed repertoire instead of category names alone"
+   ],
+   "default_guess": "Declare an explicit, version-stable allowed-code-point predicate; if categories are retained, list them exhaustively and state the Unicode version and handling of separators and format characters.",
+   "witness": {
+    "initial": "A create request id is within 128 code points and contains U+200B ZERO WIDTH SPACE.",
+    "events": [
+     "The caller submits the create with all other values valid.",
+     "One implementation rejects every Cf character; another follows a different printability predicate that admits it."
+    ],
+    "outcomes": [
+     "The create is refused as having an unprintable request id.",
+     "The create is accepted and stores the request id."
+    ],
+    "observer": "The caller retrying the create and the stored record"
+   },
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"types and model dependencies of the added grouped constants\",\"kind\":\"unclear dependency\",\"text\":\"Its other constants are scalars and import nothing.\",\"question\":\"Are CUSTOMER_VALUE_FAILURE_KINDS, PROJECT_STATUS_CONFIRMATIONS, OWNER_NAVIGATION_ACTIONS, OWNER_CHANGE_ACTIONS, SERVICE_CHANGE_OPERATIONS and REQUEST_ID_UNPRINTABLE_CATEGORIES scalar encodings, collections of raw strings, or collections of model enum members; and for every enum-backed collection, which additional models does data_provider know?\",\"options\":[\"Keep them as raw immutable collections and revise the claim that every other constant is scalar\",\"Make them collections of model enum members and add every directly named enum to Knows\",\"Encode them as scalar bit masks and define the bit assignments\"],\"default_guess\":\"Use immutable tuples of enum members where an enum exists, tuples of strings for Unicode categories, and extend Knows with every directly named enum.\",\"witness\":{\"initial\":\"The strict importer generates data_provider and a consumer of one of the new grouped constants.\",\"events\":[\"The generator interprets the constant as a collection of model enum members.\",\"One implementer adds the enum dependency; another follows “import nothing” and represents the members as strings.\"],\"outcomes\":[\"The consumer receives typed enum members and enum comparisons succeed.\",\"The consumer receives strings, or strict generation fails because the enum import was never declared.\"],\"observer\":\"The generator, strict import validator, or generated consumer\"}},{\"subject\":\"CUSTOMER_VALUE_FAILURE_KINDS\",\"kind\":\"undefined constant contents\",\"text\":\"CUSTOMER_VALUE_FAILURE_KINDS\",\"question\":\"Which failure kinds does this constant contain, what is their order and type, and is it merely data consumed by validation or a second authority for which customer values fail?\",\"options\":[\"An exhaustive ordered tuple of failure-kind enum members for all customer value checks\",\"A set containing only customer-specific failure kinds, with general missing/out-of-form kinds elsewhere\",\"A mapping from each customer field to its failure kind\"],\"default_guess\":\"Define one authoritative field-to-failure-kind mapping derived from A02, with no independent validation policy in data_provider.\",\"witness\":{\"initial\":\"A customer request supplies an unsupported language while all earlier checks pass.\",\"events\":[\"Validation constructs the stage-four refusal.\",\"One implementation treats the new constant as all customer failure kinds; another treats it as only customer-specific kinds.\"],\"outcomes\":[\"The refusal uses the general out-of-form failure kind.\",\"The refusal uses a distinct customer-value failure kind.\"],\"observer\":\"The owner interface and any test comparing the refusal field for field\"}},{\"subject\":\"backup encryption suite and key derivation\",\"kind\":\"undefined cryptographic parameters\",\"text\":\"BACKUP_NONCE_BYTES\\nBACKUP_KEY_BYTES\\nBACKUP_KEY_DERIVATION_HASH\",\"question\":\"What exact values and representations do these constants have, which authenticated-encryption algorithm uses the nonce and key, and which key-derivation algorithm uses the named hash and BACKUP_KEY_DERIVATION_INFO?\",\"options\":[\"AES-256-GCM with a 12-byte nonce, 32-byte derived key and HKDF-SHA-256\",\"ChaCha20-Poly1305 with a 12-byte nonce, 32-byte derived key and HKDF-SHA-256\",\"Another explicitly named suite with its nonce length, key length, KDF and hash\"],\"default_guess\":\"AES-256-GCM, 12-byte random nonce, 32-byte derived key, and HKDF-SHA-256, with algorithm names stored as strings rather than imported callables.\",\"witness\":{\"initial\":\"Registry has a valid configured backup secret and an existing store.\",\"events\":[\"Registry makes and keeps an encrypted backup.\",\"A restore implementation is later written from the design without access to the producing implementation.\",\"The restore derives a key or parses a nonce using a different admissible choice.\"],\"outcomes\":[\"The backup decrypts and passes its integrity check.\",\"The same valid backup cannot be decrypted or parsed.\"],\"observer\":\"The owner performing disaster recovery\"}},{\"subject\":\"PROJECT_STATUS_CONFIRMATIONS\",\"kind\":\"unclear authority\",\"text\":\"PROJECT_STATUS_CONFIRMATIONS\",\"question\":\"What does this constant map or contain, and is it a derived encoding of the already fixed confirmation actions or a new authority for deciding when a project action requires confirmation?\",\"options\":[\"A derived mapping from project status or transition to the confirmation-required owner actions\",\"A set of project statuses whose actions require confirmation\",\"Remove it and let the action-level confirmation policy remain the sole authority\"],\"default_guess\":\"Represent the existing action-level confirmation policy as a derived mapping and state that it cannot override A13 or Identity formats.\"},{\"subject\":\"owner action classifications\",\"kind\":\"duplicate ownership\",\"text\":\"OWNER_NAVIGATION_ACTIONS\\nOWNER_CHANGE_ACTIONS\",\"question\":\"Are these exhaustive disjoint partitions of OWNER_ACTIONS, derived projections of OwnerActionRoute.is_change and method, or independent authoritative lists; and what exactly makes an action “navigation”?\",\"options\":[\"Derived disjoint projections of OWNER_ACTIONS, with navigation defined explicitly\",\"Independent authoritative sets, replacing OwnerActionRoute.is_change as the owner\",\"Remove them because OWNER_ACTIONS already records whether each action is a change\"],\"default_guess\":\"Make OWNER_ACTIONS the sole authority, derive OWNER_CHANGE_ACTIONS from is_change, and define OWNER_NAVIGATION_ACTIONS as a documented derived subset rather than stored duplicate policy.\",\"witness\":{\"initial\":\"An owner action has an OWNER_ACTIONS row whose is_change value disagrees with membership in OWNER_CHANGE_ACTIONS.\",\"events\":[\"The owner submits the action from the interface.\",\"One implementation trusts the table row; another trusts the new set.\"],\"outcomes\":[\"The action is treated as navigation and may be served as a non-change.\",\"The action is treated as a change and requires POST and CSRF protection.\"],\"observer\":\"The owner and the CSRF/security tests\"}},{\"subject\":\"SERVICE_CHANGE_OPERATIONS\",\"kind\":\"undefined classification owner\",\"text\":\"SERVICE_CHANGE_OPERATIONS\",\"question\":\"Which ServiceOperation members are included, what definition of “change” is used, and which module owns that classification when operation contracts and manifest effect classes already describe behavior?\",\"options\":[\"Every service operation that mutates Registry state\",\"Only operations whose manifest effect class is state-transition or stronger\",\"A derived set from a single operation metadata table rather than an independent constant\"],\"default_guess\":\"Derive it from one authoritative operation metadata table and define change as mutation of Registry state; do not maintain a second hand-written classification.\",\"witness\":{\"initial\":\"Cabinet Kernel calls request access, which changes the pending request but is classified draft-write by R0-99.\",\"events\":[\"One implementation interprets “change” as any Registry state mutation.\",\"Another interprets it as the manifest's state-transition-or-stronger classes.\"],\"outcomes\":[\"Request access belongs to SERVICE_CHANGE_OPERATIONS.\",\"Request access does not belong to SERVICE_CHANGE_OPERATIONS.\"],\"observer\":\"The operation dispatcher, locking behavior, and generated manifest consumer\"}},{\"subject\":\"request-id printability\",\"kind\":\"undefined Unicode classification\",\"text\":\"REQUEST_ID_UNPRINTABLE_CATEGORIES\",\"question\":\"Which exact Unicode general categories are unprintable, whether category alone is sufficient, and how this constant implements A01's requirement that a request id be printable text?\",\"options\":[\"Reject Unicode categories Cc, Cf, Cs, Co and Cn\",\"Match Python str.isprintable semantics, including its treatment of separators\",\"Declare an explicit code-point predicate or allowed repertoire instead of category names alone\"],\"default_guess\":\"Declare an explicit, version-stable allowed-code-point predicate; if categories are retained, list them exhaustively and state the Unicode version and handling of separators and format characters.\",\"witness\":{\"initial\":\"A create request id is within 128 code points and contains U+200B ZERO WIDTH SPACE.\",\"events\":[\"The caller submits the create with all other values valid.\",\"One implementation rejects every Cf character; another follows a different printability predicate that admits it.\"],\"outcomes\":[\"The create is refused as having an unprintable request id.\",\"The create is accepted and stores the request id.\"],\"observer\":\"The caller retrying the create and the stored record\"}}]}",
+ "set_aside": []
+}

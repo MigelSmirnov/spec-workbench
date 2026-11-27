@@ -1049,7 +1049,7 @@ Customer (R0-65, R0-83).
 
 ### Knows
 
-`models`, `given_values`, `random_values`, `store`.
+`models`, `data_provider`, `given_values`, `random_values`, `store`.
 
 ### Must not own
 
@@ -1099,7 +1099,7 @@ from `store` in A06 rules 1, 2 and 8's orders. A05 rule 4's refusals that are pr
 
 ### Knows
 
-`models`, `given_values`, `random_values`, `store`, `customers`.
+`models`, `data_provider`, `given_values`, `random_values`, `store`, `customers`.
 
 ### Must not own
 
@@ -1203,7 +1203,7 @@ sessions in A06 rule 5's order and the session's access.
 
 ### Knows
 
-`models`, `given_values`, `store`, `projects`.
+`models`, `data_provider`, `given_values`, `store`, `projects`.
 
 ### Must not own
 
