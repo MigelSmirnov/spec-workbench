@@ -36,7 +36,9 @@ Fixture surface used here:
 - ``owner(action, target=None, stated_version=None, confirm=True,
   **values)`` -> answer, for `list_projects`, `create_project`,
   `read_project`, `correct_project` and `archive_project` (``confirm=False``
-  returns the confirmation step); ``owner_confirm(step, value=None)``;
+  returns the confirmation step); ``owner_confirm(step, value=None,
+  omit_value=False)``; ``owner_upload(content)`` and ``export_file(...)``
+  for the import (Required test 13);
 - ``owner(..., csrf=…)``: the CSRF value sent instead of the session's
   (``None`` sends none);
 - ``stop()``, ``configure(owner_credential=…)``, ``start()`` and
@@ -775,3 +777,87 @@ def test_session_values_never_in_url_log_or_record(semantic_runtime):
     for label, value in values.items():
         assert not any(value in line for line in lines), label
         assert value not in rows, label
+
+
+# --- Required test 13 (untagged) -------------------------------------------
+
+
+def _unconfirmed_refused(rt, step):
+    """Submit a shown step's action with everything but its confirmation
+    value: it is refused and changes no table, the log among them."""
+    assert step["answer_kind"] == "confirmation_step", step
+    before = {table: rt.store_rows(table) for table in TABLES}
+    answer = rt.owner_confirm(step, omit_value=True)
+    assert answer["answer_kind"] == "refused", answer
+    assert {table: rt.store_rows(table) for table in TABLES} == before
+
+
+def test_unconfirmed_submission_refused_for_every_confirmed_action(semantic_runtime):
+    """A13 rule 6, Required test 13: each action that asks for the owner's
+    confirmation (CONFIRMED_OWNER_ACTIONS: archive_project, erase_project,
+    erase_audit_entries, confirm_import), submitted in a valid session with
+    its CSRF value and inputs valid for that action but without the
+    confirmation value, is refused; the action is not performed and the log
+    holds no entry of it. Each control confirms a fresh step of the same
+    inputs and is accepted, so the inputs were valid."""
+    rt = semantic_runtime
+    rt.clock.set("2026-02-10T12:00:00Z")
+    _signed_in(rt.sign_in())
+
+    # archive_project
+    card = _create_project(rt, "Casa por archivar")
+    step = rt.owner("archive_project", target=card["project_id"],
+                    stated_version=card["revision"], confirm=False)
+    _unconfirmed_refused(rt, step)
+    assert _project(rt, card["project_id"])["status"] == "active"
+    archived = rt.owner("archive_project", target=card["project_id"],
+                        stated_version=card["revision"])
+    assert archived["answer_kind"] == "project_card", archived
+    assert archived["card"]["status"] == "archived"
+
+    # erase_project, of the project archived above
+    card = archived["card"]
+    step = rt.owner("erase_project", target=card["project_id"],
+                    stated_version=card["revision"], erasure="anonymise",
+                    confirm=False)
+    _unconfirmed_refused(rt, step)
+    assert _project(rt, card["project_id"])["display_name"] == "Casa por archivar"
+    erased = rt.owner("erase_project", target=card["project_id"],
+                      stated_version=card["revision"], erasure="anonymise")
+    assert erased["answer_kind"] == "project_erased", erased
+
+    # erase_audit_entries: an accepted erasure always writes its own entry
+    # (A15 rule 6), so an unchanged log shows it was not performed.
+    today = "2026-02-10"
+    step = rt.owner("erase_audit_entries", erase_before=today, confirm=False)
+    _unconfirmed_refused(rt, step)
+    erasure = rt.owner("erase_audit_entries", erase_before=today)
+    assert erasure["answer_kind"] == "audit_erased", erasure
+
+    # confirm_import, of one clean pick of an uploaded file
+    content = rt.export_file(
+        projects=[{
+            "project_id": "v1-a13",
+            "name": "Reforma Mayor",
+            "address": "Reforma Mayor, Valencia",
+            "status": "active",
+            "customer_ref": None,
+            "created_at": "2024-03-01T10:00:00+00:00",
+            "updated_at": "2024-03-05T10:00:00+00:00",
+            "archived_at": None,
+        }],
+        rooms=[],
+        pointers=[],
+    )
+    uploaded = rt.owner_upload(content)
+    assert uploaded["answer_kind"] == "import_upload", uploaded
+    choices = {
+        "picks": [{"project_id": "v1-a13", "display_name": None, "alias": None}],
+        "customers": [],
+    }
+    step = rt.owner("confirm_import", confirm=False, import_choices=choices)
+    _unconfirmed_refused(rt, step)
+    assert rt.store_rows("migration_closure_rows") == []
+    accepted = rt.owner("confirm_import", import_choices=choices)
+    assert accepted["answer_kind"] == "import_accepted", accepted
+

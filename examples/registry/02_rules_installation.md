@@ -1023,6 +1023,13 @@ release does not start on a kernel that is not Linux's. No guarantee
 weakened: rule 6 names the host they were written for. No right,
 limit, file, path or answer moved, and no outcome changed.
 
+Performed again on 2026-11-27, after A13 gained Required test 13 (owner):
+each action that asks for the owner's confirmation, submitted in a valid
+session with its CSRF value and valid inputs but without the confirmation
+value, is refused, performs nothing and writes no entry. Reviewed under
+authorization (A13 rule 6, A14): the test shows a refusal the rule already
+gave. No right, limit, file, path or answer moved, and no outcome changed.
+
 ### Consequence
 
 Every category has an outcome resting on accepted decisions; the GDPR review

@@ -446,6 +446,11 @@ refused_sign_ins(last 15min) >= 5 => sign_in refused   -- A13-2
     any one of them: another action, another target, another version or
     none, another value of any input, or the same list in another order
     (rule 6).
+13. For each action that asks for the owner's confirmation (Identity
+    formats), a submission in a valid owner session, with the session's CSRF
+    value and inputs valid for that action, that omits only the confirmation
+    value is refused; the action is not performed and the log holds no entry
+    of it (rule 6).
 
 ### Consequence
 
@@ -468,3 +473,10 @@ its requests are refused at the session check before either is read. Rules
 1 and 7, which had no Required test, have tests 10 and 11 for what the
 surfaces show; the rest of rule 7 and rule 1's HTTPS are carried to Factory
 verification, as rule 7 now says. No limit and no behaviour changed.
+
+Restated on 2026-11-27 by the owner, after the check of the data-protection
+matrix (`sources/privacy_requirements_20261123.md`, row A4: the owner confirms
+archiving, erasure and the import) found that tests 6 and 12 show a used,
+expired or rebound confirmation value refused, but no test shows that an
+action asking for confirmation is refused when the value is left out: test 13
+shows it for each such action. No rule and no behaviour changed.
