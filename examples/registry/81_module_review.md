@@ -1061,6 +1061,16 @@ since the slice builder takes no preamble text (State 1's clarification of
 2026-11-27 is that source); no test note in `operations` names A13 test 13,
 which the semantic test carries. Every module re-hashed on 58d6dff4.
 
+## 2026-11-27: the confirmation binding's text is in `TEXT_ENCODING`
+
+Route B on b4b5b9f9 (codex `gpt-5.6-sol`) generated every module; the linker
+stopped on four `data_literal_leak` findings in `owner_sessions`: the
+serialisation of `_confirmation_binding_digest` wrote `"utf-8"` inline, the
+value of `TEXT_ENCODING`. Its note left the encoding open; since feef0c41 it
+names the imported constant (State 7 round-15 clear). The `owner_sessions`
+packet changed by that clause alone, `TEXT_ENCODING` already among its
+dependencies; re-read and re-hashed, PASS.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
