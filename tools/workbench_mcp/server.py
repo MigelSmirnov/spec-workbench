@@ -217,7 +217,9 @@ def find_enum_lookup(project: str, source: str, target: str) -> dict[str, Any]:
     """Find provider tables that select by one source enum and return a target enum field."""
     try:
         with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (view, case_root):
-            return {**enum_lookup.find_enum_lookup(case_root, source, target), "resolved_ref": view.resolved_ref}
+            # The form calls must open the author's checkout, not this materialized copy.
+            return {**enum_lookup.find_enum_lookup(case_root, source, target, shown_case="CASE"),
+                    "resolved_ref": view.resolved_ref}
     except _ERRORS as exc:
         return {"error": str(exc), "known_cases": _known_cases()}
 

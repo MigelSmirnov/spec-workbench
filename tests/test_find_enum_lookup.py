@@ -20,7 +20,10 @@ def find(monkeypatch):
 def test_lists_all_candidates_without_guessing_or_copying_values(find):
     rows = find("Action", "Status")["matches"]
     assert rows == [{"constant": name, "row_model": "Row", "select_by": "action", "read_field": "result",
-                     "total": total, "declared_importers": None} for name, total in [("A", False), ("B", True)]]
+                     "total": total, "declared_importers": None,
+                     "edit_form": f"python tools/design_enum_map.py template . {name} --source Action.action "
+                                  f"--target Status.result --row-model Row {mode}"}
+                    for name, total, mode in [("A", False, "--partial"), ("B", True, "--total")]]
 
 
 def test_names_the_modules_that_declare_the_import(find, monkeypatch, tmp_path):
@@ -35,5 +38,9 @@ def test_names_the_modules_that_declare_the_import(find, monkeypatch, tmp_path):
 def test_direction_and_empty_result(find):
     assert find("Status", "Action")["matches"] == []
     assert "structure request" in find("Other", "Action")["guidance"]
+    missing = find("Other", "Action")
+    assert "string_mapping" in missing["guidance"]
+    assert missing["create_form"].endswith("--source Other.KEY_FIELD --target Action.VALUE_FIELD --row-model RowModelName --total")
+    assert "create_form" not in find("Action", "Status")
     with pytest.raises(ValueError, match="not a declared enum"):
         find("Missing", "Status")
