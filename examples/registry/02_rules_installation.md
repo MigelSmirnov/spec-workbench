@@ -1027,8 +1027,8 @@ Performed again on 2026-11-27, after A13 gained Required test 13 (owner):
 each action that asks for the owner's confirmation, submitted in a valid
 session with its CSRF value and valid inputs but without the confirmation
 value, is refused, performs nothing and writes no entry. Reviewed under
-authorization (A13 rule 6, A14): the test shows a refusal the rule already
-gave. No right, limit, file, path or answer moved, and no outcome changed.
+authentication_credential_abuse (A13): the test shows a refusal A13 rule 6
+already gave; no category's references changed. No right, limit, file, path or answer moved, and no outcome changed.
 
 ### Consequence
 

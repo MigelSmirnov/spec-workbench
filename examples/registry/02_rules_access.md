@@ -475,8 +475,9 @@ surfaces show; the rest of rule 7 and rule 1's HTTPS are carried to Factory
 verification, as rule 7 now says. No limit and no behaviour changed.
 
 Restated on 2026-11-27 by the owner, after the check of the data-protection
-matrix (`sources/privacy_requirements_20261123.md`, row A4: the owner confirms
-archiving, erasure and the import) found that tests 6 and 12 show a used,
+matrix (`sources/privacy_requirements_20261123.md`, its row on human
+oversight of actions: the owner confirms archiving, erasure and the import)
+found that tests 6 and 12 show a used,
 expired or rebound confirmation value refused, but no test shows that an
 action asking for confirmation is refused when the value is left out: test 13
 shows it for each such action. No rule and no behaviour changed.
