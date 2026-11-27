@@ -61,6 +61,13 @@ clearly allowed by a section you have read, read further before you write it.
    but it is not the measure. A note it passes must still meet the standard. Never
    reword a sentence only so that the check stops seeing it.
 
+For an enum-to-enum lookup (§15.2, §6.10 v2), request the typed table even if a
+string_mapping already holds the pairs. Use value_kind "mapping", identify the
+existing symbol and its unsuitable type in homes_considered, and record the
+search for the missing typed home with find_absence. In the case checkout the
+author can run design_enum_map.py template, preview and apply (see --help).
+Keep the blocked note until the source change can be projected.
+
 If a requirement of this module needs a value the specification does not hold, you
 write no notes for the module. You answer with structure requests instead (form
 below), with the `absence` that `find_absence` gave you.
