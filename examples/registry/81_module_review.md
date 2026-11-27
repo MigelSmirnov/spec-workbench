@@ -1085,6 +1085,23 @@ now waits through the `_run_backup` seam alone (code_factory 0d54864d). The
 `backups` packet changed by the note clause and the `RuntimeSettings`
 dependency; re-read and re-hashed, PASS.
 
+## 2026-11-27: the backup key's HKDF hash
+
+Route B on c3e9c613 (codex) stopped at the linker: `backups` mapped the
+`BACKUP_KEY_DERIVATION_HASH` constant to a hash through a table of names
+written in the code, `"sha256"` among them. The note said only "the hash the
+constant names"; the generator never sees the constant's value and reflection
+is banned, so it had no admissible way to choose. State 7 rounds 20-24 ruled
+out a lookup by name, a hand-made HKDF on `hmac` (not a declared import, and
+the steps are implementation) and a class the generator must guess. Since
+7c9a4d9a the note names the imported `SHA256` constructor
+(`from cryptography.hazmat.primitives.hashes import SHA256` replaces the
+`hashes` module in the third-party imports), and a wiring-fault clause raises
+`ValueError` when its name is not the constant's (round-25 clear). The
+derivation is HKDF-SHA256 as in every generation so far. The `backups` packet
+changed by those clauses; the other changed packets by note numbering alone;
+all re-hashed, PASS.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants

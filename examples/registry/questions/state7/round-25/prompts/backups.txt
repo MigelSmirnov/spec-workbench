@@ -1,0 +1,207 @@
+Module: backups
+Target path: app/backups.py
+Target file: backups.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from datetime import date, datetime
+
+from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from app.clock import recorded_now
+from app.configuration import give_backup_key
+from app.data_provider import BACKUP_DAILY_TIME_UTC, BACKUP_KEPT_PREFIX, BACKUP_KEY_BYTES, BACKUP_KEY_DERIVATION_HASH, BACKUP_KEY_DERIVATION_INFO, BACKUP_KEY_DIGEST_DOMAIN, BACKUP_KEY_DIGEST_PREFIX, BACKUP_KEY_DIGEST_SEPARATOR, BACKUP_NONCE_BYTES, BACKUP_RECORD_VERSION, BACKUP_RETENTION_HOURS, BACKUP_TEMPORARY_PREFIX, DIGEST_ALGORITHM, RELEASE_VERSION, STORE_COMPANION_STEP_SUFFIXES, TEXT_ENCODING
+from app.given_values import read_instant_text
+from app.models import BackupRecord, BackupRunStep, BackupsUnlisted, NewestBackup, NewestBackupFound, NoBackup, ProbeOutcome, ProbePassed, RuntimeSettings, SnapshotFailed, SnapshotOutcome, StartDiagnostic, StoreFileCheck, StoreSnapshot
+from app.store import RegistryStore, check_store_file, copy_store_snapshot
+
+CONTRACTS (function signatures — follow exactly):
+def _backup_due(now: datetime) -> bool
+def _decrypt_backup(sealed: bytes, backup_key: str) -> bytes | None
+def _encrypt_backup(snapshot: bytes, backup_key: str, record: BackupRecord) -> bytes
+def _key_digest(backup_key: str) -> str
+def _open_without_link(path: str, create: bool) -> int
+def _read_backup_record(file_path: str) -> BackupRecord | None
+def _report_run_failure(step: BackupRunStep, file_name: str | None) -> None
+def _run_backup(backup_dir: str, registry_store: RegistryStore, run_date: date) -> None
+def newest_backup_instant(backup_dir: str) -> NewestBackup
+def probe_backup_location(backup_dir: str) -> ProbeOutcome
+def run_daily_backup_if_due(backup_dir: str, registry_store: RegistryStore) -> None
+# RegistryStore
+def __init__(self, store_path: str) -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def recorded_now() -> datetime
+def give_backup_key() -> str
+def read_instant_text(text: str) -> datetime | None
+def check_store_file(file_path: str, recorded_sequence: int) -> StoreFileCheck
+def copy_store_snapshot(registry_store: RegistryStore, target_path: str) -> SnapshotOutcome
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+BACKUP_DAILY_TIME_UTC: str
+BACKUP_KEPT_PREFIX: str
+BACKUP_KEY_BYTES: int
+BACKUP_KEY_DERIVATION_HASH: str
+BACKUP_KEY_DERIVATION_INFO: str
+BACKUP_KEY_DIGEST_DOMAIN: str
+BACKUP_KEY_DIGEST_PREFIX: str
+BACKUP_KEY_DIGEST_SEPARATOR: str
+BACKUP_NONCE_BYTES: int
+BACKUP_RECORD_VERSION: int
+BACKUP_RETENTION_HOURS: int
+BACKUP_TEMPORARY_PREFIX: str
+DIGEST_ALGORITHM: str
+RELEASE_VERSION: str
+STORE_COMPANION_STEP_SUFFIXES: tuple[StoreCompanionStepSuffix, ...]
+TEXT_ENCODING: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- _backup_due: (now: datetime) -> bool
+- _decrypt_backup: (sealed: bytes, backup_key: str) -> bytes | None
+- _encrypt_backup: (snapshot: bytes, backup_key: str, record: BackupRecord) -> bytes
+- _key_digest: (backup_key: str) -> str
+- _open_without_link: (path: str, create: bool) -> int
+- _read_backup_record: (file_path: str) -> BackupRecord | None
+- _report_run_failure: (step: BackupRunStep, file_name: str | None) -> None
+- _run_backup: (backup_dir: str, registry_store: RegistryStore, run_date: date) -> None
+- newest_backup_instant: (backup_dir: str) -> NewestBackup
+- probe_backup_location: (backup_dir: str) -> ProbeOutcome
+- run_daily_backup_if_due: (backup_dir: str, registry_store: RegistryStore) -> None
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; a declared field or operation is
+  addressed by its name, including in try/finally cleanup, and a
+  model's fields read generically come from iterating the model,
+  in place or inside an imported operation that does so.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+- An enum member is read only by a name the models module declares for it;
+  a member or attribute the enum does not have is rejected, read through
+  the class or through a value of the enum. Compare a value with the
+  member itself, never its .name with a text: .name is the first name the
+  models module declares for the value, and a text no member's .name is
+  is rejected.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- _backup_due: [BEHAVIOR] MUST compare now's UTC time of day with the imported BACKUP_DAILY_TIME_UTC constant read as hours and minutes; before it, it MUST remember now's UTC date in the module's memory as seen before the daily time and answer false; at or after it, it MUST answer true only when now's date was so remembered and not yet decided, and MUST then remember the date as decided whatever it answers, so that only a date's first look at or after the daily time can answer true and a process answers true for each date at most once; the memory starts empty with each process.
+- _decrypt_backup: [VALIDATION_ERROR] MUST split sealed at its first line feed, take as the nonce the imported BACKUP_NONCE_BYTES constant in bytes after it and decrypt the rest with the key derived from backup_key as _encrypt_backup derives it and the record line's bytes without its line feed as associated data, answering the decrypted snapshot; it MUST answer None, without raising, when sealed has no line feed, holds fewer bytes after it than the nonce takes, or fails the authentication, a rest too short to hold a tag failing it.
+- _encrypt_backup: [SCHEMA_CONSTRAINT] MUST answer the backup file's bytes: first the record line, one JSON object encoded by the imported TEXT_ENCODING constant holding exactly the fields of = models.BackupRecord from record, made_at as the text of the instant in UTC in the internet date and time format, its offset written as hours and minutes and its fraction of a second always to the microsecond, a text read_instant_text reads back as the same instant, written on one line and ended by one line feed; then a fresh random nonce of the imported BACKUP_NONCE_BYTES constant in bytes drawn from the operating system's random source; then the AES-GCM ciphertext of snapshot with its authentication tag.
+- _encrypt_backup: [SECURITY_BOUNDARY] MUST seal under an AES-GCM key of the imported BACKUP_KEY_BYTES constant in bytes, derived by HKDF with the hash the imported SHA256 constructor of the cryptography package builds, the one whose name the imported BACKUP_KEY_DERIVATION_HASH constant holds, and no salt from the bytes of backup_key with those of the imported BACKUP_KEY_DERIVATION_INFO constant as its info, both encoded by the imported TEXT_ENCODING constant, using the cryptography package, and MUST pass the record line's bytes without its line feed as the associated data, so that a changed record fails the decryption.
+- _encrypt_backup: [VALIDATION_ERROR] MUST raise ValueError, a wiring fault and never an answer, when the name of the hash the imported SHA256 constructor built for the key's derivation is not the one the imported BACKUP_KEY_DERIVATION_HASH constant holds, a release whose constant names another hash being one this code was not made for.
+- _key_digest: [SECURITY_BOUNDARY] MUST answer the text the imported BACKUP_KEY_DIGEST_PREFIX constant holds followed by the lowercase hexadecimal digest, by the algorithm the imported DIGEST_ALGORITHM constant names, of the bytes, each encoded by the imported TEXT_ENCODING constant, of the imported BACKUP_KEY_DIGEST_DOMAIN constant, of the imported BACKUP_KEY_DIGEST_SEPARATOR constant and of backup_key, the same text for the same key on every call, and MUST keep neither the key nor the digest.
+- _open_without_link: [PATH_OR_ARTIFACT_POLICY] MUST open path without following a symbolic link: a link at path, even one placed there just before the open, MUST make the open fail rather than be followed; when create is false it MUST open the file for reading only, and when create is true it MUST create a new regular file for writing, exclusively, failing when anything already exists at path.
+- _open_without_link: [RETURN_SHAPE] MUST answer the file descriptor of the opened file and MUST let the OSError of a failed open propagate unchanged.
+- _open_without_link: [FORBIDDEN_ACTION] MUST NOT test whether the platform offers an open that does not follow links and MUST NOT fall back to an open that follows them: Registry runs on Linux alone (A20).
+- _read_backup_record: [VALIDATION_ERROR] MUST open file_path for reading only, through _open_without_link, read only its first line, and answer a BackupRecord when that line is a JSON object encoded by the imported TEXT_ENCODING constant with exactly the fields of = models.BackupRecord, each of its type, made_at a text for which read_instant_text answers an instant, taken as that instant, and no integer field a boolean, whatever its record_version; it MUST answer None, without raising, for a file that is not a regular file or cannot be opened or read, and for any other first line.
+- _report_run_failure: [BEHAVIOR] MUST write exactly one line to the process's standard error naming that a backup run failed, the failed step by its member of = models.BackupRunStep and, when file_name is given, that file's name within the backup location, and nothing else: never a key, a digest, a record's value, the location's path or a file's content.
+- _run_backup: [BEHAVIOR] The run MUST first look for a kept backup of run_date by reading with _read_backup_record every regular file directly in backup_dir whose name begins with the imported BACKUP_KEPT_PREFIX constant, and MUST end with no step and no diagnostic when one records a made_at whose UTC date is run_date; a file whose record cannot be read, or a location that cannot be listed, counts as no kept backup of the date.
+- _run_backup: [BEHAVIOR] The run's removal step MUST remove every regular file directly in backup_dir whose name begins with the imported BACKUP_TEMPORARY_PREFIX constant; when the location cannot be listed or one removal fails it MUST report the REMOVE_TEMPORARY member of = models.BackupRunStep through _report_run_failure and end the run there, making no backup and deleting nothing else.
+- _run_backup: [BEHAVIOR] The run's backup step MUST have copy_store_snapshot copy registry_store to a new temporary path, take the key give_backup_key gives, make the BackupRecord from the imported BACKUP_RECORD_VERSION constant, the StoreSnapshot's fixed_at as its made_at and its last_sequence_number, the imported RELEASE_VERSION constant and _key_digest of the key, write _encrypt_backup of the copy's bytes into a second new temporary file, and remove the unencrypted copy, with each companion file whose path is the copy's path followed by the suffix of a row of the imported STORE_COMPANION_STEP_SUFFIXES constant, before going on; when copy_store_snapshot answers SnapshotFailed, the step MUST remove what it wrote at that path before it reports.
+- _run_backup: [BEHAVIOR] The backup step MUST then read the written backup back from its file, decrypt it with _decrypt_backup into a third new temporary file, have check_store_file check that file against the recorded last sequence number, and remove that file with each companion file whose path is its path followed by the suffix of a row of the imported STORE_COMPANION_STEP_SUFFIXES constant, whatever the check answered; the backup MUST be renamed to its kept name only when the snapshot, the encryption, the decryption and the check passed and both unencrypted files were removed, and otherwise the step MUST delete the backup when it can, leaving it under its temporary name when the decrypted file cannot be removed, and report the MAKE_BACKUP member of = models.BackupRunStep, a file it cannot remove or delete staying under the temporary prefix for the next run.
+- _run_backup: [PATH_OR_ARTIFACT_POLICY] MUST make a backup's kept name from the imported BACKUP_KEPT_PREFIX constant followed by its made_at in UTC to the microsecond, written in a fixed-width form of ASCII digits and letters whose order as text is the order of the instants, and MUST never overwrite a file: when a file of the kept name exists or the rename fails, the backup MUST be deleted and the MAKE_BACKUP member of = models.BackupRunStep reported.
+- _run_backup: [BEHAVIOR] The run's rotation step MUST run whatever the backup step did, take the instant recorded_now answers once, before it looks at any file, and take one cutoff, that instant less the imported BACKUP_RETENTION_HOURS constant in hours; it MUST then take the regular files directly in backup_dir whose name begins with the imported BACKUP_KEPT_PREFIX constant in the order of their names and delete each whose record _read_backup_record cannot read and each whose made_at is earlier than the cutoff, comparing to the microsecond with neither side rounded, so that a backup made exactly at the cutoff is kept.
+- _run_backup: [VALIDATION_ERROR] A rotation step that cannot list the location MUST report the REMOVE_EXPIRED member of = models.BackupRunStep with no file name, and a file it cannot delete MUST be reported with that member and the file's name and the next file taken; such a run counts as failed while its new backup stays kept, and every exception raised inside a run MUST be caught there and reported as the failure of the step it arose in, never reaching the caller or stopping Registry.
+- _run_backup: [PATH_OR_ARTIFACT_POLICY] MUST touch in backup_dir only regular files directly in it whose name begins with the imported BACKUP_KEPT_PREFIX constant or the imported BACKUP_TEMPORARY_PREFIX constant, MUST follow no symbolic link, opening through _open_without_link every file it opens itself, the files check_store_file and copy_store_snapshot open being opened by the store module under its own contract, and enter no directory there, and MUST create each temporary file exclusively under the temporary prefix with a name no other file has; it MUST write nothing to the store and make no audit entry.
+- _run_backup: [SECURITY_BOUNDARY] MUST ask give_backup_key for the key anew for its run and MUST hold the key only while the run lasts, never in the module's memory between runs, never in a file name, a record or a diagnostic; the record MUST carry only the key's digest.
+- newest_backup_instant: [RETURN_SHAPE] MUST list backup_dir once and answer a NewestBackupFound with the latest made_at among the regular files directly in it whose name begins with the imported BACKUP_KEPT_PREFIX constant and whose record _read_backup_record reads, a NoBackup when there is none, and a BackupsUnlisted when the location cannot be listed, never a NoBackup for that; a file whose record cannot be read, or that is gone after the listing, MUST count as no backup, a temporary file never counts, and it MUST write nothing.
+- probe_backup_location: [PATH_OR_ARTIFACT_POLICY] MUST create one new regular file directly in backup_dir, created exclusively and without following a link, through _open_without_link, under a name that begins with the imported BACKUP_TEMPORARY_PREFIX constant and that no file of the location has, and MUST then remove that same file, touching no other file of the location.
+- probe_backup_location: [RETURN_SHAPE] MUST answer a ProbePassed when the probe file was created and removed, and otherwise a StartDiagnostic whose diagnostic names the backup_dir item by the name of the backup_dir field of = models.RuntimeSettings, as every start diagnostic names an item, and what failed, the location missing or not a directory or the file not created or not removed, never the location's path; a probe file it could not remove MUST be left where it is, for the next run's removal of temporary files.
+- run_daily_backup_if_due: [ORCHESTRATION] MUST take the instant recorded_now answers once per call and ask _backup_due with that instant; only when it answers true and no run of this process is going MUST it start _run_backup with backup_dir, registry_store and the UTC date of that instant on a thread of its own, naming _run_backup through the module's own name at the moment of the call, and return at once, never waiting for the run; a call while a run is going MUST start none, so that runs never overlap, and the flag that a run is going MUST be set by the call that starts the run and cleared by _run_backup when it ends, on every path, under a lock.
+- run_daily_backup_if_due: [TEST_EVIDENCE] With the clock replaced in the test, a test MUST show: with the rotation's cutoff fixed at its start, a kept backup made exactly the imported BACKUP_RETENTION_HOURS constant in hours before it is kept and one made a microsecond earlier is deleted, a made_at with a fraction of a second compared with that fraction; after a run whose backup step failed, backups older than the cutoff are still deleted; a backup whose integrity check fails, or whose decrypted audit sequence differs from its record, is deleted and reported; so that after a run whose deletions succeeded no kept backup is older than the cutoff and none failed its check.
+- run_daily_backup_if_due: [TEST_EVIDENCE] A test MUST show that the snapshot every kept backup holds is encrypted and cannot be read without the key it was made with, its record line alone being readable without it (A18), that its readable record holds the made_at, the release and the last sequence number of the snapshot it was made from and the digest of its key, that a backup taken during a write restores to the store either before or after it and never in between, that a store restored from it holds no agent session, and that a daily time of the imported BACKUP_DAILY_TIME_UTC constant missed while Registry was stopped makes no backup at the next start, the next one being made at the following daily time.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- BackupRecord: omitted because it is an imported runtime model schema
+- BackupRunStep: omitted because it is an imported runtime model schema
+- RuntimeSettings: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not app.models imports.
+Only import runtime model symbols from app.models when they are explicitly listed in IMPORTS.
+- models.BackupRecord: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+- models.BackupRunStep: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+- models.RuntimeSettings: runtime model schema omitted from non-model prompt; exported from app.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from app.models. Use the listed enum member names and model fields exactly.
+- BackupRecord fields (exact, no others exist): key_digest: str, last_sequence_number: int, made_at: datetime, record_version: int, release_version: str
+- BackupRunStep enum members: MAKE_BACKUP='make_backup', REMOVE_EXPIRED='remove_expired', REMOVE_TEMPORARY='remove_temporary'
+- BackupsUnlisted fields (exact, no others exist): newest: Literal['unlisted']
+- NewestBackup discriminated union on field 'newest' (exact variants, no others exist): NewestBackupFound (newest='found'), NoBackup (newest='none'), BackupsUnlisted (newest='unlisted'); a value of NewestBackup is an instance of one of these variants, never of another model, and NewestBackup itself is not constructed
+- NewestBackupFound fields (exact, no others exist): made_at: datetime, newest: Literal['found']
+- NoBackup fields (exact, no others exist): newest: Literal['none']
+- ProbeOutcome discriminated union on field 'result' (exact variants, no others exist): ProbePassed (result='probed'), StartDiagnostic (result='stopped'); a value of ProbeOutcome is an instance of one of these variants, never of another model, and ProbeOutcome itself is not constructed
+- ProbePassed fields (exact, no others exist): result: Literal['probed']
+- RuntimeSettings fields (exact, no others exist): backup_dir: str | None, backup_key: str | None, owner_credential: str | None, owner_listen: str | None, service_listen: str | None, store_path: str | None, token_cabinet: str | None, token_cabinet_kernel: str | None, token_client_portal: str | None, token_presupro: str | None
+- SnapshotFailed fields (exact, no others exist): result: Literal['failed']
+- SnapshotOutcome discriminated union on field 'result' (exact variants, no others exist): StoreSnapshot (result='copied'), SnapshotFailed (result='failed'); a value of SnapshotOutcome is an instance of one of these variants, never of another model, and SnapshotOutcome itself is not constructed
+- StartDiagnostic fields (exact, no others exist): diagnostic: str, result: Literal['stopped']
+- StoreFileCheck fields (exact, no others exist): failed_check: StoreFileCheckKind | None, passed: bool
+- StoreSnapshot fields (exact, no others exist): fixed_at: datetime, last_sequence_number: int, result: Literal['copied']
+Models named by the signatures above (read their fields on the values those signatures give; not imported here unless listed above):
+- StoreCompanionStepSuffix fields (exact, no others exist): step: DiscardStep, suffix: str
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+_backup_due, _decrypt_backup, _encrypt_backup, _key_digest, _open_without_link, _read_backup_record, _report_run_failure, _run_backup, newest_backup_instant, probe_backup_location, run_daily_backup_if_due
+
+MODELS CONTEXT:
+Runtime models live in app.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete backups.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing in its place; a parameter the signature itself declares as object is annotated object.
+Never import from a top-level models module or models.*; runtime models live in app.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and app.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
