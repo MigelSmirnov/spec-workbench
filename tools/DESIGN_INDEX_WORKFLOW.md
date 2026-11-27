@@ -63,6 +63,32 @@ reference to a decision that does not exist at all stays
 
 When a candidate responsibility is derived from State 2, use the following navigation loop before assigning ownership.
 
+### Preview one decision beside a module
+
+Open a read-only card in the current case checkout. For example, in Registry:
+
+```bash
+python tools/design_ownership_card.py "$CASE" A13 data_provider --rule 6 --constant CONFIRMED_OWNER_ACTIONS
+```
+
+Read the cited rule. Compare the owner of the **whole decision** in
+`30_trace.json` with the supplier of the constant and its declared importers.
+A reader of a constant can also own a rule; a shared name proves neither role.
+For an early case omit `--constant`; a missing trace appears as null.
+The card also quotes State 3 itself, which needs nothing past `30_modules.md`:
+`module_names_decision` lists the lines of this module's section that name the
+decision (`names_rule` marks those citing the chosen rule),
+`other_modules_naming_decision` and `other_modules_naming_rule` list the other
+modules whose sections do, and `module_recorded_role` gives this module's role
+in the trace. A mention is evidence to read, not a claim of ownership, and a
+module may own a rule without citing its number.
+To preview a change of primary owner, supply `--propose-owner "reason from the decision"`.
+The proposal is compared with the recorded owner in `against_recorded`; the card
+writes nothing, and `to_record` names the file and the check that follow.
+When the row model's product meaning is undecided, take the question to State 1
+and use the card's return address to reopen it. The card reads local files;
+the State 3 lint and transition trace check still govern handoff.
+
 ### 1. Expand
 
 Discover every occurrence of the relevant domain name, model, external system, or policy term across the case study:
