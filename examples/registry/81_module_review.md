@@ -925,7 +925,7 @@ names `service_may_call`, the function `perform_service_operation`
 calls. No State 3 or State 5 text names these imports: State 3's round is
 given SPEC_STANDARD §7, and the imports are State 6's to record.
 
-## 2026-11-27: the whole-module probe — seven values get a home, five notes state what they rely on
+## 2026-11-27: the whole-module probe — ten values get a home, four notes state what they rely on
 
 A State 7 probe of every generated module (`design_questions.py ask --probe`,
 which asks closed modules too) raised blocking topics in text no round had
@@ -934,18 +934,22 @@ each with the value the notes already wrote: `CUSTOMER_VALUE_FAILURE_KINDS`
 (customers' values-stage order, apart from `PROJECT_VALUE_FAILURE_KINDS`,
 since the two agree only by chance), `POINTER_VERSION_FIRST`,
 `BACKUP_NONCE_BYTES`, `BACKUP_KEY_BYTES`, `BACKUP_KEY_DERIVATION_HASH`,
-`PROJECT_STATUS_CONFIRMATIONS` and `OWNER_NAVIGATION_ACTIONS`. Two orders
-and one table stay derivations rather than constants: a failure's kind
-follows from whether its form is a closed list, import failures follow the
-member order of `RefusalKind`, and a mapping field is the `FormField`
-member of the same name. The backup tag length is not a value the code
+`PROJECT_STATUS_CONFIRMATIONS` and `OWNER_NAVIGATION_ACTIONS`. Three
+correspondences first kept as derivations became constants on State 7
+round-05, since the standard counts "one member gives one value, the rest
+another" as a table: `FORM_FIELD_REFUSAL_KINDS` (a form field's refusal
+kind), `IMPORT_FORM_FIELD_MAPPING_FIELDS` (the mapping field of an import
+value's form failure) and `IMPORT_CHOICE_FAILURE_KINDS` (refused import
+choices, `outside_closed_list` first, which is not `RefusalKind`'s
+declaration order). `perform_service_operation` no longer restates that only
+Cabinet Kernel has agent authority: that rule is `service_may_call`'s, and
+the operations test checks only that the principal follows the answer. The backup tag length is not a value the code
 passes; a rest too short for a tag fails authentication.
 
-Five notes now state what they relied on without saying it: a Customer that
+Four notes now state what they relied on without saying it: a Customer that
 is not erased always holds its name, kind, revision and instants (State 1
 M04), so `read_billing_data`, `list_customers` and `_customer_view` copy them
-into fields that exclude None; `service_may_call` answers agent authority only
-for Cabinet Kernel (A10), which `perform_service_operation` restates; a
+into fields that exclude None; a
 backup's record line is readable without its key on purpose (A18 rule 1), so
 the test's no-key claim covers the snapshot only; and `confirm_import`
 refuses an `ExportRefused` with `MAPPING_NOT_CLEAN`, a branch the kept
