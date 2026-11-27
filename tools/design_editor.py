@@ -32,6 +32,7 @@ Operation = Literal[
     "append-section",
     "insert-section",
     "replace-item",
+    "insert-item",
 ]
 
 
@@ -66,6 +67,7 @@ class EditPlan:
     new_target_end: int
     file_mode: int
     address_snapshot: AddressSnapshot
+    inserted_item_key: str | None = None
 
 
 def _build_valid_index(project: Path) -> dict[str, object]:
@@ -248,6 +250,21 @@ def plan_edit(
     return plan
 
 
+def plan_sibling(project: Path, anchor: str, key: str, content: bytes) -> EditPlan:
+    """Insert one new indexed sibling immediately after an existing item."""
+    project = project.resolve()
+    index = _build_valid_index(project)
+    if any(entry["key"] == key for entry in index["items"]):
+        raise DesignEditorError(f"{key} already exists; reopen the form")
+    item = _resolve_item(index, anchor)
+    path = _source_path(project, item["source"]["path"])
+    before = path.read_bytes()
+    _, end = _byte_range(before, item["source"]["start_line"], item["source"]["end_line"])
+    return EditPlan(project, "insert-item", item["key"], None, path, item["source"]["path"],
+                    before, before[:end] + content + before[end:], end, end, end + len(content),
+                    stat.S_IMODE(path.stat().st_mode), _snapshot(index, item), key)
+
+
 def render_unified_diff(plan: EditPlan) -> str:
     """Render a preview without changing the filesystem."""
     before = plan.before.decode("utf-8").splitlines(keepends=True)
@@ -302,7 +319,10 @@ def _is_subsequence(
 def _validate_applied_structure(plan: EditPlan) -> None:
     index = _build_valid_index(plan.project)
     keys = tuple(entry["key"] for entry in index["items"])
-    if Counter(keys) != Counter(plan.address_snapshot.all_item_keys):
+    expected = Counter(plan.address_snapshot.all_item_keys)
+    if plan.inserted_item_key:
+        expected[plan.inserted_item_key] += 1
+    if Counter(keys) != expected:
         raise DesignEditorError("edit created, deleted, or renamed a design item")
 
     matches = [entry for entry in index["items"] if entry["key"] == plan.item_key]
@@ -317,7 +337,7 @@ def _validate_applied_structure(plan: EditPlan) -> None:
         (section["title"], section["level"])
         for section in item["sections"]
     )
-    if plan.operation in {"replace-section", "append-section"}:
+    if plan.operation in {"replace-section", "append-section", "insert-item"}:
         if after_sections != before_sections:
             raise DesignEditorError(
                 f"{plan.operation} changed section structure; use insert-section to create a section"

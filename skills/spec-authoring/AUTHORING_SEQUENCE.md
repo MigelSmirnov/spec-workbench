@@ -109,6 +109,23 @@ python tools/design_index.py examples/<case> --list --state 2
 python tools/design_lint.py examples/<case> --state 2
 ```
 
+To develop one outcome from an existing accepted decision, open the form in
+the author’s current case checkout (replace A12 with its actual decision ID):
+
+```bash
+python tools/design_state2_form.py template "$CASE" A12 > /tmp/state2-form.json
+python tools/design_state2_form.py preview "$CASE" /tmp/state2-form.json
+python tools/design_state2_form.py apply "$CASE" /tmp/state2-form.json
+```
+
+Read the prefilled passage. Between template and preview, choose `decision`
+when the passage supports the outcome, quote it and fill the guarantee, the
+observation that demonstrates it, and its consequence. Choose `question` when
+the owner must choose between outcomes. The operation inserts one indexed
+sibling in the same document. It checks the quote and the structure; the
+existing State 2 review judges whether the source supports the outcome.
+Saving a card leaves the phase gates to the ordinary authoring sequence.
+
 The State 2 lint includes the explicit security-review gate. Unresolved security
 categories block State 3.
 
