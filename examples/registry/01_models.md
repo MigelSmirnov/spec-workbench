@@ -58,6 +58,10 @@ On 2026-11-27 five correspondences over a closed list that the data
 provider held as text-to-text maps became tables whose rows name the
 members themselves (SPEC_STANDARD §15.2, "a correspondence over a
 taxonomy"), so their rows have the records M30–M34 (owner, 2026-11-27).
+Like M22–M29 they are the row shapes of tables the generated code reads,
+which the data provider delivers (SPEC_STANDARD §6.10, `row_model`), not
+reference tables of the specification: a `models` record of kind
+`mapping`, `catalog` or `vocabulary` never reaches the code (§5, §15.2).
 
 Every State 1 question the owner must answer is under a model's
 `Open questions`; a `BLOCK:` question stops State 2 until answered.
