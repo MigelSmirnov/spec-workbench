@@ -1,0 +1,78 @@
+"""Find single-key enum lookups for a note in the current case projection."""
+import argparse
+import json
+import shlex
+from pathlib import Path
+
+from imports_workbench import service as imports
+from spec_projection_workbench import projected_spec
+
+
+def table_form(case: str, symbol: str, source: str, target: str, row_model: str, total: bool) -> str:
+    """The call that opens the table's author form (design_enum_map.py) with these names filled in."""
+    return " ".join(["python", "tools/design_enum_map.py", "template", shlex.quote(case), symbol, "--source",
+                     source, "--target", target, "--row-model", row_model, "--total" if total else "--partial"])
+
+
+def find_enum_lookup(case: Path, source: str, target: str, shown_case: str | None = None) -> dict:
+    """``shown_case`` is how the case is written in the form calls; a caller that reads a
+    materialized copy passes a placeholder, because the form must open the author's own checkout."""
+    shown = shown_case or str(case)
+    spec = projected_spec(case)
+    models = spec["models"]
+    for name in (source, target):
+        if models.get(name, {}).get("kind") != "enum":
+            raise ValueError(f"{name!r} is not a declared enum; check its name in the current case.")
+    provider = spec.get("rules", {}).get("data_provider_backend", {})
+    supplier = (provider.get("wiring") or {}).get("module")
+    try:  # who already declares the import: the note's module must be among them
+        table = imports.load_table(case)
+    except imports.ImportsError:
+        table = None
+    edges = imports.derive(table) if table is not None else None
+    matches = []
+    for symbol, table in sorted(provider.get("constants", {}).items()):
+        key = table.get("key")
+        if table.get("value_type") != "record_tuple" or not isinstance(key, list) or len(key) != 1:
+            continue
+        fields = models.get(table["row_model"], {}).get("fields", {})
+        if fields.get(key[0]) != source:
+            continue
+        for field, enum in fields.items():
+            if field != key[0] and enum == target:
+                matches.append({"constant": symbol, "row_model": table["row_model"], "select_by": key[0],
+                                "read_field": field, "total": table.get("total") is True,
+                                "declared_importers": None if edges is None else [
+                                    module for module, uses in edges.items() if symbol in uses.get(supplier, [])],
+                                "edit_form": table_form(shown, symbol, f"{source}.{key[0]}", f"{target}.{field}",
+                                                        table["row_model"], table.get("total") is True)})
+    guidance = ("Choose the matching table and result field from the design. The note's module must be among "
+                "declared_importers (null: this case has no import table yet); otherwise declare the import first. "
+                "Name the constant and the selection field in the note; read the result field from that row. "
+                "To change the table itself, open edit_form: it shows the rows and who reads them before writing.")
+    report = {"source": source, "target": target, "matches": matches}
+    if not matches:
+        guidance = ("No single-key typed table for this direction in this projection. A string_mapping that holds "
+                    "the same pairs is not listed: check the provider's constants before asking for a new table. If "
+                    "the design requires this mapping, open an enum mapping structure request; create_form opens the "
+                    "table's author form once you have chosen the constant, the two field names and the row model.")
+        report["create_form"] = table_form(shown, "CONSTANT_NAME", f"{source}.KEY_FIELD", f"{target}.VALUE_FIELD",
+                                           "RowModelName", True)
+    return {**report, "guidance": guidance}
+
+
+def main(argv=None):
+    cli = argparse.ArgumentParser(description=__doc__)
+    cli.add_argument("case", type=Path)
+    cli.add_argument("source", help="enum used to select a row")
+    cli.add_argument("target", help="enum the consumer needs")
+    args = cli.parse_args(argv)
+    try:
+        report = find_enum_lookup(args.case, args.source, args.target)
+    except (ValueError, OSError) as exc:
+        cli.exit(2, f"Cannot search this case: {exc}\n")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()
