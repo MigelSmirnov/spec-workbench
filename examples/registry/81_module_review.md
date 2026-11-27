@@ -1071,6 +1071,20 @@ names the imported constant (State 7 round-15 clear). The `owner_sessions`
 packet changed by that clause alone, `TEXT_ENCODING` already among its
 dependencies; re-read and re-hashed, PASS.
 
+## 2026-11-27: verification of the codex candidate on 7dc17d7f
+
+Verification run 20261127_204749 blocked on eleven checks. A02 (two): the
+test's `_names` read path elements as objects, while the wire writes each as
+its name or position since 88e85d60; the helper reads the wire (27f2ccff).
+A17 (one): `probe_backup_location` wrote "backup directory" for the item; the
+note now names the `backup_dir` field of `= models.RuntimeSettings`, imported
+by the scope (9ade56ac; State 7 rounds 16-18 found a value without a home,
+then the model named but not imported; round-19 clear). A18 (eight): the
+line's fixture read `backups._run_going`, which the spec does not name; it
+now waits through the `_run_backup` seam alone (code_factory 0d54864d). The
+`backups` packet changed by the note clause and the `RuntimeSettings`
+dependency; re-read and re-hashed, PASS.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
