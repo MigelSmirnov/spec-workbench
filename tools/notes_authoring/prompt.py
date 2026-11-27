@@ -49,11 +49,24 @@ clearly allowed by a section you have read, read further before you write it.
 4. For data: `find_value_homes(project, value)` gives where a literal is declared,
    `resolve_data_address(project, address)` gives the Factory's verdict on one
    address, and `find_absence(project, terms)` gives where terms occur, with the
-   namespace digests.
+   namespace digests. When behaviour selects one enum from another, use
+   `find_enum_lookup(project, source, target)` before drafting. For unpublished
+   changes run `python tools/find_enum_lookup.py CASE SOURCE TARGET` on the working
+   case. Choose by the accepted decision when several tables fit. An empty list
+   means this projection has no matching single-key table; check the design before
+   requesting one. For a match, verify its import and describe the lookup by the
+   reported constant and fields (§6.10) without repeating its pairs.
 5. `check_note_draft(project, note)`: run it on every note before you hand the note in.
    It runs the State 7 gate's checks of one note and a mechanical lint. It is required
    but it is not the measure. A note it passes must still meet the standard. Never
    reword a sentence only so that the check stops seeing it.
+
+For an enum-to-enum lookup (§15.2, §6.10 v2), request the typed table even if a
+string_mapping already holds the pairs. Use value_kind "mapping", identify the
+existing symbol and its unsuitable type in homes_considered, and record the
+search for the missing typed home with find_absence. In the case checkout the
+author can run design_enum_map.py template, preview and apply (see --help).
+Keep the blocked note until the source change can be projected.
 
 If a requirement of this module needs a value the specification does not hold, you
 write no notes for the module. You answer with structure requests instead (form

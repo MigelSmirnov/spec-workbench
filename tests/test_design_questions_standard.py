@@ -296,3 +296,33 @@ def test_a_probe_refuses(tmp_path, monkeypatch, state, out, modules, match):
     case, factory = _notes_case(tmp_path, monkeypatch)
     with pytest.raises(service.QuestionRoundError, match=match):
         service.probe_round(case, state, Provider(), tmp_path / out, factory_root=factory, modules=modules)
+
+
+def test_probe_evidence_compares_only_verified_answers_in_the_reviewed_module(tmp_path):
+    import hashlib
+    from questions_workbench.probe_evidence import report
+
+    case, probe = tmp_path / "case", tmp_path / "probe"
+    prompt = "The request lock remains held until the whole step ends."
+    directory = case / "questions/state7/round-02"
+    directory.mkdir(parents=True)
+    def topic(module, quote, verified=True):
+        return {"topic": "lock lifetime", "units": [module], "judgement": {
+            "kind": "answered", "blocking": False, "verified": verified, "quotes": [quote]}}
+    directory.joinpath("summary.json").write_text(json.dumps({"round": "round-02", "topics": [
+        topic("ops", prompt), topic("ops", "The old and removed description."), topic("store", prompt),
+        topic("ops", prompt, False)]}))
+    (probe / "prompts").mkdir(parents=True)
+    (probe / "prompts/ops.txt").write_text(prompt)
+    raw = {"schema_version": service.PROBE_SCHEMA, "state": 7, "modules": {"ops": {}},
+           "units": {"ops": hashlib.sha256(prompt.encode()).hexdigest()},
+           "topics": [{"topic": "what is locked?", "units": ["ops"]}]}
+    (probe / "summary.json").write_text(json.dumps(raw))
+    result = report(case, probe, "ops")
+    assert [a["evidence_in_saved_prompt"] for a in result["historical_answers"]] == [True, False]
+    assert result["probe_topics"] == raw["topics"]
+    with pytest.raises(ValueError):
+        report(case, probe, "store")
+    (probe / "prompts/ops.txt").write_text("changed")
+    with pytest.raises(ValueError, match="differs"):
+        report(case, probe, "ops")

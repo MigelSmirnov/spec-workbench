@@ -76,11 +76,16 @@ def author_guidance(state: int | None = None, *, factory_return: bool = False) -
         "state and review the change. Deterministic transition findings must also close through their checks.",
     ]
     if state == 2:
-        lines.append("State 2: decide required results and constraints, including necessary refusal precedence; "
+        lines.append("Open a proposal or owner-question form at an accepted decision with python tools/design_state2_form.py template CASE A_ID; a proposal is a draft until a reviewer accepts it. "
+                     "State 2: decide required results and constraints, including necessary refusal precedence; "
                      "carry test mechanisms, exact contracts and deployment procedures to their owners.")
     if state == 5:
         lines.append("State 5: decide obligations between modules for inputs, results, failures and effects; "
                      "leave exact contract forms and hidden implementation to later layers.")
+    if state == 7:
+        lines.append("For an enum-to-enum lookup, resolve the typed table before rewriting the note "
+                     "(SPEC_STANDARD §15.2 and §6.10 v2). Use python tools/design_enum_map.py template "
+                     "--help, fill rows, then preview and apply in the case checkout.")
     if factory_return:
         lines.insert(0, "Factory return: preserve the exact diagnostic, tool revisions, artifact hash and a minimal "
                      "reproducer. Compare the requirement, structured data/contracts, notes, generated code and "
@@ -1595,6 +1600,9 @@ def probe_round(case: Path, state: int, provider: Provider, out: Path, runs: int
                            "prompt_chars": len(read.units[key]["text"])}
     summary = {
         "schema_version": PROBE_SCHEMA,
+        "case_name": case.resolve().name,
+        "author_guidance": ("Diagnostic only; case status is unchanged. Before editing, inspect the saved "
+                            "prompt and earlier answers: design_questions.py probe-evidence CASE OUT MODULE"),
         "state": state,
         "provider": provider.name,
         "reviews": runs,
