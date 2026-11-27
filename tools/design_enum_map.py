@@ -15,6 +15,7 @@ from pathlib import Path
 from design_stage6_data import DATA_PROVIDER_CLOSURE
 from identity_workbench.service import state6_closure, verify
 from identity_workbench.sources import load_state1
+from imports_workbench import service as imports
 from notes_authoring.index import enum_member_names
 
 IDENTITIES = ("value", "entity")
@@ -139,6 +140,8 @@ def context(case, op):
         form["coverage_change"] = (f"{symbol} currently guarantees a result for every {src} member. "
                                    "Partial coverage allows existing or future members to have no result.")
         form["confirm_partial"] = False
+    elif any(cells.values()):
+        form["confirm_removed"] = []
     if row in models:
         form["row_model_declared"] = {"file": row_info["file"], **models[row]}
     else:
@@ -185,6 +188,31 @@ def row_declaration(form, row, info):
         raise ValueError(f"row_model_file: choose where {row} is declared from {info['files']} (closure files {kind}: "
                          + ("it is a State 1 concept" if info["state1"] else "it has no State 1 record") + ")")
     return identity, target
+
+
+def readers(case, backend, symbol):
+    """Who is declared to read the constant, and which notes name it: what a changed row touches."""
+    supplier = (backend.get("wiring") or {}).get("module")
+    try:
+        table = imports.load_table(case)
+    except imports.ImportsError as exc:
+        table, importers = None, f"unknown ({exc})"
+    else:
+        importers = (f"unknown: no {imports.table_path(case).name} in this project yet" if table is None else
+                     ", ".join(m for m, edges in imports.derive(table).items() if symbol in edges.get(supplier, []))
+                     or f"none declared in {imports.table_path(case).name}")
+    lines = [f"Readers of {symbol}. Declared importers: {importers}."]
+    files = sorted(case.glob("80_notes*.md"))
+    found = [f"  {path.name}:{number}: {text.strip()[:220]}" for path in files
+             for number, text in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+             if imports.named(symbol, text)]
+    if not files:
+        lines.append("Notes: this project has none yet, so what a reader does with a row is not written down.")
+    else:
+        lines.append(f"Notes naming it ({len(found)}); a note that reaches the table without naming it is not listed:")
+        lines.extend(found)
+    lines.append("Read these before deciding: the table does not say what a reader does when a row changes or is absent.")
+    return lines
 
 
 def identity_findings(project):
@@ -298,7 +326,11 @@ def run(args):
         constant["total"] = True
     backend["schema_version"] = 2
     backend["constants"][op["symbol"]] = {**constant, "value": records}
-    root = Path(subprocess.check_output(["git", "-C", str(case), "rev-parse", "--show-toplevel"], text=True).strip())
+    located = subprocess.run(["git", "-C", str(case), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if located.returncode:
+        raise ValueError(f"{case} is not inside a git checkout; the patch is applied with git, so open the case "
+                         "in its spec-workbench checkout")
+    root = Path(located.stdout.strip())
     diff = []
     changed = {}
     for path, raw in originals.items():
@@ -316,16 +348,29 @@ def run(args):
         return
     if form["revision"] != current["revision"]:
         raise ValueError("stale form: generate a fresh template from the current closures")
+    # The decision in the author's terms first; the diff below only shows how it is stored.
+    before = current["rows"]
+    removed = [name for name, was in before.items() if was is not None and name not in rows]
+    summary = ([f"  + {name} -> {rows[name]}" for name in before if before[name] is None and name in rows]
+               + [f"  ~ {name}: {before[name]} -> {rows[name]}" for name in before
+                  if before[name] is not None and name in rows and rows[name] != before[name]]
+               + [f"  - {name} -> {before[name]} ({name} will have no result)" for name in removed])
+    if summary:
+        print(f"Rows of {op['symbol']}:")
+        print("\n".join(summary))
+    blocked = None
     if "coverage_change" in current:
         print(current["coverage_change"])
-        removed = [name for name, old_value in current["rows"].items() if old_value is not None and name not in rows]
         if removed:
             print("Members losing their result: " + ", ".join(removed))
         if form.get("confirm_partial") is not True:
-            instruction = "Set confirm_partial to true if this change is intended, or regenerate with --total."
-            if args.command == "apply":
-                raise ValueError(instruction)
-            print(instruction)
+            blocked = "Set confirm_partial to true if this change is intended, or regenerate with --total."
+    elif removed and (not isinstance(form.get("confirm_removed"), list) or set(form["confirm_removed"]) != set(removed)):
+        blocked = (f"Members losing their result: {', '.join(removed)}. Set confirm_removed to {json.dumps(removed)} "
+                   "if this is intended, or keep their rows.")
+    weakened = "coverage_change" in current or any(line[2] != "+" for line in summary)
+    if weakened:
+        print("\n".join(readers(case, backend, op["symbol"])))
     patch = "".join(diff)
     print(patch, end="")
     known = identity_findings(case)
@@ -334,8 +379,10 @@ def run(args):
         raise ValueError("this patch would add identity findings, so nothing was written:\n"
                          + "\n".join(f"  {code} [{model}] - {message}" for code, model, message in added))
     verdict = f"Identity check on the patched copy: no new findings ({len(known)} already present)."
-    if args.command != "apply":
+    if args.command != "apply" or blocked:
         print(verdict)
+        if blocked:
+            raise ValueError(blocked + " Nothing was written.")
         return
     subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], cwd=root, input=patch.encode(), check=True)
     left = sorted(identity_findings(case) - known, key=str)
@@ -344,7 +391,8 @@ def run(args):
     print(verdict)
     print(f"Applied. {row}: identity {identity}"
           + (f" ({form['row_identity_reason'].strip()})" if isinstance(form.get("row_identity_reason"), str) else "")
-          + f". Consumer note: name the imported {op['symbol']} constant and its selection field {key}.")
+          + f". Consumer note: name the imported {op['symbol']} constant and its selection field {key}."
+          + (" Re-read the readers listed above: a row they relied on changed or may now be absent." if weakened else ""))
 
 
 def main(argv=None):

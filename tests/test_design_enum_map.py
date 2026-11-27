@@ -1,5 +1,6 @@
 """Exercise the author's CLI and real git apply on a disposable case."""
 import json
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -207,13 +208,76 @@ def test_relaxing_total_coverage_is_explicit(case, capsys, remove_row):
     if remove_row:
         del form["rows"]["SECOND"]
     before = snapshot(case)
-    assert attempt(case, form, "preview") == 0
+    assert attempt(case, form, "preview") == 2  # preview answers as apply would
     preview = capsys.readouterr().out
     assert "future members" in preview
     assert ("Members losing their result: SECOND" in preview) == remove_row
+    assert ("  - SECOND -> OPEN (SECOND will have no result)" in preview) == remove_row
+    assert "Readers of LOOKUP" in preview
+    assert attempt(case, {**form, "confirm_partial": True}, "preview") == 0
     del form["coverage_change"]  # apply checks the actual current guarantee
     assert attempt(case, form) == 2
     assert snapshot(case) == before
     form["confirm_partial"] = True
     assert attempt(case, form) == 0
     assert attempt(case, form) == 0
+
+
+def partial_table(case, capsys):
+    form = form_for(case, capsys, "--partial")
+    form.update(row_identity="value", row_identity_reason="Only the pair it holds.", rows={"FIRST": "DONE", "SECOND": "OPEN"})
+    assert attempt(case, form) == 0
+    capsys.readouterr()
+    return form_for(case, capsys, "--partial")
+
+
+def test_removing_a_row_from_a_partial_table_is_named_and_confirmed(case, capsys):
+    form = partial_table(case, capsys)
+    assert form["confirm_removed"] == [] and "confirm_partial" not in form
+    del form["rows"]["SECOND"]
+    before = snapshot(case)
+    for command in ("preview", "apply"):
+        assert attempt(case, form, command) == 2
+        captured = capsys.readouterr()
+        assert "  - SECOND -> OPEN (SECOND will have no result)" in captured.out
+        assert 'Set confirm_removed to ["SECOND"]' in captured.err
+        assert snapshot(case) == before
+    assert attempt(case, {**form, "confirm_removed": ["FIRST"]}) == 2
+    form["confirm_removed"] = ["SECOND"]
+    assert attempt(case, form, "preview") == 0
+    capsys.readouterr()
+    assert attempt(case, form) == 0
+    assert "Re-read the readers" in capsys.readouterr().out
+    assert tool.read(case / tool.DATA_PROVIDER_CLOSURE)["backend_ir"]["constants"]["LOOKUP"]["value"] == [
+        {"input": "x", "output": "done"}]
+
+
+def test_changed_rows_show_who_reads_the_table(case, capsys):
+    form = partial_table(case, capsys)
+    form["rows"]["SECOND"] = "DONE"
+    assert attempt(case, form, "preview") == 0
+    out = capsys.readouterr().out
+    assert "  ~ SECOND: OPEN -> DONE" in out
+    assert "Declared importers: unknown: no 65_imports.json" in out and "this project has none yet" in out
+    (case / "65_imports.json").write_text(json.dumps({"scopes": {
+        "reader.step": {"uses": [{"symbol": "LOOKUP", "provider": "data"}]},
+        "other.step": {"uses": [{"symbol": "ELSEWHERE", "provider": "data"}]}}}))
+    (case / "80_notes.md").write_text("reader.run: [BEHAVIOR] MUST read the status from LOOKUP.\n"
+                                      "other.run: [BEHAVIOR] MUST not touch LOOKUPS.\n")
+    form = form_for(case, capsys, "--partial")
+    form["rows"]["SECOND"] = "DONE"
+    assert attempt(case, form, "preview") == 0
+    out = capsys.readouterr().out
+    assert "Declared importers: reader." in out
+    assert "Notes naming it (1)" in out and "80_notes.md:1: reader.run" in out and "other.run" not in out
+
+
+def test_new_table_and_case_outside_git(case, capsys, tmp_path_factory):
+    form = answered(form_for(case, capsys), row_identity="value", row_identity_reason="Only the pair it holds.")
+    assert attempt(case, form, "preview") == 0
+    out = capsys.readouterr().out
+    assert "  + SECOND -> OPEN" in out and "Readers of" not in out
+    bare = tmp_path_factory.mktemp("bare") / "case"
+    shutil.copytree(case, bare)
+    assert attempt(bare, form, "preview") == 2
+    assert "not inside a git checkout" in capsys.readouterr().err
