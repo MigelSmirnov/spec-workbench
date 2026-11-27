@@ -1,0 +1,183 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "CONFIRMED_OWNER_ACTIONS public provider obligation",
+   "kind": "missing_boundary_contract",
+   "text": "The table holds one row for every `ConfirmedAction` member and no other: it is total over `ConfirmedAction`, so each action that asks for confirmation has a row, and keyed by the confirmed action, so none has two",
+   "question": "Must State 5 state that the data-provider module publicly supplies this correspondence and that every caller may rely on exactly one row for every `ConfirmedAction`, with no missing-row or duplicate-row failure for a valid member?",
+   "options": [
+    "Expose the correspondence as a data-provider public obligation with total, unique lookup guaranteed.",
+    "Keep the table private and expose the same guarantee through an owning lookup operation.",
+    "Use it only for release or factory validation, with no runtime consumer contract."
+   ],
+   "default_guess": "Expose it from the data provider and let callers rely on exactly one row for every valid `ConfirmedAction`.",
+   "witness": {
+    "initial": "A release contains all four confirmed actions and their corresponding owner actions.",
+    "events": [
+     "An owner-interface module receives a valid confirmed action.",
+     "The module needs the corresponding owner action before submitting the confirmation."
+    ],
+    "outcomes": [
+     "The module relies on the provider guarantee and performs an infallible lookup.",
+     "The module treats absence or duplication as an ordinary runtime failure it must handle."
+    ],
+    "observer": "The owner sees either the confirmation submission proceed or an internal/refusal outcome."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "direct consumers of CONFIRMED_OWNER_ACTIONS",
+   "kind": "missing_dependency_boundary",
+   "text": "Its rows are values of the release the data provider holds (70_data_provider_closure.json), none made at run time.",
+   "question": "Which logical modules directly name or import `CONFIRMED_OWNER_ACTIONS`, and therefore must have a `module_internal` edge to its provider?",
+   "options": [
+    "Only the owner-interface surface/router consumes it.",
+    "The owner-session or confirmation module consumes it.",
+    "Both modules consume it directly.",
+    "No runtime module consumes it; only generation or factory checks inspect it."
+   ],
+   "default_guess": "The owner-session or confirmation module consumes it, and the surface calls that module without importing the table itself.",
+   "consequences": [
+    "A surface consumer creates a direct data-provider dependency in the routing layer.",
+    "A session consumer keeps confirmation binding and translation in the session boundary.",
+    "Two consumers enlarge the dependency graph and require two minimal import edges.",
+    "A factory-only table creates no runtime import edge and requires generated code to encode no lookup dependency."
+   ]
+  },
+  {
+   "unit": "context",
+   "subject": "confirmed-action to owner-action translation",
+   "kind": "missing_operation_owner",
+   "text": "a row's owner action is the `OwnerAction` member of the same name, the one whose submission carries the confirmation value.",
+   "question": "Which module owns the operation that translates a `ConfirmedAction` into the `OwnerAction` whose submission carries the confirmation value?",
+   "options": [
+    "The data-provider module owns and exports the lookup.",
+    "The owner-session/confirmation module owns the translation and reads the provider table.",
+    "The owner-interface surface/router owns the translation while dispatching the submission.",
+    "There is no runtime translation operation; generation emits direct dispatch from the correspondence."
+   ],
+   "default_guess": "The owner-session/confirmation module owns the translation and depends on the data-provider table.",
+   "consequences": [
+    "Provider ownership makes the data provider behavioral rather than purely declarative.",
+    "Session ownership keeps confirmation binding and action selection together.",
+    "Surface ownership puts domain routing logic in the interface module.",
+    "Generation removes runtime lookup but requires generated dispatch to preserve the correspondence."
+   ]
+  },
+  {
+   "unit": "context",
+   "subject": "valid and invalid confirmed-action lookup behaviour",
+   "kind": "missing_failure_contract",
+   "text": "it is total over `ConfirmedAction`, so each action that asks for confirmation has a row, and keyed by the confirmed action, so none has two",
+   "question": "What may a caller rely on when requesting the owner action for a confirmed action: is lookup infallible for every valid `ConfirmedAction`, and which boundary owns refusal of an unrecognised external action value before lookup?",
+   "options": [
+    "Lookup is total and infallible for valid enum members; the external request parser/surface refuses an unrecognised value.",
+    "The lookup operation itself accepts external values and returns a typed unknown-action failure.",
+    "The submission operation performs lookup internally and exposes only the confirmation refusal required by A13."
+   ],
+   "default_guess": "Lookup is infallible for valid enum members, while the request-facing surface refuses values outside the closed list before calling it.",
+   "witness": {
+    "initial": "An owner session has a pending confirmation for archiving a project.",
+    "events": [
+     "A submission arrives with an action value.",
+     "The request-facing module hands the action to the confirmation/dispatch boundary."
+    ],
+    "outcomes": [
+     "The surface first converts it to `ConfirmedAction`, so the internal lookup cannot fail.",
+     "The internal lookup accepts raw input and may return its own unknown-action failure."
+    ],
+    "observer": "The owner and semantic tests observe different failure ownership and potentially different failure kinds or paths."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "release-table stability and mutation effects",
+   "kind": "missing_effect_guarantee",
+   "text": "Its rows are values of the release the data provider holds (70_data_provider_closure.json), none made at run time.",
+   "question": "Must State 5 guarantee to consumers that the correspondence is stable for the whole release and that no runtime operation can add, remove, replace or mutate one of its rows?",
+   "options": [
+    "Guarantee a release-stable, read-only correspondence to every consumer.",
+    "Allow consumers to receive copies that they may mutate without changing the provider's table.",
+    "Promise only that Registry creates no rows, leaving mutation through returned objects unspecified."
+   ],
+   "default_guess": "Guarantee a release-stable, read-only correspondence; returned access must not permit changing the provider's release value.",
+   "witness": {
+    "initial": "Registry is running a release whose archive confirmation maps to the archive owner action.",
+    "events": [
+     "One consumer obtains the table or a row.",
+     "That consumer modifies its received value or collection.",
+     "A later confirmation submission performs the same lookup."
+    ],
+    "outcomes": [
+     "The later lookup still returns the release-declared archive action.",
+     "The later lookup observes the consumer's mutation."
+    ],
+    "observer": "The owner sees different action dispatch for the same release."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "ConfirmedOwnerAction contract model shape",
+   "kind": "later_layer_choice",
+   "text": "Its identity is `value`, declared with the contracts (60_model_closure_values.json): two rows with equal facts are the same row, and a row has no continuity, since a changed pair is a new release's row.",
+   "question": "What exact contract type, field names and field types represent a `ConfirmedOwnerAction` row?",
+   "decision_owner": "6",
+   "options": [
+    "A two-field value model with fields equivalent to `confirmed_action: ConfirmedAction` and `owner_action: OwnerAction`.",
+    "A keyed-map entry model whose key is `ConfirmedAction` and whose value is `OwnerAction`.",
+    "A discriminated contract value carrying the same two facts under generated field names."
+   ],
+   "consequences": [
+    "A two-field model makes both facts explicit and independently inspectable.",
+    "A keyed-map entry encodes uniqueness structurally but couples the model to map representation.",
+    "A discriminated value can aid generated dispatch but adds representation machinery."
+   ],
+   "requirement": "a row's owner action is the `OwnerAction` member of the same name, the one whose submission carries the confirmation value.",
+   "default_guess": "Declare a two-field value model containing a `ConfirmedAction` and an `OwnerAction`; choose exact field names in State 6."
+  },
+  {
+   "unit": "context",
+   "subject": "CONFIRMED_OWNER_ACTIONS container and serialization",
+   "kind": "later_layer_choice",
+   "text": "The table holds one row for every `ConfirmedAction` member and no other",
+   "question": "How is the table represented, ordered and serialized in generated artifacts and at runtime?",
+   "decision_owner": "7",
+   "options": [
+    "Serialize a list of row values and build a keyed lookup internally.",
+    "Serialize an object/map keyed by the confirmed-action representation.",
+    "Generate a fixed in-code immutable correspondence without a separately serialized runtime table."
+   ],
+   "consequences": [
+    "A row list preserves the explicit row model but requires uniqueness and totality checks.",
+    "A map makes key uniqueness structural but fixes key serialization semantics.",
+    "Generated code avoids runtime table loading but moves correspondence construction into generation."
+   ],
+   "requirement": "The table holds one row for every `ConfirmedAction` member and no other: it is total over `ConfirmedAction`, so each action that asks for confirmation has a row, and keyed by the confirmed action, so none has two; a row's owner action is the `OwnerAction` member of the same name, the one whose submission carries the confirmation value.",
+   "default_guess": "Serialize explicit rows and construct an immutable lookup keyed by `ConfirmedAction`; ordering must have no contract meaning."
+  },
+  {
+   "unit": "context",
+   "subject": "verification of CONFIRMED_OWNER_ACTIONS closure",
+   "kind": "later_layer_choice",
+   "text": "The table holds one row for every `ConfirmedAction` member and no other: it is total over `ConfirmedAction`, so each action that asks for confirmation has a row, and keyed by the confirmed action, so none has two; a row's owner action is the `OwnerAction` member of the same name",
+   "question": "Where is the release rejected if the table is missing a confirmed action, contains an extra or duplicate row, or maps to a differently named owner action?",
+   "decision_owner": "factory_checks",
+   "options": [
+    "Factory checks validate totality, uniqueness, absence of extras and same-name correspondence.",
+    "Generation constructs the table mechanically from the two enumerations, making invalid input unrepresentable.",
+    "Generation constructs it and factory checks independently verify the generated result."
+   ],
+   "consequences": [
+    "Factory-only validation accepts authored data but must report every closure defect before release.",
+    "Mechanical generation removes manual table choices but requires the enumeration names to be the authoritative source.",
+    "Generation plus verification gives stronger assurance at the cost of duplicated checking logic."
+   ],
+   "requirement": "The table holds one row for every `ConfirmedAction` member and no other: it is total over `ConfirmedAction`, so each action that asks for confirmation has a row, and keyed by the confirmed action, so none has two; a row's owner action is the `OwnerAction` member of the same name, the one whose submission carries the confirmation value.",
+   "default_guess": "Generate the correspondence mechanically and have factory checks verify totality, uniqueness, no extras and same-name mapping."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"CONFIRMED_OWNER_ACTIONS public provider obligation\",\"kind\":\"missing_boundary_contract\",\"text\":\"The table holds one row for every `ConfirmedAction` member and no other: it is total over `ConfirmedAction`, so each action that asks for confirmation has a row, and keyed by the confirmed action, so none has two\",\"question\":\"Must State 5 state that the data-provider module publicly supplies this correspondence and that every caller may rely on exactly one row for every `ConfirmedAction`, with no missing-row or duplicate-row failure for a valid member?\",\"options\":[\"Expose the correspondence as a data-provider public obligation with total, unique lookup guaranteed.\",\"Keep the table private and expose the same guarantee through an owning lookup operation.\",\"Use it only for release or factory validation, with no runtime consumer contract.\"],\"default_guess\":\"Expose it from the data provider and let callers rely on exactly one row for every valid `ConfirmedAction`.\",\"witness\":{\"initial\":\"A release contains all four confirmed actions and their corresponding owner actions.\",\"events\":[\"An owner-interface module receives a valid confirmed action.\",\"The module needs the corresponding owner action before submitting the confirmation.\"],\"outcomes\":[\"The module relies on the provider guarantee and performs an infallible lookup.\",\"The module treats absence or duplication as an ordinary runtime failure it must handle.\"],\"observer\":\"The owner sees either the confirmation submission proceed or an internal/refusal outcome.\"}},{\"unit\":\"context\",\"subject\":\"direct consumers of CONFIRMED_OWNER_ACTIONS\",\"kind\":\"missing_dependency_boundary\",\"text\":\"Its rows are values of the release the data provider holds (70_data_provider_closure.json), none made at run time.\",\"question\":\"Which logical modules directly name or import `CONFIRMED_OWNER_ACTIONS`, and therefore must have a `module_internal` edge to its provider?\",\"options\":[\"Only the owner-interface surface/router consumes it.\",\"The owner-session or confirmation module consumes it.\",\"Both modules consume it directly.\",\"No runtime module consumes it; only generation or factory checks inspect it.\"],\"default_guess\":\"The owner-session or confirmation module consumes it, and the surface calls that module without importing the table itself.\",\"consequences\":[\"A surface consumer creates a direct data-provider dependency in the routing layer.\",\"A session consumer keeps confirmation binding and translation in the session boundary.\",\"Two consumers enlarge the dependency graph and require two minimal import edges.\",\"A factory-only table creates no runtime import edge and requires generated code to encode no lookup dependency.\"]},{\"unit\":\"context\",\"subject\":\"confirmed-action to owner-action translation\",\"kind\":\"missing_operation_owner\",\"text\":\"a row's owner action is the `OwnerAction` member of the same name, the one whose submission carries the confirmation value.\",\"question\":\"Which module owns the operation that translates a `ConfirmedAction` into the `OwnerAction` whose submission carries the confirmation value?\",\"options\":[\"The data-provider module owns and exports the lookup.\",\"The owner-session/confirmation module owns the translation and reads the provider table.\",\"The owner-interface surface/router owns the translation while dispatching the submission.\",\"There is no runtime translation operation; generation emits direct dispatch from the correspondence.\"],\"default_guess\":\"The owner-session/confirmation module owns the translation and depends on the data-provider table.\",\"consequences\":[\"Provider ownership makes the data provider behavioral rather than purely declarative.\",\"Session ownership keeps confirmation binding and action selection together.\",\"Surface ownership puts domain routing logic in the interface module.\",\"Generation removes runtime lookup but requires generated dispatch to preserve the correspondence.\"]},{\"unit\":\"context\",\"subject\":\"valid and invalid confirmed-action lookup behaviour\",\"kind\":\"missing_failure_contract\",\"text\":\"it is total over `ConfirmedAction`, so each action that asks for confirmation has a row, and keyed by the confirmed action, so none has two\",\"question\":\"What may a caller rely on when requesting the owner action for a confirmed action: is lookup infallible for every valid `ConfirmedAction`, and which boundary owns refusal of an unrecognised external action value before lookup?\",\"options\":[\"Lookup is total and infallible for valid enum members; the external request parser/surface refuses an unrecognised value.\",\"The lookup operation itself accepts external values and returns a typed unknown-action failure.\",\"The submission operation performs lookup internally and exposes only the confirmation refusal required by A13.\"],\"default_guess\":\"Lookup is infallible for valid enum members, while the request-facing surface refuses values outside the closed list before calling it.\",\"witness\":{\"initial\":\"An owner session has a pending confirmation for archiving a project.\",\"events\":[\"A submission arrives with an action value.\",\"The request-facing module hands the action to the confirmation/dispatch boundary.\"],\"outcomes\":[\"The surface first converts it to `ConfirmedAction`, so the internal lookup cannot fail.\",\"The internal lookup accepts raw input and may return its own unknown-action failure.\"],\"observer\":\"The owner and semantic tests observe different failure ownership and potentially different failure kinds or paths.\"}},{\"unit\":\"context\",\"subject\":\"release-table stability and mutation effects\",\"kind\":\"missing_effect_guarantee\",\"text\":\"Its rows are values of the release the data provider holds (70_data_provider_closure.json), none made at run time.\",\"question\":\"Must State 5 guarantee to consumers that the correspondence is stable for the whole release and that no runtime operation can add, remove, replace or mutate one of its rows?\",\"options\":[\"Guarantee a release-stable, read-only correspondence to every consumer.\",\"Allow consumers to receive copies that they may mutate without changing the provider's table.\",\"Promise only that Registry creates no rows, leaving mutation through returned objects unspecified.\"],\"default_guess\":\"Guarantee a release-stable, read-only correspondence; returned access must not permit changing the provider's release value.\",\"witness\":{\"initial\":\"Registry is running a release whose archive confirmation maps to the archive owner action.\",\"events\":[\"One consumer obtains the table or a row.\",\"That consumer modifies its received value or collection.\",\"A later confirmation submission performs the same lookup.\"],\"outcomes\":[\"The later lookup still returns the release-declared archive action.\",\"The later lookup observes the consumer's mutation.\"],\"observer\":\"The owner sees different action dispatch for the same release.\"}},{\"unit\":\"context\",\"subject\":\"ConfirmedOwnerAction contract model shape\",\"kind\":\"later_layer_choice\",\"text\":\"Its identity is `value`, declared with the contracts (60_model_closure_values.json): two rows with equal facts are the same row, and a row has no continuity, since a changed pair is a new release's row.\",\"question\":\"What exact contract type, field names and field types represent a `ConfirmedOwnerAction` row?\",\"decision_owner\":\"6\",\"options\":[\"A two-field value model with fields equivalent to `confirmed_action: ConfirmedAction` and `owner_action: OwnerAction`.\",\"A keyed-map entry model whose key is `ConfirmedAction` and whose value is `OwnerAction`.\",\"A discriminated contract value carrying the same two facts under generated field names.\"],\"consequences\":[\"A two-field model makes both facts explicit and independently inspectable.\",\"A keyed-map entry encodes uniqueness structurally but couples the model to map representation.\",\"A discriminated value can aid generated dispatch but adds representation machinery.\"],\"requirement\":\"a row's owner action is the `OwnerAction` member of the same name, the one whose submission carries the confirmation value.\",\"default_guess\":\"Declare a two-field value model containing a `ConfirmedAction` and an `OwnerAction`; choose exact field names in State 6.\"},{\"unit\":\"context\",\"subject\":\"CONFIRMED_OWNER_ACTIONS container and serialization\",\"kind\":\"later_layer_choice\",\"text\":\"The table holds one row for every `ConfirmedAction` member and no other\",\"question\":\"How is the table represented, ordered and serialized in generated artifacts and at runtime?\",\"decision_owner\":\"7\",\"options\":[\"Serialize a list of row values and build a keyed lookup internally.\",\"Serialize an object/map keyed by the confirmed-action representation.\",\"Generate a fixed in-code immutable correspondence without a separately serialized runtime table.\"],\"consequences\":[\"A row list preserves the explicit row model but requires uniqueness and totality checks.\",\"A map makes key uniqueness structural but fixes key serialization semantics.\",\"Generated code avoids runtime table loading but moves correspondence construction into generation.\"],\"requirement\":\"The table holds one row for every `ConfirmedAction` member and no other: it is total over `ConfirmedAction`, so each action that asks for confirmation has a row, and keyed by the confirmed action, so none has two; a row's owner action is the `OwnerAction` member of the same name, the one whose submission carries the confirmation value.\",\"default_guess\":\"Serialize explicit rows and construct an immutable lookup keyed by `ConfirmedAction`; ordering must have no contract meaning.\"},{\"unit\":\"context\",\"subject\":\"verification of CONFIRMED_OWNER_ACTIONS closure\",\"kind\":\"later_layer_choice\",\"text\":\"The table holds one row for every `ConfirmedAction` member and no other: it is total over `ConfirmedAction`, so each action that asks for confirmation has a row, and keyed by the confirmed action, so none has two; a row's owner action is the `OwnerAction` member of the same name\",\"question\":\"Where is the release rejected if the table is missing a confirmed action, contains an extra or duplicate row, or maps to a differently named owner action?\",\"decision_owner\":\"factory_checks\",\"options\":[\"Factory checks validate totality, uniqueness, absence of extras and same-name correspondence.\",\"Generation constructs the table mechanically from the two enumerations, making invalid input unrepresentable.\",\"Generation constructs it and factory checks independently verify the generated result.\"],\"consequences\":[\"Factory-only validation accepts authored data but must report every closure defect before release.\",\"Mechanical generation removes manual table choices but requires the enumeration names to be the authoritative source.\",\"Generation plus verification gives stronger assurance at the cost of duplicated checking logic.\"],\"requirement\":\"The table holds one row for every `ConfirmedAction` member and no other: it is total over `ConfirmedAction`, so each action that asks for confirmation has a row, and keyed by the confirmed action, so none has two; a row's owner action is the `OwnerAction` member of the same name, the one whose submission carries the confirmation value.\",\"default_guess\":\"Generate the correspondence mechanically and have factory checks verify totality, uniqueness, no extras and same-name mapping.\"}]}",
+ "set_aside": []
+}
