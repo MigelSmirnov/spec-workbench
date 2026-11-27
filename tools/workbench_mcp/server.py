@@ -28,6 +28,7 @@ sys.path.insert(0, str(TOOLS_DIR))
 from mcp.server.fastmcp import FastMCP
 
 import authoring_pipeline
+import find_enum_lookup as enum_lookup
 import project_navigation
 from notes_workbench.factory_addresses import ResolverUnavailable
 from spec_projection_workbench.model import SpecProjectionError
@@ -207,6 +208,16 @@ def find_value_homes(project: str, value: str) -> dict[str, Any]:
     try:
         with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
             return service.value_homes(case_root, value)
+    except _ERRORS as exc:
+        return {"error": str(exc), "known_cases": _known_cases()}
+
+
+@mcp.tool()
+def find_enum_lookup(project: str, source: str, target: str) -> dict[str, Any]:
+    """Find provider tables that select by one source enum and return a target enum field."""
+    try:
+        with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (view, case_root):
+            return {**enum_lookup.find_enum_lookup(case_root, source, target), "resolved_ref": view.resolved_ref}
     except _ERRORS as exc:
         return {"error": str(exc), "known_cases": _known_cases()}
 

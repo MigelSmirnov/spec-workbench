@@ -1,0 +1,30 @@
+from pathlib import Path
+
+import pytest
+
+import find_enum_lookup as lookup
+
+
+@pytest.fixture
+def find(monkeypatch):
+    models = {"Action": {"kind": "enum"}, "Status": {"kind": "enum"}, "Other": {"kind": "enum"},
+              "Row": {"fields": {"action": "Action", "result": "Status"}}}
+    row = {"value_type": "record_tuple", "row_model": "Row", "key": ["action"], "total": True}
+    tables = {"B": row, "A": {**row, "total": False}, "COMPOSITE": {**row, "key": ["action", "result"]},
+              "UNTYPED": {"value_type": "string_mapping", "value": {"x": "y"}}}
+    spec = {"models": models, "rules": {"data_provider_backend": {"constants": tables}}}
+    monkeypatch.setattr(lookup, "projected_spec", lambda case: spec)
+    return lambda a, b: lookup.find_enum_lookup(Path("."), a, b)
+
+
+def test_lists_all_candidates_without_guessing_or_copying_values(find):
+    rows = find("Action", "Status")["matches"]
+    assert rows == [{"constant": name, "row_model": "Row", "select_by": "action", "read_field": "result",
+                     "total": total} for name, total in [("A", False), ("B", True)]]
+
+
+def test_direction_and_empty_result(find):
+    assert find("Status", "Action")["matches"] == []
+    assert "structure request" in find("Other", "Action")["guidance"]
+    with pytest.raises(ValueError, match="not a declared enum"):
+        find("Missing", "Status")
