@@ -6,12 +6,26 @@ import hashlib
 import json
 import keyword
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from design_stage6_data import DATA_PROVIDER_CLOSURE
+from identity_workbench.service import state6_closure, verify
+from identity_workbench.sources import load_state1
 from notes_authoring.index import enum_member_names
+
+IDENTITIES = ("value", "entity")
+# Everything the identity check reads; the trial copy holds exactly these.
+IDENTITY_SOURCES = ("01_models*.md", "60_model_closure_*.json", "60_contracts.json",
+                    DATA_PROVIDER_CLOSURE, "global_spec.json")
+QUESTION = ("If this row were replaced by another row holding the same pair of values, would anything "
+            "change for the product? No: value. Yes, the row itself is followed through changes: entity. "
+            "Answer in row_identity and say why in row_identity_reason (SPEC_STANDARD §15.1.1).")
+ENTITY_QUESTION = ("{row} is declared entity, yet a row of a constant table never changes state. Say in "
+                   "row_identity_reason why this table may reuse it, or name another row model.")
 
 
 def unique_object(pairs):
@@ -34,6 +48,8 @@ def identifier(name):
 
 
 def column(spec):
+    if spec.count(".") != 1:
+        raise ValueError(f"{spec!r}: write the column as Enum.field, the enum and the row field that holds it")
     enum, field = spec.split(".")
     return identifier(enum), identifier(field)
 
@@ -70,10 +86,28 @@ def context(case, op):
             if name in models and model != models[name]:
                 raise ValueError(f"conflicting declarations for {name}")
             models[name], owners[name] = model, p
+    for name in (src, dst):
+        if name not in models:
+            raise ValueError(f"{name} is not declared in {', '.join(p.name for p in paths) or 'any model closure'}; "
+                             "name a declared enum as Enum.field")
     source, target = members(models[src]), members(models[dst])
     fields = {key: src, value: dst}
     if row in models and models[row].get("fields") != fields:
-        raise ValueError(f"{row} already exists with another declaration")
+        raise ValueError(f"{row} is already declared in {owners[row].name} as "
+                         f"{json.dumps(models[row], ensure_ascii=False)}; use its field names in "
+                         "--source/--target or choose another --row-model")
+    # Identity: State 1 decides it for a product concept; an existing record keeps
+    # its own; for a model born here the author answers the question (§15.1.1).
+    state1 = load_state1(case)[0].get(row)
+    scoped = [p for p in paths if (docs[p].get("identity_scope") == "contract_only") != bool(state1)]
+    row_info = {"state1": state1, "files": [p.name for p in scoped], "declared": None, "file": None}
+    if row in models:
+        row_info["declared"] = models[row].get("identity")
+        row_info["file"] = owners[row].name
+    elif owners[src] in scoped:
+        row_info["file"] = owners[src].name
+    elif len(scoped) == 1:
+        row_info["file"] = scoped[0].name
     backend = docs[provider]["backend_ir"]
     if (docs[provider]["schema_version"] != "spec_workbench_data_provider_backend_closure.v1"
             or backend["kind"] != "data_provider_backend" or type(backend["schema_version"]) is not int
@@ -97,8 +131,76 @@ def context(case, op):
     digest = hashlib.sha256()
     for p, raw in originals.items():
         digest.update(p.name.encode() + b"\0" + hashlib.sha256(raw).digest())
-    form = {**op, "revision": digest.hexdigest(), "target_members": list(target.values()), "rows": cells}
-    return form, originals, docs, owners[src], backend, source, target, fields
+    for p in sorted(case.glob("01_models*.md")):
+        digest.update(p.name.encode() + b"\0" + hashlib.sha256(p.read_bytes()).digest())
+    identity = row_info["declared"] or (state1.identity if state1 else None)
+    form = {**op, "revision": digest.hexdigest()}
+    if row in models:
+        form["row_model_declared"] = {"file": row_info["file"], **models[row]}
+    else:
+        form["row_model_file"] = row_info["file"]
+        form["row_model_files"] = row_info["files"]
+    if state1:
+        form["row_model_state1"] = {"identity": state1.identity, "location": state1.location}
+    form["row_identity"] = identity
+    if identity == "entity":
+        form["row_identity_question"] = ENTITY_QUESTION.format(row=row)
+    elif identity is None:
+        form["row_identity_question"] = QUESTION
+    if identity != "value":
+        form["row_identity_reason"] = None
+    form.update({"target_members": list(target.values()), "rows": cells})
+    return form, originals, docs, row_info, backend, source, target, fields
+
+
+def row_declaration(form, row, info):
+    """The author's identity answer, checked against what the project already decided."""
+    identity, reason = form.get("row_identity"), form.get("row_identity_reason")
+    if identity not in IDENTITIES:
+        raise ValueError(f"row_identity: {row} needs identity value or entity before anything is written. {QUESTION}")
+    for decided, where in ((info["declared"], info["file"]),
+                           (info["state1"] and info["state1"].identity, info["state1"] and info["state1"].location)):
+        if decided and identity != decided:
+            raise ValueError(f"row_identity: {row} is {decided} in {where} and this form keeps it. To change the "
+                             "identity, change that record first; to keep it, restore the value in the form")
+    explained = isinstance(reason, str) and reason.strip()
+    if identity == "entity" and not explained:
+        raise ValueError("row_identity_reason: " + ENTITY_QUESTION.format(row=row))
+    if not info["declared"] and not info["state1"] and not explained:
+        raise ValueError(f"row_identity_reason: {row} is created by this form with no State 1 record, so the "
+                         f"choice of {identity} has no other source. {QUESTION}")
+    if info["declared"] or info["file"] is not None and form.get("row_model_file", info["file"]) == info["file"]:
+        return identity, info["file"]
+    target = form.get("row_model_file")
+    kind = "without identity_scope contract_only" if info["state1"] else "with identity_scope contract_only"
+    if not info["files"]:
+        raise ValueError(f"row_model_file: {row} has " + ("a" if info["state1"] else "no") + " State 1 record, so it "
+                         f"belongs in a model closure {kind}, and this project has none. Add that closure file"
+                         + ("" if info["state1"] else f" or give {row} a State 1 model record") + " first")
+    if target not in info["files"]:
+        raise ValueError(f"row_model_file: choose where {row} is declared from {info['files']} (closure files {kind}: "
+                         + ("it is a State 1 concept" if info["state1"] else "it has no State 1 record") + ")")
+    return identity, target
+
+
+def identity_findings(project):
+    reports = [state6_closure(project)]
+    if (project / "global_spec.json").is_file():
+        reports.append(verify(project))
+    return {(f["code"], f.get("model"), f["message"]) for report in reports for f in report["findings"]}
+
+
+def identity_trial(case, changed):
+    """Run the identity check on the files it reads, with the patch applied to a copy."""
+    with tempfile.TemporaryDirectory() as tmp:
+        trial = Path(tmp) / case.name
+        trial.mkdir()
+        for pattern in IDENTITY_SOURCES:
+            for path in case.glob(pattern):
+                shutil.copyfile(path, trial / path.name)
+        for path, text in changed.items():
+            (trial / path.name).write_bytes(text.encode("utf-8"))
+        return identity_findings(trial)
 
 
 def render_edit(text, before, after):
@@ -157,8 +259,11 @@ def run(args):
         print(json.dumps(context(case, op)[0], indent=2, ensure_ascii=False))
         return
     form = read(args.form)
+    absent = [k for k in ("symbol", "source", "target", "row_model", "total", "revision", "rows") if k not in form]
+    if absent:
+        raise ValueError(f"form lacks {absent}; generate it with the template command")
     op = {k: form[k] for k in ("symbol", "source", "target", "row_model", "total")}
-    current, originals, docs, owner, backend, source, target, fields = context(case, op)
+    current, originals, docs, row_info, backend, source, target, fields = context(case, op)
     key, value = fields
     rows = form["rows"]
     if not isinstance(rows, dict) or not rows or set(rows) - set(source.values()):
@@ -173,8 +278,17 @@ def run(args):
                 raise ValueError(f"{name}: choose a target member from {list(values)}")
             records.append({key: raw, value: values[rows[name]]})
     row = op["row_model"]
-    if not any(row in doc.get("models", {}) for doc in docs.values()):
-        docs[owner]["models"][row] = {"fields": fields}
+    try:
+        identity, home = row_declaration(form, row, row_info)
+    except ValueError:
+        if form["revision"] != current["revision"]:
+            raise ValueError("stale form: generate a fresh template from the current closures") from None
+        raise
+    owner = next(p for p in docs if p.name == home)
+    if row not in docs[owner]["models"]:
+        docs[owner]["models"][row] = {"identity": identity, "fields": fields}
+    elif "identity" not in docs[owner]["models"][row]:
+        docs[owner]["models"][row]["identity"] = identity
     constant = {"value_type": "record_tuple", "row_model": row, "key": [key]}
     if op["total"]:
         constant["total"] = True
@@ -182,6 +296,7 @@ def run(args):
     backend["constants"][op["symbol"]] = {**constant, "value": records}
     root = Path(subprocess.check_output(["git", "-C", str(case), "rev-parse", "--show-toplevel"], text=True).strip())
     diff = []
+    changed = {}
     for path, raw in originals.items():
         before = raw.decode("utf-8")
         if json.loads(before) == docs[path]:
@@ -189,7 +304,7 @@ def run(args):
         if path.is_symlink():
             raise ValueError(f"refusing to replace symlink {path}")
         rel = path.relative_to(root).as_posix()
-        after = render_edit(before, json.loads(before), docs[path])
+        after = changed[path] = render_edit(before, json.loads(before), docs[path])
         for line in difflib.unified_diff(before.splitlines(True), after.splitlines(True), f"a/{rel}", f"b/{rel}"):
             diff.append(line if line.endswith("\n") else line + "\n\\ No newline at end of file\n")
     if not diff:
@@ -199,9 +314,23 @@ def run(args):
         raise ValueError("stale form: generate a fresh template from the current closures")
     patch = "".join(diff)
     print(patch, end="")
-    if args.command == "apply":
-        subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], cwd=root, input=patch.encode(), check=True)
-        print(f"Applied. Consumer note: name the imported {op['symbol']} constant and its selection field {key}.")
+    known = identity_findings(case)
+    added = sorted(identity_trial(case, changed) - known, key=str)
+    if added:
+        raise ValueError("this patch would add identity findings, so nothing was written:\n"
+                         + "\n".join(f"  {code} [{model}] - {message}" for code, model, message in added))
+    verdict = f"Identity check on the patched copy: no new findings ({len(known)} already present)."
+    if args.command != "apply":
+        print(verdict)
+        return
+    subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], cwd=root, input=patch.encode(), check=True)
+    left = sorted(identity_findings(case) - known, key=str)
+    if left:
+        raise ValueError(f"applied, but the identity check now reports {left}; inspect with design_identity_closure.py")
+    print(verdict)
+    print(f"Applied. {row}: identity {identity}"
+          + (f" ({form['row_identity_reason'].strip()})" if isinstance(form.get("row_identity_reason"), str) else "")
+          + f". Consumer note: name the imported {op['symbol']} constant and its selection field {key}.")
 
 
 def main(argv=None):
