@@ -1024,6 +1024,43 @@ rule it serves is fixed. `ConfirmedOwnerAction` is declared so (A13 rule 6,
 on its own by the criterion above. This answers State 3 round-108's
 contradiction between that preamble and the models module.
 
+## 2026-11-27: Stage 8.1 re-read of all 23 modules after the State 7 work
+
+The ledger's hashes were of the slices of 39ec1691 (2026-11-26). The State 7
+work since (protocol literals and policy tables given one home, the
+`given_values` readers, the five typed tables and `CONFIRMED_OWNER_ACTIONS`,
+A13 Required test 13 and the State 1 clarification) changed every packet but
+`store_persistence`'s, the line numbers alone in some. Each changed packet was
+re-read against the review protocol on a word-level diff from its last
+PASS packet: `clock`, `runtime_settings`, `audit_log`, `random_values` and
+`instance_lifecycle` by the author; the other seventeen by four independent
+readers, each module's whole packet with its diff.
+
+One AMBIGUITY, `owner_interface`: `_read_form_path` reads a position with
+`read_digits_text`, which allows leading zeros, so `picks.1` and `picks.01`
+reach one path, while `_read_owner_request` made a request unreadable only
+when it repeated a field's name as text: one generation could refuse the
+request, another let one value overwrite the other. Repaired in 4a56e12e and
+58d6dff4: the CSRF field given twice, or two fields taken as those of one
+`OWNER_FORM_FIELDS` row at one path, make the request unreadable; unknown
+fields and the target's query parameter still never do (State 7 round-13
+found the first wording contradicting that; round-14 clear). The page's own
+forms never write such names.
+
+Every other module PASS. Each new constant's value equals the literal the
+note held before; the tables marked total cover their key enumeration
+(FormField 7, ProjectStatus 2, ConfirmedAction 4); the orders of the failure
+kinds equal the State 5 Errors lists; A13 test 13 is located in
+`operations` (`take_confirmation` before running a confirmed action),
+`owner_sessions` (`presented_value` None refused) and `owner_interface` (an
+omitted field read as None). Observations, none admitting two behaviours:
+the State 5 Callers of `given_values.read_digits_text` name
+`migration_import` alone, though `owner_interface._read_form_path` also calls
+it; the `models` packet carries no State 1 source for `ConfirmedOwnerAction`,
+since the slice builder takes no preamble text (State 1's clarification of
+2026-11-27 is that source); no test note in `operations` names A13 test 13,
+which the semantic test carries. Every module re-hashed on 58d6dff4.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
