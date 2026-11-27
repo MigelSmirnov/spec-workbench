@@ -51,3 +51,34 @@ def test_missing_sources_and_invalid_selections(case):
         card(case, "A1", "tables", constant="UNKNOWN")
     with pytest.raises(ValueError, match="basis"):
         card(case, "A1", "tables", owner_reason=" ")
+
+
+def test_card_shows_what_state3_itself_says_before_any_later_state(case):
+    (case / "30_modules.md").write_text(
+        "# State 3\n\n## `session`\n\nKeeps every promise of A1.\n\n## `tables`\n\nHolds the action list (A1\n"
+        "rules 1–2) and the limits of A10 rule 1.\n\n## `ui`\n\nShows the evidence (A1 rule 2).\n")
+    for later in ("70_data_provider_closure.json", "65_imports.json"):
+        (case / later).unlink()
+    result = card(case, "A1", "tables", 1)
+    assert result["module_recorded_role"] == "consumer"
+    assert result["module_names_decision"] == [{"line": 9, "text": "Holds the action list (A1", "names_rule": True}]
+    assert result["other_modules_naming_decision"] == ["module:session", "module:ui"]
+    assert result["other_modules_naming_rule"] == []
+    assert card(case, "A1", "ui", 2)["other_modules_naming_rule"] == ["module:tables"]
+    assert card(case, "A1", "session")["module_recorded_role"] == "primary_owner"
+    with pytest.raises(ValueError, match="omit --constant"):
+        card(case, "A1", "tables", constant="ACTIONS")
+
+
+def test_proposal_is_compared_with_the_record_and_state1_is_consulted(case):
+    other = card(case, "A1", "tables", owner_reason="It holds the list.")
+    assert "module:session would stop being the owner" in other["proposed_ownership"]["against_recorded"]
+    assert "30_trace.json" in other["to_record"]
+    same = card(case, "A1", "session", owner_reason="It keeps the promise.")
+    assert "nothing would change" in same["proposed_ownership"]["against_recorded"]
+    assert card(case, "A1", "ui")["module_recorded_role"] == "not recorded"
+    assert card(case, "A1", "tables", constant="ACTIONS")["data_dependency"]["row_model_state1"] is None
+    (case / "01_models.md").write_text("## Model M1 — ActionRow\n\n### Identity\n\nvalue\n")
+    known = card(case, "A1", "tables", constant="ACTIONS")
+    assert known["data_dependency"]["row_model_state1"] == {"identity": "value", "location": "01_models.md:1"}
+    assert "already records ActionRow at 01_models.md:1" in known["state1_question"]

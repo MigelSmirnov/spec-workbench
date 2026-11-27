@@ -1,12 +1,14 @@
 """Preview the ownership of a State 2 decision beside a State 3 module."""
 import argparse
 import json
+import re
 from pathlib import Path
 
 import design_index
 import design_stage3
 import design_trace
 from design_lint import NUMBERED_RULE_RE
+from identity_workbench.sources import load_state1
 from imports_workbench import service as imports
 from standard_backends import standard_backends
 
@@ -54,6 +56,51 @@ def constant_evidence(case, symbol):
             "declared_importers": readers if table is not None else None}
 
 
+def module_evidence(case, manifest, module, key, rule):
+    """What State 3 itself says: where modules name the decision, in their own sections.
+
+    This needs only 30_modules.md, so it serves an author who has nothing past State 3.
+    """
+    named = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(key)}(?![A-Za-z0-9_])")
+    cited = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(key)}\s+rules?\s+((?:\d+(?:\s*[–-]\s*\d+)?(?:\s*,\s*|\s+and\s+)?)+)")
+
+    def names_rule(text):
+        for numbers in cited.findall(text):
+            for first, last in re.findall(r"(\d+)(?:\s*[–-]\s*(\d+))?", numbers):
+                if int(first) <= rule <= int(last or first):
+                    return True
+        return False
+
+    texts = {}
+    passages, others, rule_others = [], [], []
+    for entry in manifest["modules"]:
+        source = entry["source"]
+        lines = texts.setdefault(source["path"], (case / source["path"]).read_text(encoding="utf-8").splitlines())
+        # A sentence wraps across lines, so judge each line together with the next one.
+        hits = [(n, lines[n - 1].strip(), " ".join(lines[n - 1:n + 1]))
+                for n in range(source["start_line"], source["end_line"] + 1) if named.search(lines[n - 1])]
+        on_rule = [hit for hit in hits if rule and names_rule(hit[2])]
+        if entry["key"] == module["key"]:
+            passages = [{"line": n, "text": text, **({"names_rule": True} if (n, text, both) in on_rule else {})}
+                        for n, text, both in hits]
+        elif hits:
+            others.append(entry["key"])
+            if on_rule:
+                rule_others.append(entry["key"])
+    result = {"module_names_decision": passages, "other_modules_naming_decision": others}
+    if rule:
+        result["other_modules_naming_rule"] = rule_others
+    return result
+
+
+def role(current, module_key):
+    if not current:
+        return None
+    if current.get("primary_owner") == module_key:
+        return "primary_owner"
+    return "consumer" if module_key in (current.get("consumers") or []) else "not recorded"
+
+
 def card(case, decision_key, module_name, rule=None, constant=None, owner_reason=None):
     key = decision_key.upper()
     index = design_index.build_index(case)
@@ -74,7 +121,8 @@ def card(case, decision_key, module_name, rule=None, constant=None, owner_reason
     current = trace["decisions"].get(key)
     result = {"decision": decision_basis(case, decision, rule), "module": module["key"],
               "module_location": module["source"], "trace_source": trace_path.name if trace_path.exists() else None,
-              "recorded_ownership": current,
+              "recorded_ownership": current, "module_recorded_role": role(current, module["key"]),
+              **module_evidence(case, manifest, module, key, rule),
               "trace_findings": [f for f in trace["findings"] if f["subject"] == key],
               "question": "Is this module responsible for the decision, or does it supply or read its data?",
               "return_to": {"decision": key, "rule": rule, "module": module["key"], "constant": constant}}
@@ -82,12 +130,25 @@ def card(case, decision_key, module_name, rule=None, constant=None, owner_reason
         evidence = constant_evidence(case, constant)
         result["data_dependency"] = evidence
         if evidence["row_model"]:
-            result["state1_question"] = (f"Does {evidence['row_model']} have independent product meaning? "
-                                         "If unresolved, take this question to State 1, then return to this card.")
+            record = load_state1(case)[0].get(evidence["row_model"])
+            evidence["row_model_state1"] = ({"identity": record.identity, "location": record.location} if record
+                                            else None)
+            result["state1_question"] = (
+                f"State 1 already records {evidence['row_model']} at {record.location}: read it before asking again."
+                if record else
+                f"State 1 has no record of {evidence['row_model']}. Does it have independent product meaning? "
+                "If unresolved, take this question to State 1, then return to this card.")
     if owner_reason is not None:
         if not owner_reason.strip():
             raise ValueError("State the basis for assigning the whole decision to this module")
-        result["proposed_ownership"] = {"decision": key, "primary_owner": module["key"], "basis": owner_reason}
+        recorded = (current or {}).get("primary_owner")
+        change = ("no owner is recorded yet" if not recorded else
+                  "same as the recorded owner: nothing would change" if recorded == module["key"] else
+                  f"{recorded} would stop being the owner of the whole decision; state what becomes of its part")
+        result["proposed_ownership"] = {"decision": key, "primary_owner": module["key"], "basis": owner_reason,
+                                        "against_recorded": change}
+        result["to_record"] = (f"This card writes nothing. Set decisions.{key}.primary_owner in "
+                               f"{design_trace.DEFAULT_TRACE_FILE}, then run design_trace.py --check.")
     return result
 
 
