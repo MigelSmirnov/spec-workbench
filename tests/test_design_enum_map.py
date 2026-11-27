@@ -195,3 +195,25 @@ def test_partial_and_stale(case, capsys):
     form.update(row_identity="value", row_identity_reason="Only the pair it holds.")
     assert attempt(case, form) == 0
     assert "total" not in tool.read(closure)["backend_ir"]["constants"]["LOOKUP"]
+
+
+@pytest.mark.parametrize("remove_row", [False, True])
+def test_relaxing_total_coverage_is_explicit(case, capsys, remove_row):
+    initial = answered(form_for(case, capsys), row_identity="value", row_identity_reason="Only the pair.")
+    assert attempt(case, initial) == 0
+    capsys.readouterr()
+    form = form_for(case, capsys, "--partial")
+    assert form["confirm_partial"] is False
+    if remove_row:
+        del form["rows"]["SECOND"]
+    before = snapshot(case)
+    assert attempt(case, form, "preview") == 0
+    preview = capsys.readouterr().out
+    assert "future members" in preview
+    assert ("Members losing their result: SECOND" in preview) == remove_row
+    del form["coverage_change"]  # apply checks the actual current guarantee
+    assert attempt(case, form) == 2
+    assert snapshot(case) == before
+    form["confirm_partial"] = True
+    assert attempt(case, form) == 0
+    assert attempt(case, form) == 0

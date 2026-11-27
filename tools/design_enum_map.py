@@ -135,6 +135,10 @@ def context(case, op):
         digest.update(p.name.encode() + b"\0" + hashlib.sha256(p.read_bytes()).digest())
     identity = row_info["declared"] or (state1.identity if state1 else None)
     form = {**op, "revision": digest.hexdigest()}
+    if old and old.get("total") is True and not op["total"]:
+        form["coverage_change"] = (f"{symbol} currently guarantees a result for every {src} member. "
+                                   "Partial coverage allows existing or future members to have no result.")
+        form["confirm_partial"] = False
     if row in models:
         form["row_model_declared"] = {"file": row_info["file"], **models[row]}
     else:
@@ -312,6 +316,16 @@ def run(args):
         return
     if form["revision"] != current["revision"]:
         raise ValueError("stale form: generate a fresh template from the current closures")
+    if "coverage_change" in current:
+        print(current["coverage_change"])
+        removed = [name for name, old_value in current["rows"].items() if old_value is not None and name not in rows]
+        if removed:
+            print("Members losing their result: " + ", ".join(removed))
+        if form.get("confirm_partial") is not True:
+            instruction = "Set confirm_partial to true if this change is intended, or regenerate with --total."
+            if args.command == "apply":
+                raise ValueError(instruction)
+            print(instruction)
     patch = "".join(diff)
     print(patch, end="")
     known = identity_findings(case)
