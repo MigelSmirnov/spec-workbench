@@ -20,7 +20,16 @@ def find(monkeypatch):
 def test_lists_all_candidates_without_guessing_or_copying_values(find):
     rows = find("Action", "Status")["matches"]
     assert rows == [{"constant": name, "row_model": "Row", "select_by": "action", "read_field": "result",
-                     "total": total} for name, total in [("A", False), ("B", True)]]
+                     "total": total, "declared_importers": None} for name, total in [("A", False), ("B", True)]]
+
+
+def test_names_the_modules_that_declare_the_import(find, monkeypatch, tmp_path):
+    lookup.projected_spec(None)["rules"]["data_provider_backend"]["wiring"] = {"module": "tables"}
+    (tmp_path / "65_imports.json").write_text(
+        '{"scopes": {"ui.show": {"uses": [{"provider": "tables", "symbol": "B"}]}}}')
+    rows = {row["constant"]: row["declared_importers"]
+            for row in lookup.find_enum_lookup(tmp_path, "Action", "Status")["matches"]}
+    assert rows == {"A": [], "B": ["ui"]}
 
 
 def test_direction_and_empty_result(find):

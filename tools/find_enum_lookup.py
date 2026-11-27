@@ -3,6 +3,7 @@ import argparse
 import json
 from pathlib import Path
 
+from imports_workbench import service as imports
 from spec_projection_workbench import projected_spec
 
 
@@ -13,6 +14,12 @@ def find_enum_lookup(case: Path, source: str, target: str) -> dict:
         if models.get(name, {}).get("kind") != "enum":
             raise ValueError(f"{name!r} is not a declared enum; check its name in the current case.")
     provider = spec.get("rules", {}).get("data_provider_backend", {})
+    supplier = (provider.get("wiring") or {}).get("module")
+    try:  # who already declares the import: the note's module must be among them
+        table = imports.load_table(case)
+    except imports.ImportsError:
+        table = None
+    edges = imports.derive(table) if table is not None else None
     matches = []
     for symbol, table in sorted(provider.get("constants", {}).items()):
         key = table.get("key")
@@ -24,9 +31,12 @@ def find_enum_lookup(case: Path, source: str, target: str) -> dict:
         for field, enum in fields.items():
             if field != key[0] and enum == target:
                 matches.append({"constant": symbol, "row_model": table["row_model"], "select_by": key[0],
-                                "read_field": field, "total": table.get("total") is True})
-    guidance = ("Choose the matching table and result field from the design. Check the consumer imports the "
-                "constant. Name it and the selection field in the note; read the result field from that row.")
+                                "read_field": field, "total": table.get("total") is True,
+                                "declared_importers": None if edges is None else [
+                                    module for module, uses in edges.items() if symbol in uses.get(supplier, [])]})
+    guidance = ("Choose the matching table and result field from the design. The note's module must be among "
+                "declared_importers (null: this case has no import table yet); otherwise declare the import first. "
+                "Name the constant and the selection field in the note; read the result field from that row.")
     if not matches:
         guidance = ("No single-key typed table for this direction in this projection. If the design requires "
                     "this mapping, open an enum mapping structure request.")
