@@ -75,7 +75,16 @@ row adds no fact, so State 6 still adds no fact a model does not list here.
 action that asks for confirmation is submitted with the confirmation value
 the step showed — is fixed by State 2 A13 rule 6 and the `ConfirmedAction`
 vocabulary, the closed list of the actions that ask for confirmation
-("Identity formats"). It has no model number here. M30–M34 keep their
+("Identity formats"). The table holds one row for every `ConfirmedAction`
+member and no other: it is total over `ConfirmedAction`, so each action that
+asks for confirmation has a row, and keyed by the confirmed action, so none
+has two; a row's owner action is the `OwnerAction` member of the same name,
+the one whose submission carries the confirmation value. Its rows are
+values of the release the data provider holds (70_data_provider_closure.json),
+none made at run time. Its identity is `value`, declared with the contracts
+(60_model_closure_values.json): two rows with equal facts are the same row,
+and a row has no continuity, since a changed pair is a new release's row.
+It has no model number here. M30–M34 keep their
 records until each is reviewed on its own (owner, 2026-11-27).
 
 Every State 1 question the owner must answer is under a model's
