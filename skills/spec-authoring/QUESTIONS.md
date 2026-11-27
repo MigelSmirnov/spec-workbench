@@ -821,3 +821,22 @@ A round is a few tens of thousands of tokens — far less than one generation ru
 of a module set. Rounds repeat until closed; on Cabinet Kernel State 1 the points
 per review fell from 15 to 3–5 once the stop rule applied, and the tenth round
 repeated nothing.
+
+### Reading a State 7 probe before editing
+
+`ask --probe` reviews the generator prompt without prior judgements. Its count
+of blocking findings describes the experiment. Use the ordinary State 7
+`status` for the case's closure. Review an existing probe without a model call:
+
+```bash
+python tools/design_questions.py probe-evidence "$CASE" "$PROBE_DIR" operations
+```
+
+The report names the exact saved prompt, the probe topics for this module,
+and the module's recorded verified `answered` judgements with their reasons
+and quotes. It checks the prompt digest and whether the old quoted evidence
+is still present. The author checks whether a previous answer addresses this
+particular finding. When a cited rule lives in another module or design
+document, inspect what the consumer actually receives before changing the
+specification. A design decision can already be settled while the consumer
+still lacks the contract detail it needs. The report changes no dispositions.

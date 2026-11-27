@@ -1595,6 +1595,9 @@ def probe_round(case: Path, state: int, provider: Provider, out: Path, runs: int
                            "prompt_chars": len(read.units[key]["text"])}
     summary = {
         "schema_version": PROBE_SCHEMA,
+        "case_name": case.resolve().name,
+        "author_guidance": ("Diagnostic only; case status is unchanged. Before editing, inspect the saved "
+                            "prompt and earlier answers: design_questions.py probe-evidence CASE OUT MODULE"),
         "state": state,
         "provider": provider.name,
         "reviews": runs,
