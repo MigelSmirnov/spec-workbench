@@ -1102,6 +1102,19 @@ derivation is HKDF-SHA256 as in every generation so far. The `backups` packet
 changed by those clauses; the other changed packets by note numbering alone;
 all re-hashed, PASS.
 
+## 2026-11-27: an answer is written with its body's length
+
+The first runtime smoke (verify 20261127_225829) started Registry as a managed
+service: both listeners came up, and every answer was written with no
+`Content-Length` while the connection stayed open, so a client that reads a
+body to its end (urllib) waited until its own timeout (RFC 9112 section 6.3).
+`start_instance` said only that the answer is written back unchanged; since
+e4816570 its header fields, unchanged, are followed by the
+`CONTENT_LENGTH_HEADER` field the listener alone writes (State 7 round-26
+found "unchanged" and "added" contradicting; round-27 clear). The
+`instance_lifecycle` packet changed by that clause and the constant;
+re-read and re-hashed, PASS.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
