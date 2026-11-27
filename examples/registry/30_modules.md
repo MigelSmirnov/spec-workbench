@@ -238,10 +238,10 @@ later line, and modules on one line do not know each other.
 
 ### Owns
 
-The models M01–M29 as the domain's vocabulary — among them the forms of a
+The models M01–M34 as the domain's vocabulary — among them the forms of a
 pointer's publisher and an audit entry's subject (M13–M19), the owner
 session's pending confirmation and uploaded file (M20, M21) and the row
-shapes of the data provider's eight tables (M22–M29), whose rows are
+shapes of the data provider's thirteen tables (M22–M34), whose rows are
 `data_provider`'s — and the declared vocabularies of
 State 1 as enumerations — for the artifact types only the shape of a type
 with its owner service (M22), whose rows are `data_provider`'s, so a stored
@@ -382,7 +382,7 @@ and every one is exported.
 
 ### Knows
 
-`models`, for exactly the row models and enumerations of its eight tables:
+`models`, for exactly the row models and enumerations of its thirteen tables:
 `ArtifactTypeOwner` (a type with its owner service) and `ServiceName` for
 `ARTIFACT_TYPE_OWNERS`; `ServiceRight` (a service and an operation) with
 `ServiceName` and `ServiceOperation` for `SERVICE_RIGHTS`;
@@ -398,7 +398,17 @@ has one, the audit action it writes and the kind of its entry's subject)
 with `OwnerAction`, `CustomerTransition`, `ProjectErasure`, `AuditAction`
 and `AuditSubjectKind` for `OWNER_AUDIT_ACTIONS`; `OwnerFormField` (an owner form field's name, the
 model it fills and how its text is read) with `OwnerFormCarrier` and
-`FormValueKind` for `OWNER_FORM_FIELDS`. Its other constants are scalars and import nothing.
+`FormValueKind` for `OWNER_FORM_FIELDS`; `FormFieldRefusalKind` (a form
+field and its refusal kind) with `FormField` and `RefusalKind` for
+`FORM_FIELD_REFUSAL_KINDS`; `ProjectStatusConfirmation` (a project status
+and the action its card confirms) with `ProjectStatus` and `ConfirmedAction`
+for `PROJECT_STATUS_CONFIRMATIONS`; `ImportFormFailureField` (a form field
+and the mapping field its failure is reported under) with `FormField` and
+`MappingField` for `IMPORT_FORM_FIELD_MAPPING_FIELDS`;
+`CustomerEligibilityRefusal` (an eligibility and its refusal kind) with
+`CustomerEligibility` and `RefusalKind` for `CUSTOMER_ELIGIBILITY_REFUSALS`;
+`StoreCompanionStepSuffix` (a discard step and its file's suffix) with
+`DiscardStep` for `STORE_COMPANION_STEP_SUFFIXES`. Its other constants are scalars and import nothing.
 
 ### Must not own
 

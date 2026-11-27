@@ -54,6 +54,10 @@ M21; the upload number, which State 6 carried on the owner's word of
 2026-11-24, is now a fact of M11), and the rows of the data provider's seven
 tables (M22–M28). Later on 2026-11-25 the owner made the owner form's fields
 an eighth table, so its row has the record M29 (owner, 2026-11-25).
+On 2026-11-27 five correspondences over a closed list that the data
+provider held as text-to-text maps became tables whose rows name the
+members themselves (SPEC_STANDARD §15.2, "a correspondence over a
+taxonomy"), so their rows have the records M30–M34 (owner, 2026-11-27).
 
 Every State 1 question the owner must answer is under a model's
 `Open questions`; a `BLOCK:` question stops State 2 until answered.
@@ -1556,6 +1560,231 @@ Continuity: none; changed only with a new release.
 ### Source of truth
 
 The release: the owner form table the data provider holds.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M30 — FormFieldRefusalKind
+
+### Meaning
+
+A row of the form refusal table: the kind of refusal a value outside its form
+is answered with, by the form field it was given as — a field of a
+closed list answers `outside_closed_list`, every other field `outside_form`.
+One row per form field.
+
+Facts: the form field; the refusal kind.
+
+Candidate fields:
+
+- `field: FormField`
+- `kind: RefusalKind`
+
+These are all its fields, none optional; their exact names and types are
+State 6's, as every field's is (State 0, "Carried to later states"), and
+State 6 declares exactly these.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `FORM_FIELD_REFUSAL_KINDS`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M31 — ProjectStatusConfirmation
+
+### Meaning
+
+A row of the project confirmation table: the confirmed action a project's
+card offers by the project's status — archiving an active project (V1-7,
+R0-12), erasing an archived one (R0-60). One row per project status.
+
+Facts: the project's status; the confirmed action.
+
+Candidate fields:
+
+- `status: ProjectStatus`
+- `confirm_action: ConfirmedAction`
+
+These are all its fields, none optional; their exact names and types are
+State 6's, as every field's is (State 0, "Carried to later states"), and
+State 6 declares exactly these.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `PROJECT_STATUS_CONFIRMATIONS`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M32 — ImportFormFailureField
+
+### Meaning
+
+A row of the import form failure table: the field of the import mapping a
+value's form failure is reported under, by the form field the value was
+checked as (R0-85) — an alias under the alias, a customer kind under the
+customer kind. One row for each form field the import checks.
+
+Facts: the form field; the mapping field.
+
+Candidate fields:
+
+- `form_field: FormField`
+- `mapping_field: MappingField`
+
+These are all its fields, none optional; their exact names and types are
+State 6's, as every field's is (State 0, "Carried to later states"), and
+State 6 declares exactly these.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `IMPORT_FORM_FIELD_MAPPING_FIELDS`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M33 — CustomerEligibilityRefusal
+
+### Meaning
+
+A row of the customer eligibility refusal table: the kind of refusal a
+project's customer is refused with, by the customer's eligibility — an
+erased, restricted or ended customer (R0-16, R0-51, R0-57). One row for each eligibility
+that refuses; an eligible customer and an unknown one have none.
+
+Facts: the eligibility; the refusal kind.
+
+Candidate fields:
+
+- `eligibility: CustomerEligibility`
+- `kind: RefusalKind`
+
+These are all its fields, none optional; their exact names and types are
+State 6's, as every field's is (State 0, "Carried to later states"), and
+State 6 declares exactly these.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `CUSTOMER_ELIGIBILITY_REFUSALS`.
+
+### Lifecycle candidate
+
+None.
+
+### Persistence candidate
+
+Not persisted; a constant of the release.
+
+### Open questions
+
+None.
+
+## Model M34 — StoreCompanionStepSuffix
+
+### Meaning
+
+A row of the store companion table: the suffix of the companion file a step
+of discarding a new store removes, by that step — the write-ahead
+log, the shared memory and the journal. One row for each step that removes
+a companion file; closing the connection and removing the store's file
+have none.
+
+Facts: the discard step; the suffix.
+
+Candidate fields:
+
+- `step: DiscardStep`
+- `suffix: str`
+
+These are all its fields, none optional; their exact names and types are
+State 6's, as every field's is (State 0, "Carried to later states"), and
+State 6 declares exactly these.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: two rows with equal facts are the same fact of the table.
+Continuity: none; changed only with a new release.
+
+### Source of truth
+
+The release: the data provider's `STORE_COMPANION_STEP_SUFFIXES`.
 
 ### Lifecycle candidate
 

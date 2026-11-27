@@ -957,6 +957,34 @@ content never reaches but the typed answer must handle. The backups prompt
 lists `RegistryStore.__init__` under the module's own contracts although
 the class is imported; that is the Factory's prompt assembly, not the spec.
 
+## 2026-11-27: five correspondences over a closed list become typed tables (owner)
+
+State 7 rounds 07–09 swung between two objections to the refusal-kind lookup
+in `check_value_forms`: naming the two members it can give is an inline
+allow-list (§2), and choosing "the member whose value the constant maps ...
+to" names a member by its value (§15.3.1). Both were right about a
+text-to-text map: the code has to turn a text into a member, and no wording
+says that within the standard. The standard's own form is §15.2 ("a
+correspondence over a taxonomy") and §6.10 version 2: a `record_tuple` whose
+row names the members in enumeration columns, keyed by the member the row is
+chosen by and, where every member has a row, `total`. By the owner's
+decision of 2026-11-27 all five such maps became tables, the earlier two
+included:
+
+| constant | row model (State 1) | key | total |
+|---|---|---|---|
+| `FORM_FIELD_REFUSAL_KINDS` | `FormFieldRefusalKind` (M30) | `field` | yes |
+| `PROJECT_STATUS_CONFIRMATIONS` | `ProjectStatusConfirmation` (M31) | `status` | yes |
+| `IMPORT_FORM_FIELD_MAPPING_FIELDS` | `ImportFormFailureField` (M32) | `form_field` | no |
+| `CUSTOMER_ELIGIBILITY_REFUSALS` | `CustomerEligibilityRefusal` (M33) | `eligibility` | no |
+| `STORE_COMPANION_STEP_SUFFIXES` | `StoreCompanionStepSuffix` (M34) | `step` | no |
+
+The values are unchanged. Notes read a row by its key field ("the kind of
+the row ... whose field is that field"), as `REFUSAL_HTTP_STATUSES` is read;
+no consumer names a row model, as none names `RefusalHttpStatus`. A member
+added to `FormField` or `ProjectStatus` without its row now stops the
+emitter instead of passing silently.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
