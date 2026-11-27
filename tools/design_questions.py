@@ -106,6 +106,10 @@ def main(argv: list[str] | None = None) -> int:
     guide.add_argument("--state", type=int, choices=range(9))
     guide.add_argument("--factory-return", action="store_true")
     guide.add_argument("--json", action="store_true")
+    evidence = sub.add_parser("probe-evidence", help="compare a saved State 7 probe with earlier module answers")
+    evidence.add_argument("case", type=Path)
+    evidence.add_argument("probe", type=Path)
+    evidence.add_argument("module")
     ask = sub.add_parser("ask")
     ask.add_argument("case", type=Path)
     ask.add_argument("--state", type=int, required=True)
@@ -164,6 +168,14 @@ def main(argv: list[str] | None = None) -> int:
     stat.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.command == "probe-evidence":
+            from questions_workbench.probe_evidence import report
+            try:
+                result = report(args.case, args.probe, args.module)
+            except OSError as exc:
+                parser.error(str(exc))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         if args.command == "guide":
             guidance = service.author_guidance(args.state, factory_return=args.factory_return)
             print(json.dumps({"state": args.state, "factory_return": args.factory_return,
@@ -234,7 +246,8 @@ def main(argv: list[str] | None = None) -> int:
                 for module, row in summary["modules"].items():
                     print(f"{module}: topics={row['topics']} blocking={row['blocking']} kinds={row['kinds']} "
                           f"prompt_chars={row['prompt_chars']}")
-                print(f"probe kept in {args.probe}: blocking={summary['blocking_topics']}")
+                print(f"probe kept in {args.probe}: diagnostic findings marked blocking={summary['blocking_topics']}")
+                print(summary["author_guidance"])
             else:
                 read = summary["reviews_read"]
                 for unit, row in summary["per_unit"].items():
