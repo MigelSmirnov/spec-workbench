@@ -985,6 +985,36 @@ no consumer names a row model, as none names `RefusalHttpStatus`. A member
 added to `FormField` or `ProjectStatus` without its row now stops the
 emitter instead of passing silently.
 
+## 2026-11-27 — confirmed actions read their owner action from a table
+
+`owner_interface._render_owner_page` (the confirmation step's form) and
+`operations.OwnerRequestStep.run` (which owner actions take a confirmation)
+matched a `ConfirmedAction` member to the `OwnerAction` member of equal value.
+The whole-module probe named it a correspondence written in prose
+(SPEC_STANDARD §2, §15.2). It is now `CONFIRMED_OWNER_ACTIONS`, a
+`record_tuple` keyed by `confirm_action`, `total: true`, with row model
+`ConfirmedOwnerAction` (identity value, in `60_model_closure_values.json`
+under `contract_only`, no State 1 record). It was written by
+`tools/design_enum_map.py apply` (PR #209) from the form its `preview` showed:
+the four pairs `ARCHIVE_PROJECT`, `ERASE_PROJECT`, `CONFIRM_IMPORT`,
+`ERASE_AUDIT_ENTRIES`, each to the owner action of the same name. A fifth
+confirmed action now stops closure until its row is written. Both notes read
+the row by `confirm_action`; `OwnerRequestStep.run` no longer imports
+`ConfirmedAction` (it passes the row's value on without naming the type).
+
+### Open: do M30–M34 belong in State 1?
+
+The five tables made earlier today (`FORM_FIELD_REFUSAL_KINDS`,
+`PROJECT_STATUS_CONFIRMATIONS`, `IMPORT_FORM_FIELD_MAPPING_FIELDS`,
+`CUSTOMER_ELIGIBILITY_REFUSALS`, `STORE_COMPANION_STEP_SUFFIXES`) have their
+row models recorded in State 1 as M30–M34 and declared in
+`60_model_closure_domain.json`; `ConfirmedOwnerAction` has neither. The
+question is to be decided per model by one criterion (owner, 2026-11-27):
+which product rule needs this notion on its own? A model that exists only as
+the row of a constant table argues for `contract_only`. The cost of the
+repeated rounds a State 1 record causes does not by itself justify that
+conclusion. Not decided in this change; M30–M34 are untouched.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
