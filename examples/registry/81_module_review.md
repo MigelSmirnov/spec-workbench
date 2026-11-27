@@ -1015,6 +1015,15 @@ the row of a constant table argues for `contract_only`. The cost of the
 repeated rounds a State 1 record causes does not by itself justify that
 conclusion. Not decided in this change; M30–M34 are untouched.
 
+Later on 2026-11-27 the owner decided the rule for Registry (not for the
+standard): State 1's preamble now allows a row of a constant table to be
+declared `contract_only` with no record of its own when its fields name facts
+State 1 lists and the row has no product meaning of its own, naming where the
+rule it serves is fixed. `ConfirmedOwnerAction` is declared so (A13 rule 6,
+`ConfirmedAction`); no M35. M30–M34 keep their records until each is reviewed
+on its own by the criterion above. This answers State 3 round-108's
+contradiction between that preamble and the models module.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants

@@ -245,7 +245,9 @@ shapes of thirteen of the data provider's fourteen tables (M22–M34), whose
 rows are `data_provider`'s, and `ConfirmedOwnerAction`, the row shape of the
 fourteenth, `CONFIRMED_OWNER_ACTIONS` (a confirmed action and the owner
 action that carries it), declared with the contracts alone and no State 1
-record, as a row of a constant table and nothing more (2026-11-27) — and the declared vocabularies of
+record of its own, as State 1's clarification of 2026-11-27 allows for a
+row of a constant table whose fields name facts State 1 lists, the rule
+it serves being A13 rule 6 and `ConfirmedAction` — and the declared vocabularies of
 State 1 as enumerations — for the artifact types only the shape of a type
 with its owner service (M22), whose rows are `data_provider`'s, so a stored
 pointer of a type a later release removed still reads (A22 rule 4) — and the disclosure class

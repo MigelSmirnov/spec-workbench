@@ -62,6 +62,22 @@ Like M22–M29 they are the shapes of rows of tables the data provider holds
 for the release (SPEC_STANDARD §6.10), not reference tables of the
 specification, which never reach the running service (§5, §15.2).
 
+Clarified on 2026-11-27 by the owner, for Registry; what was decided on
+2026-11-25 above stays as it was and is the history of M22–M34. A row of a
+constant table may be declared by the contracts alone (`contract_only`), with
+no record of its own here, when each of its fields names a fact a model here
+already lists and the row itself has no product meaning of its own; its
+declaration names where the product rule the table serves is fixed. Such a
+row adds no fact, so State 6 still adds no fact a model does not list here.
+`ConfirmedOwnerAction`, the row of the data provider's
+`CONFIRMED_OWNER_ACTIONS`, is one: its two fields name the confirmed action
+(M20, M31) and the owner action (M27), and the rule the table serves — an
+action that asks for confirmation is submitted with the confirmation value
+the step showed — is fixed by State 2 A13 rule 6 and the `ConfirmedAction`
+vocabulary, the closed list of the actions that ask for confirmation
+("Identity formats"). It has no model number here. M30–M34 keep their
+records until each is reviewed on its own (owner, 2026-11-27).
+
 Every State 1 question the owner must answer is under a model's
 `Open questions`; a `BLOCK:` question stops State 2 until answered.
 
