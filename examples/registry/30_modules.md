@@ -241,8 +241,11 @@ later line, and modules on one line do not know each other.
 The models M01–M34 as the domain's vocabulary — among them the forms of a
 pointer's publisher and an audit entry's subject (M13–M19), the owner
 session's pending confirmation and uploaded file (M20, M21) and the row
-shapes of the data provider's thirteen tables (M22–M34), whose rows are
-`data_provider`'s — and the declared vocabularies of
+shapes of thirteen of the data provider's fourteen tables (M22–M34), whose
+rows are `data_provider`'s, and `ConfirmedOwnerAction`, the row shape of the
+fourteenth, `CONFIRMED_OWNER_ACTIONS` (a confirmed action and the owner
+action that carries it), declared with the contracts alone and no State 1
+record, as a row of a constant table and nothing more (2026-11-27) — and the declared vocabularies of
 State 1 as enumerations — for the artifact types only the shape of a type
 with its owner service (M22), whose rows are `data_provider`'s, so a stored
 pointer of a type a later release removed still reads (A22 rule 4) — and the disclosure class
@@ -382,7 +385,7 @@ and every one is exported.
 
 ### Knows
 
-`models`, for exactly the row models and enumerations of its thirteen tables:
+`models`, for exactly the row models and enumerations of its fourteen tables:
 `ArtifactTypeOwner` (a type with its owner service) and `ServiceName` for
 `ARTIFACT_TYPE_OWNERS`; `ServiceRight` (a service and an operation) with
 `ServiceName` and `ServiceOperation` for `SERVICE_RIGHTS`;
