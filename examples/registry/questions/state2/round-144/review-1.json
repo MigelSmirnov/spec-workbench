@@ -1,0 +1,130 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "M30 — FormFieldRefusalKind",
+   "kind": "ambiguous classification",
+   "text": "a field of a closed list answers `outside_closed_list`, every other field `outside_form`.",
+   "question": "Does “a field of a closed list” mean only a field whose `reads_as` is `member`, or does it also include a `boolean` field whose accepted values are the closed set `true` and `false`?",
+   "options": [
+    "Only `member` fields use `outside_closed_list`; boolean and all other fields use `outside_form`.",
+    "Both `member` and `boolean` fields use `outside_closed_list`.",
+    "The table explicitly classifies every form field, without deriving the refusal kind from `reads_as`."
+   ],
+   "default_guess": "Treat only `member` fields as closed-list fields and use `outside_form` for boolean fields.",
+   "witness": {
+    "initial": "An owner form has a boolean field and the owner submits text other than `true` or `false`.",
+    "events": [
+     "The owner submits the invalid boolean text.",
+     "Registry selects the refusal kind from `FORM_FIELD_REFUSAL_KINDS`."
+    ],
+    "outcomes": [
+     "The failure kind is `outside_form`.",
+     "The failure kind is `outside_closed_list`."
+    ],
+    "observer": "The owner and any contract consumer reading the refusal."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "M32 — ImportFormFailureField",
+   "kind": "missing correspondence",
+   "text": "One row for each form field the import checks.",
+   "question": "Exactly which import form fields have rows, and which mapping field does each one name?",
+   "options": [
+    "Every checked import field maps to the mapping field representing that same input.",
+    "Only the examples and another explicitly enumerated subset have rows.",
+    "Several form fields may report under one aggregate mapping field."
+   ],
+   "default_guess": "Give every checked import field a row mapping it to its corresponding same-purpose mapping field.",
+   "witness": {
+    "initial": "An import mapping contains an invalid owner-supplied value in a checked field not covered by either example.",
+    "events": [
+     "The owner asks to see the import mapping.",
+     "Registry detects the field's form failure.",
+     "Registry must choose a mapping field under which to report it."
+    ],
+    "outcomes": [
+     "The failure appears under the mapping field corresponding to the submitted field.",
+     "The failure appears under an aggregate or differently chosen mapping field."
+    ],
+    "observer": "The owner viewing the import mapping and the code consuming its answer."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "M33 — CustomerEligibilityRefusal",
+   "kind": "missing refusal result",
+   "text": "the kind of refusal a project's customer is refused with, by the customer's eligibility — an erased, restricted or ended customer",
+   "question": "Which exact refusal kind is required for each of `erased`, `restricted` and `ended` eligibility?",
+   "options": [
+    "Each eligibility has its own distinct refusal kind.",
+    "All three use one common customer-ineligible refusal kind.",
+    "Some eligibilities share a refusal kind and others have distinct kinds."
+   ],
+   "default_guess": "Use a distinct refusal kind for erased, restricted and ended customers.",
+   "witness": {
+    "initial": "A restricted Customer exists and an owner action newly names it as a project's customer.",
+    "events": [
+     "The owner submits the action.",
+     "Registry passes existence checks and evaluates customer eligibility.",
+     "Registry refuses the action."
+    ],
+    "outcomes": [
+     "The answer carries a refusal kind specific to restriction.",
+     "The answer carries a generic customer-ineligible refusal kind."
+    ],
+    "observer": "The owner interface and any caller inspecting the refusal answer."
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "M34 — StoreCompanionStepSuffix",
+   "kind": "later value choice",
+   "text": "the suffix of the companion file a step of discarding a new store removes, by that step — the write-ahead log, the shared memory and the journal.",
+   "question": "What exact suffix string belongs to each discard step, and which step names each companion?",
+   "options": [
+    "Use SQLite's conventional `-wal`, `-shm` and `-journal` suffixes, each assigned to its own removal step.",
+    "Use platform-derived suffixes supplied by the store backend.",
+    "Use one discard step associated with all three suffix rows."
+   ],
+   "default_guess": "Use three rows with `-wal`, `-shm` and `-journal`, each attached to the corresponding removal step.",
+   "decision_owner": "generation",
+   "consequences": [
+    "Different strings select different filesystem paths and can leave real companion files behind.",
+    "Different step-to-suffix assignments change cleanup order and which failure is reported.",
+    "The generated code must still obtain the values from the provider table rather than inventing literals."
+   ],
+   "requirement": "The release: the data provider's `STORE_COMPANION_STEP_SUFFIXES`."
+  },
+  {
+   "unit": "context",
+   "subject": "A17 failed-start cleanup affected by M34",
+   "kind": "missing safety guarantee",
+   "text": "A failed start leaves no file it made but one it could not remove: a probe, which the next backup run removes with the other temporary files (A18 rule 4); a file of the store's temporary name, which the next start removes first (rule 5); or a store it made new for a start a listener then failed, which it removes — one it cannot remove is an empty store of the release's version, which the next start opens as any store.",
+   "question": "If discarding a newly made store cannot remove one of its write-ahead-log, shared-memory or journal companions, what result and subsequent-start guarantee are required?",
+   "options": [
+    "The failed start may leave that companion, reports it, and every later start retries removing it before opening or creating a store.",
+    "The start must not finish until every companion is removed, with no permitted residual file.",
+    "A companion-removal failure is treated like failure to remove the empty store, and the residue is an explicitly permitted failed-start result."
+   ],
+   "default_guess": "Stop the start, report the failed companion without its contents, leave no listener open, and require the next start to retry cleanup before using the store path.",
+   "witness": {
+    "initial": "Registry creates a new SQLite store and a companion file, then a listener fails; removal of the companion is denied by the filesystem.",
+    "events": [
+     "Registry closes the new store and begins the M34 discard steps.",
+     "Removal of the companion file fails.",
+     "A later Registry start examines the same configured store path."
+    ],
+    "outcomes": [
+     "The failed start leaves a companion file and the next start explicitly retries and removes it before proceeding.",
+     "The failed start is considered cleaned because the main store was removed, leaving the companion unhandled."
+    ],
+    "observer": "The host administrator and the next Registry process; residual store data may also be observable on disk."
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"M30 — FormFieldRefusalKind\",\"kind\":\"ambiguous classification\",\"text\":\"a field of a closed list answers `outside_closed_list`, every other field `outside_form`.\",\"question\":\"Does “a field of a closed list” mean only a field whose `reads_as` is `member`, or does it also include a `boolean` field whose accepted values are the closed set `true` and `false`?\",\"options\":[\"Only `member` fields use `outside_closed_list`; boolean and all other fields use `outside_form`.\",\"Both `member` and `boolean` fields use `outside_closed_list`.\",\"The table explicitly classifies every form field, without deriving the refusal kind from `reads_as`.\"],\"default_guess\":\"Treat only `member` fields as closed-list fields and use `outside_form` for boolean fields.\",\"witness\":{\"initial\":\"An owner form has a boolean field and the owner submits text other than `true` or `false`.\",\"events\":[\"The owner submits the invalid boolean text.\",\"Registry selects the refusal kind from `FORM_FIELD_REFUSAL_KINDS`.\"],\"outcomes\":[\"The failure kind is `outside_form`.\",\"The failure kind is `outside_closed_list`.\"],\"observer\":\"The owner and any contract consumer reading the refusal.\"}},{\"unit\":\"context\",\"subject\":\"M32 — ImportFormFailureField\",\"kind\":\"missing correspondence\",\"text\":\"One row for each form field the import checks.\",\"question\":\"Exactly which import form fields have rows, and which mapping field does each one name?\",\"options\":[\"Every checked import field maps to the mapping field representing that same input.\",\"Only the examples and another explicitly enumerated subset have rows.\",\"Several form fields may report under one aggregate mapping field.\"],\"default_guess\":\"Give every checked import field a row mapping it to its corresponding same-purpose mapping field.\",\"witness\":{\"initial\":\"An import mapping contains an invalid owner-supplied value in a checked field not covered by either example.\",\"events\":[\"The owner asks to see the import mapping.\",\"Registry detects the field's form failure.\",\"Registry must choose a mapping field under which to report it.\"],\"outcomes\":[\"The failure appears under the mapping field corresponding to the submitted field.\",\"The failure appears under an aggregate or differently chosen mapping field.\"],\"observer\":\"The owner viewing the import mapping and the code consuming its answer.\"}},{\"unit\":\"context\",\"subject\":\"M33 — CustomerEligibilityRefusal\",\"kind\":\"missing refusal result\",\"text\":\"the kind of refusal a project's customer is refused with, by the customer's eligibility — an erased, restricted or ended customer\",\"question\":\"Which exact refusal kind is required for each of `erased`, `restricted` and `ended` eligibility?\",\"options\":[\"Each eligibility has its own distinct refusal kind.\",\"All three use one common customer-ineligible refusal kind.\",\"Some eligibilities share a refusal kind and others have distinct kinds.\"],\"default_guess\":\"Use a distinct refusal kind for erased, restricted and ended customers.\",\"witness\":{\"initial\":\"A restricted Customer exists and an owner action newly names it as a project's customer.\",\"events\":[\"The owner submits the action.\",\"Registry passes existence checks and evaluates customer eligibility.\",\"Registry refuses the action.\"],\"outcomes\":[\"The answer carries a refusal kind specific to restriction.\",\"The answer carries a generic customer-ineligible refusal kind.\"],\"observer\":\"The owner interface and any caller inspecting the refusal answer.\"}},{\"unit\":\"context\",\"subject\":\"M34 — StoreCompanionStepSuffix\",\"kind\":\"later value choice\",\"text\":\"the suffix of the companion file a step of discarding a new store removes, by that step — the write-ahead log, the shared memory and the journal.\",\"question\":\"What exact suffix string belongs to each discard step, and which step names each companion?\",\"options\":[\"Use SQLite's conventional `-wal`, `-shm` and `-journal` suffixes, each assigned to its own removal step.\",\"Use platform-derived suffixes supplied by the store backend.\",\"Use one discard step associated with all three suffix rows.\"],\"default_guess\":\"Use three rows with `-wal`, `-shm` and `-journal`, each attached to the corresponding removal step.\",\"decision_owner\":\"generation\",\"consequences\":[\"Different strings select different filesystem paths and can leave real companion files behind.\",\"Different step-to-suffix assignments change cleanup order and which failure is reported.\",\"The generated code must still obtain the values from the provider table rather than inventing literals.\"],\"requirement\":\"The release: the data provider's `STORE_COMPANION_STEP_SUFFIXES`.\"},{\"unit\":\"context\",\"subject\":\"A17 failed-start cleanup affected by M34\",\"kind\":\"missing safety guarantee\",\"text\":\"A failed start leaves no file it made but one it could not remove: a probe, which the next backup run removes with the other temporary files (A18 rule 4); a file of the store's temporary name, which the next start removes first (rule 5); or a store it made new for a start a listener then failed, which it removes — one it cannot remove is an empty store of the release's version, which the next start opens as any store.\",\"question\":\"If discarding a newly made store cannot remove one of its write-ahead-log, shared-memory or journal companions, what result and subsequent-start guarantee are required?\",\"options\":[\"The failed start may leave that companion, reports it, and every later start retries removing it before opening or creating a store.\",\"The start must not finish until every companion is removed, with no permitted residual file.\",\"A companion-removal failure is treated like failure to remove the empty store, and the residue is an explicitly permitted failed-start result.\"],\"default_guess\":\"Stop the start, report the failed companion without its contents, leave no listener open, and require the next start to retry cleanup before using the store path.\",\"witness\":{\"initial\":\"Registry creates a new SQLite store and a companion file, then a listener fails; removal of the companion is denied by the filesystem.\",\"events\":[\"Registry closes the new store and begins the M34 discard steps.\",\"Removal of the companion file fails.\",\"A later Registry start examines the same configured store path.\"],\"outcomes\":[\"The failed start leaves a companion file and the next start explicitly retries and removes it before proceeding.\",\"The failed start is considered cleaned because the main store was removed, leaving the companion unhandled.\"],\"observer\":\"The host administrator and the next Registry process; residual store data may also be observable on disk.\"}}]}",
+ "set_aside": []
+}

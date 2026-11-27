@@ -55,13 +55,12 @@ M21; the upload number, which State 6 carried on the owner's word of
 tables (M22–M28). Later on 2026-11-25 the owner made the owner form's fields
 an eighth table, so its row has the record M29 (owner, 2026-11-25).
 On 2026-11-27 five correspondences over a closed list that the data
-provider held as text-to-text maps became tables whose rows name the
+provider held as maps of text to text became tables whose rows name the
 members themselves (SPEC_STANDARD §15.2, "a correspondence over a
 taxonomy"), so their rows have the records M30–M34 (owner, 2026-11-27).
-Like M22–M29 they are the row shapes of tables the generated code reads,
-which the data provider delivers (SPEC_STANDARD §6.10, `row_model`), not
-reference tables of the specification: a `models` record of kind
-`mapping`, `catalog` or `vocabulary` never reaches the code (§5, §15.2).
+Like M22–M29 they are the shapes of rows of tables the data provider holds
+for the release (SPEC_STANDARD §6.10), not reference tables of the
+specification, which never reach the running service (§5, §15.2).
 
 Every State 1 question the owner must answer is under a model's
 `Open questions`; a `BLOCK:` question stops State 2 until answered.
@@ -1608,7 +1607,7 @@ Continuity: none; changed only with a new release.
 
 ### Source of truth
 
-The release: the data provider's `FORM_FIELD_REFUSAL_KINDS`.
+The release: the form refusal table the data provider holds.
 
 ### Lifecycle candidate
 
@@ -1652,7 +1651,7 @@ Continuity: none; changed only with a new release.
 
 ### Source of truth
 
-The release: the data provider's `PROJECT_STATUS_CONFIRMATIONS`.
+The release: the project confirmation table the data provider holds.
 
 ### Lifecycle candidate
 
@@ -1697,7 +1696,7 @@ Continuity: none; changed only with a new release.
 
 ### Source of truth
 
-The release: the data provider's `IMPORT_FORM_FIELD_MAPPING_FIELDS`.
+The release: the import form failure table the data provider holds.
 
 ### Lifecycle candidate
 
@@ -1742,7 +1741,7 @@ Continuity: none; changed only with a new release.
 
 ### Source of truth
 
-The release: the data provider's `CUSTOMER_ELIGIBILITY_REFUSALS`.
+The release: the customer eligibility refusal table the data provider holds.
 
 ### Lifecycle candidate
 
@@ -1788,7 +1787,7 @@ Continuity: none; changed only with a new release.
 
 ### Source of truth
 
-The release: the data provider's `STORE_COMPANION_STEP_SUFFIXES`.
+The release: the store companion table the data provider holds.
 
 ### Lifecycle candidate
 

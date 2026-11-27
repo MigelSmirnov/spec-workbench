@@ -1,0 +1,150 @@
+{
+ "open_points": [
+  {
+   "unit": "context",
+   "subject": "M30 FormFieldRefusalKind consumption",
+   "kind": "unnamed owner",
+   "text": "“their rows have the records M30–M34” and “a field of a closed list answers `outside_closed_list`, every other field `outside_form`”",
+   "question": "Which State 4 step and capability reads `FORM_FIELD_REFUSAL_KINDS` to produce a form-value refusal, rather than deriving or hard-coding the refusal kind elsewhere?",
+   "options": [
+    "`given_values.check_value_forms` reads the table",
+    "`owner_interface.serve_owner_request` reads it while parsing forms",
+    "Each record module maps its own field failures"
+   ],
+   "default_guess": "Make `given_values.check_value_forms` the sole reader and have callers propagate its refusal unchanged."
+  },
+  {
+   "unit": "context",
+   "subject": "M31 ProjectStatusConfirmation in project-card rendering",
+   "kind": "missing step",
+   "text": "“the confirmed action a project's card offers by the project's status”",
+   "question": "Who reads `PROJECT_STATUS_CONFIRMATIONS`, through what capability, and at which flow step is the project status turned into the confirmation action offered on the card?",
+   "options": [
+    "`projects.read_project_card` adds the mapped action to its answer",
+    "`owner_interface.serve_owner_request` reads the table while rendering the card",
+    "`operations.perform_owner_operation` selects the action only after submission"
+   ],
+   "default_guess": "Have `owner_interface.serve_owner_request` read the table while rendering a card and offer archive for `active` and erase for `archived`.",
+   "witness": {
+    "initial": "An active project exists and the owner has a valid session.",
+    "events": [
+     "The owner asks `owner_interface` to show the project card.",
+     "`projects.read_project_card` returns the project and its status.",
+     "`owner_interface` must decide which confirmed action the card offers."
+    ],
+    "outcomes": [
+     "The card offers the archive confirmation step.",
+     "The card has no status-derived action, or offers an action selected by a different module or rule."
+    ],
+    "observer": "The owner viewing the project card"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "M32 ImportFormFailureField rows",
+   "kind": "underspecified mapping",
+   "text": "“an alias under the alias, a customer kind under the customer kind. One row for each form field the import checks”",
+   "question": "For every other import form field, which `MappingField` receives its form failure, and which capability reads `IMPORT_FORM_FIELD_MAPPING_FIELDS` when building the mapping?",
+   "options": [
+    "Every failure is attached to the corresponding scalar mapping field",
+    "Customer-value failures are attached to the Customer mapping item as a whole",
+    "Project name, alias and Customer failures use different nesting rules"
+   ],
+   "default_guess": "Give every checked form field an explicit row pointing to the same-named leaf field, and have `migration_import.read_import_mapping` use the table.",
+   "witness": {
+    "initial": "An upload is kept and a picked project needs a new Customer whose supplied name is blank.",
+    "events": [
+     "The owner requests the import mapping with that Customer value.",
+     "`migration_import.read_import_mapping` detects the missing required name.",
+     "The mapping must place the failure under a field."
+    ],
+    "outcomes": [
+     "The failure appears under the Customer name field.",
+     "The failure appears under the Customer item or another general mapping field."
+    ],
+    "observer": "The owner reviewing the import mapping"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "M33 CustomerEligibilityRefusal ownership and rows",
+   "kind": "ambiguous failure",
+   "text": "“the kind of refusal a project's customer is refused with, by the customer's eligibility — an erased, restricted or ended customer”",
+   "question": "What refusal kind corresponds to each of `erased`, `restricted` and `ended`, and does `customers.check_customer_eligible` return that refusal or does `projects` read `CUSTOMER_ELIGIBILITY_REFUSALS` and translate an eligibility?",
+   "options": [
+    "One distinct refusal kind for each refusing eligibility, produced by `customers`",
+    "One distinct refusal kind for each eligibility, translated by `projects`",
+    "One common ineligible-customer refusal for all three"
+   ],
+   "default_guess": "Have `customers.check_customer_eligible` return eligibility only; have `projects` read the table and produce distinct erased, restricted and ended refusals.",
+   "witness": {
+    "initial": "A restricted Customer exists and an active project is being corrected to name it.",
+    "events": [
+     "The owner submits the correction with the current revision.",
+     "`projects.correct_project` asks `customers.check_customer_eligible`.",
+     "The Customer is found to be restricted and the action reaches stage 6."
+    ],
+    "outcomes": [
+     "The owner receives a refusal specifically identifying the restricted eligibility.",
+     "The owner receives a generic customer-ineligible refusal shared with erased and ended Customers."
+    ],
+    "observer": "The owner submitting the correction"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "M34 StoreCompanionStepSuffix row values",
+   "kind": "missing constants",
+   "text": "“the suffix of the companion file a step of discarding a new store removes, by that step — the write-ahead log, the shared memory and the journal”",
+   "question": "What are the exact suffix strings and their associated `DiscardStep` members in `STORE_COMPANION_STEP_SUFFIXES`?",
+   "options": [
+    "SQLite suffixes `-wal`, `-shm` and `-journal`",
+    "Dot-prefixed suffixes such as `.wal`, `.shm` and `.journal`",
+    "Release-specific suffix strings declared elsewhere"
+   ],
+   "default_guess": "Use `-wal`, `-shm` and `-journal`, each paired with a separately named removal step.",
+   "witness": {
+    "initial": "A start made a new SQLite store and companion files exist beside it when opening the service listener fails.",
+    "events": [
+     "`instance_lifecycle` calls `store.discard_new_store`.",
+     "`store` constructs companion paths from the table's suffixes.",
+     "It attempts to remove those paths."
+    ],
+    "outcomes": [
+     "The actual SQLite companion files are removed.",
+     "Different paths are targeted and the actual companion files remain."
+    ],
+    "observer": "The host administrator inspecting the store directory, and the next start"
+   }
+  },
+  {
+   "unit": "context",
+   "subject": "store.discard_new_store companion cleanup",
+   "kind": "unstated failure outcome",
+   "text": "“a store step 3 made new is removed by `capability:store.discard_new_store` — one it cannot remove is an empty store of the release's version”",
+   "question": "In what order does `discard_new_store` close the connection and remove the WAL, shared-memory, journal and store files, and what exact outcome and diagnostic follow if any individual close or removal step fails?",
+   "options": [
+    "Close, remove every companion, then remove the store; any failure stops and leaves the remaining files",
+    "Close, attempt every companion and the store, reporting all failures",
+    "Remove the store first and treat companion cleanup independently"
+   ],
+   "default_guess": "Close first, remove companions in the table's declared step order, remove the store last, stop on the first failure, and report the failed discard step while leaving all not-yet-removed files.",
+   "witness": {
+    "initial": "A start made a new store; the owner listener opened, the service listener failed, and removal of the WAL companion is denied while removal of the main store would succeed.",
+    "events": [
+     "`instance_lifecycle` closes the opened listener.",
+     "It calls `store.discard_new_store`.",
+     "The discard reaches the WAL and main-store removal steps."
+    ],
+    "outcomes": [
+     "Discard stops before removing the main store, leaving an empty store and its WAL and naming the removal failure.",
+     "Discard removes the main store or continues past the failure, leaving only a companion file or reporting a different result."
+    ],
+    "observer": "The process diagnostic, the host administrator, and the next start"
+   }
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"context\",\"subject\":\"M30 FormFieldRefusalKind consumption\",\"kind\":\"unnamed owner\",\"text\":\"“their rows have the records M30–M34” and “a field of a closed list answers `outside_closed_list`, every other field `outside_form`”\",\"question\":\"Which State 4 step and capability reads `FORM_FIELD_REFUSAL_KINDS` to produce a form-value refusal, rather than deriving or hard-coding the refusal kind elsewhere?\",\"options\":[\"`given_values.check_value_forms` reads the table\",\"`owner_interface.serve_owner_request` reads it while parsing forms\",\"Each record module maps its own field failures\"],\"default_guess\":\"Make `given_values.check_value_forms` the sole reader and have callers propagate its refusal unchanged.\"},{\"unit\":\"context\",\"subject\":\"M31 ProjectStatusConfirmation in project-card rendering\",\"kind\":\"missing step\",\"text\":\"“the confirmed action a project's card offers by the project's status”\",\"question\":\"Who reads `PROJECT_STATUS_CONFIRMATIONS`, through what capability, and at which flow step is the project status turned into the confirmation action offered on the card?\",\"options\":[\"`projects.read_project_card` adds the mapped action to its answer\",\"`owner_interface.serve_owner_request` reads the table while rendering the card\",\"`operations.perform_owner_operation` selects the action only after submission\"],\"default_guess\":\"Have `owner_interface.serve_owner_request` read the table while rendering a card and offer archive for `active` and erase for `archived`.\",\"witness\":{\"initial\":\"An active project exists and the owner has a valid session.\",\"events\":[\"The owner asks `owner_interface` to show the project card.\",\"`projects.read_project_card` returns the project and its status.\",\"`owner_interface` must decide which confirmed action the card offers.\"],\"outcomes\":[\"The card offers the archive confirmation step.\",\"The card has no status-derived action, or offers an action selected by a different module or rule.\"],\"observer\":\"The owner viewing the project card\"}},{\"unit\":\"context\",\"subject\":\"M32 ImportFormFailureField rows\",\"kind\":\"underspecified mapping\",\"text\":\"“an alias under the alias, a customer kind under the customer kind. One row for each form field the import checks”\",\"question\":\"For every other import form field, which `MappingField` receives its form failure, and which capability reads `IMPORT_FORM_FIELD_MAPPING_FIELDS` when building the mapping?\",\"options\":[\"Every failure is attached to the corresponding scalar mapping field\",\"Customer-value failures are attached to the Customer mapping item as a whole\",\"Project name, alias and Customer failures use different nesting rules\"],\"default_guess\":\"Give every checked form field an explicit row pointing to the same-named leaf field, and have `migration_import.read_import_mapping` use the table.\",\"witness\":{\"initial\":\"An upload is kept and a picked project needs a new Customer whose supplied name is blank.\",\"events\":[\"The owner requests the import mapping with that Customer value.\",\"`migration_import.read_import_mapping` detects the missing required name.\",\"The mapping must place the failure under a field.\"],\"outcomes\":[\"The failure appears under the Customer name field.\",\"The failure appears under the Customer item or another general mapping field.\"],\"observer\":\"The owner reviewing the import mapping\"}},{\"unit\":\"context\",\"subject\":\"M33 CustomerEligibilityRefusal ownership and rows\",\"kind\":\"ambiguous failure\",\"text\":\"“the kind of refusal a project's customer is refused with, by the customer's eligibility — an erased, restricted or ended customer”\",\"question\":\"What refusal kind corresponds to each of `erased`, `restricted` and `ended`, and does `customers.check_customer_eligible` return that refusal or does `projects` read `CUSTOMER_ELIGIBILITY_REFUSALS` and translate an eligibility?\",\"options\":[\"One distinct refusal kind for each refusing eligibility, produced by `customers`\",\"One distinct refusal kind for each eligibility, translated by `projects`\",\"One common ineligible-customer refusal for all three\"],\"default_guess\":\"Have `customers.check_customer_eligible` return eligibility only; have `projects` read the table and produce distinct erased, restricted and ended refusals.\",\"witness\":{\"initial\":\"A restricted Customer exists and an active project is being corrected to name it.\",\"events\":[\"The owner submits the correction with the current revision.\",\"`projects.correct_project` asks `customers.check_customer_eligible`.\",\"The Customer is found to be restricted and the action reaches stage 6.\"],\"outcomes\":[\"The owner receives a refusal specifically identifying the restricted eligibility.\",\"The owner receives a generic customer-ineligible refusal shared with erased and ended Customers.\"],\"observer\":\"The owner submitting the correction\"}},{\"unit\":\"context\",\"subject\":\"M34 StoreCompanionStepSuffix row values\",\"kind\":\"missing constants\",\"text\":\"“the suffix of the companion file a step of discarding a new store removes, by that step — the write-ahead log, the shared memory and the journal”\",\"question\":\"What are the exact suffix strings and their associated `DiscardStep` members in `STORE_COMPANION_STEP_SUFFIXES`?\",\"options\":[\"SQLite suffixes `-wal`, `-shm` and `-journal`\",\"Dot-prefixed suffixes such as `.wal`, `.shm` and `.journal`\",\"Release-specific suffix strings declared elsewhere\"],\"default_guess\":\"Use `-wal`, `-shm` and `-journal`, each paired with a separately named removal step.\",\"witness\":{\"initial\":\"A start made a new SQLite store and companion files exist beside it when opening the service listener fails.\",\"events\":[\"`instance_lifecycle` calls `store.discard_new_store`.\",\"`store` constructs companion paths from the table's suffixes.\",\"It attempts to remove those paths.\"],\"outcomes\":[\"The actual SQLite companion files are removed.\",\"Different paths are targeted and the actual companion files remain.\"],\"observer\":\"The host administrator inspecting the store directory, and the next start\"}},{\"unit\":\"context\",\"subject\":\"store.discard_new_store companion cleanup\",\"kind\":\"unstated failure outcome\",\"text\":\"“a store step 3 made new is removed by `capability:store.discard_new_store` — one it cannot remove is an empty store of the release's version”\",\"question\":\"In what order does `discard_new_store` close the connection and remove the WAL, shared-memory, journal and store files, and what exact outcome and diagnostic follow if any individual close or removal step fails?\",\"options\":[\"Close, remove every companion, then remove the store; any failure stops and leaves the remaining files\",\"Close, attempt every companion and the store, reporting all failures\",\"Remove the store first and treat companion cleanup independently\"],\"default_guess\":\"Close first, remove companions in the table's declared step order, remove the store last, stop on the first failure, and report the failed discard step while leaving all not-yet-removed files.\",\"witness\":{\"initial\":\"A start made a new store; the owner listener opened, the service listener failed, and removal of the WAL companion is denied while removal of the main store would succeed.\",\"events\":[\"`instance_lifecycle` closes the opened listener.\",\"It calls `store.discard_new_store`.\",\"The discard reaches the WAL and main-store removal steps.\"],\"outcomes\":[\"Discard stops before removing the main store, leaving an empty store and its WAL and naming the removal failure.\",\"Discard removes the main store or continues past the failure, leaving only a companion file or reporting a different result.\"],\"observer\":\"The process diagnostic, the host administrator, and the next start\"}}]}",
+ "set_aside": []
+}
