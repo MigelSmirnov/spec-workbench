@@ -925,6 +925,34 @@ names `service_may_call`, the function `perform_service_operation`
 calls. No State 3 or State 5 text names these imports: State 3's round is
 given SPEC_STANDARD §7, and the imports are State 6's to record.
 
+## 2026-11-27: the whole-module probe — seven values get a home, five notes state what they rely on
+
+A State 7 probe of every generated module (`design_questions.py ask --probe`,
+which asks closed modules too) raised blocking topics in text no round had
+reopened. Values the notes wrote in prose became data_provider constants,
+each with the value the notes already wrote: `CUSTOMER_VALUE_FAILURE_KINDS`
+(customers' values-stage order, apart from `PROJECT_VALUE_FAILURE_KINDS`,
+since the two agree only by chance), `POINTER_VERSION_FIRST`,
+`BACKUP_NONCE_BYTES`, `BACKUP_KEY_BYTES`, `BACKUP_KEY_DERIVATION_HASH`,
+`PROJECT_STATUS_CONFIRMATIONS` and `OWNER_NAVIGATION_ACTIONS`. Two orders
+and one table stay derivations rather than constants: a failure's kind
+follows from whether its form is a closed list, import failures follow the
+member order of `RefusalKind`, and a mapping field is the `FormField`
+member of the same name. The backup tag length is not a value the code
+passes; a rest too short for a tag fails authentication.
+
+Five notes now state what they relied on without saying it: a Customer that
+is not erased always holds its name, kind, revision and instants (State 1
+M04), so `read_billing_data`, `list_customers` and `_customer_view` copy them
+into fields that exclude None; `service_may_call` answers agent authority only
+for Cabinet Kernel (A10), which `perform_service_operation` restates; a
+backup's record line is readable without its key on purpose (A18 rule 1), so
+the test's no-key claim covers the snapshot only; and `confirm_import`
+refuses an `ExportRefused` with `MAPPING_NOT_CLEAN`, a branch the kept
+content never reaches but the typed answer must handle. The backups prompt
+lists `RegistryStore.__init__` under the module's own contracts although
+the class is imported; that is the Factory's prompt assembly, not the spec.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
