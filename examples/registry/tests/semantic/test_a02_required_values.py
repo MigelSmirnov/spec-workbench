@@ -99,8 +99,11 @@ def _store(rt):
 
 
 def _names(failure):
-    """The names along a failure's path (State 6 PathElement.name)."""
-    return [element.get("name") for element in failure["path"]]
+    """The names along a failure's path: the wire writes an element as its
+    name (a string) or its position (a number), never as an object (State 7,
+    service_api._write_service_answer; RUNTIME_SURFACE.md "Refusals are
+    answers")."""
+    return [element for element in failure["path"] if isinstance(element, str)]
 
 
 def _invalid(answer, *expected):
