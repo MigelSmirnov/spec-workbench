@@ -1,0 +1,124 @@
+Module: upload_framing
+Target path: app/upload_framing.py
+Target file: upload_framing.py
+
+IMPORTS (every listed symbol is available; import the ones the module uses):
+from app.data_provider import OWNER_CSRF_FIELD, TEXT_ENCODING, UPLOAD_BOUNDARY_PARAMETER, UPLOAD_CLOSE_SUFFIX, UPLOAD_DELIMITER_PREFIX, UPLOAD_FILENAME_PARAMETER, UPLOAD_FORM_HEAD_MAX_BYTES, UPLOAD_FORM_MEDIA_TYPE
+from app.models import ByteStream, UploadBody, UploadHead
+
+CONTRACTS (function signatures — follow exactly):
+def read_upload_head(stream: ByteStream, content_type: str | None, declared_length: int | None) -> UploadHead
+# MultipartFileBody
+def __init__(self, stream: ByteStream, delimiter: str) -> None
+# MultipartFileBody
+def read(self, size: int) -> bytes
+# ByteStream
+def read(self, size: int) -> bytes
+# UploadBody
+def read(self, size: int) -> bytes
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+OWNER_CSRF_FIELD: str
+TEXT_ENCODING: str
+UPLOAD_BOUNDARY_PARAMETER: str
+UPLOAD_CLOSE_SUFFIX: str
+UPLOAD_DELIMITER_PREFIX: str
+UPLOAD_FILENAME_PARAMETER: str
+UPLOAD_FORM_HEAD_MAX_BYTES: int
+UPLOAD_FORM_MEDIA_TYPE: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- read_upload_head: (stream: ByteStream, content_type: str | None, declared_length: int | None) -> UploadHead
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; a declared field or operation is
+  addressed by its name, including in try/finally cleanup, and a
+  model's fields are read generically only by iterating the model.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+- A value passed to a model field is narrowed at the call itself: a name
+  seeded with None, set on some branches and passed later under a test of
+  another name is rejected; build the value where it is obtained and pass
+  it there, or test that same name for None at the call.
+- An enum member is read only by a name the models module declares for it;
+  a member or attribute the enum does not have is rejected, read through
+  the class or through a value of the enum. Compare a value with the
+  member itself, never its .name with a text: .name is the first name the
+  models module declares for the value, and a text no member's .name is
+  is rejected.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+- MultipartFileBody: define locally with methods __init__, read
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+These bindings are structural spec obligations, not naming conventions:
+- MultipartFileBody MUST implement and inherit UploadBody; required port methods: read
+
+REQUIREMENTS (notes — implement these):
+- read_upload_head: [BEHAVIOR] MUST read the head from stream only through the read operation its ByteStream port declares, MUST never read the first byte of the file nor any byte past the end of the second part's headers, and MUST read at most the imported UPLOAD_FORM_HEAD_MAX_BYTES constant in all: the boundary is the parameter the imported UPLOAD_BOUNDARY_PARAMETER constant names of content_type's media type the imported UPLOAD_FORM_MEDIA_TYPE constant names; the first part MUST be the form field the imported OWNER_CSRF_FIELD constant names, with no file name, whose value decoded by the imported TEXT_ENCODING constant is the CSRF value; the second part's headers MUST name a file by the parameter the imported UPLOAD_FILENAME_PARAMETER constant names, an empty one included.
+- read_upload_head: [RETURN_SHAPE] MUST answer, for a head it read whole within its bound with every part in form, an UploadHead holding the CSRF value, as delimiter the imported UPLOAD_DELIMITER_PREFIX constant followed by the boundary, and as file_declared_length declared_length less the bytes of the head it read and less those of the delimiter followed by the imported UPLOAD_CLOSE_SUFFIX constant, or None as file_declared_length when declared_length is None.
+- read_upload_head: [VALIDATION_ERROR] MUST answer an UploadHead whose three fields are None, stopping its reading there and raising nothing, when content_type is None or names no media type the imported UPLOAD_FORM_MEDIA_TYPE constant names with the parameter the imported UPLOAD_BOUNDARY_PARAMETER constant names, when the first part is not that CSRF field or its value cannot be decoded by the imported TEXT_ENCODING constant, when no second part naming a file follows, when the head does not end within the imported UPLOAD_FORM_HEAD_MAX_BYTES constant, when declared_length is less than the head and the closing delimiter, or when reading stream raises, or stream ends, before the head ends.
+- MultipartFileBody.__init__: [BEHAVIOR] MUST keep stream and delimiter as the file part's source and its end, and MUST read nothing from stream: the file's bytes are read only when the instance is asked to read them.
+- MultipartFileBody.read: [BEHAVIOR] MUST answer the next bytes of the file part, at most size of them, size being passed positionally, reading stream only through the read operation its ByteStream port declares, never answering a byte of delimiter or after it and never reading past the end of the request's body, where stream ends, a piece that reaches past the delimiter into the closing suffix being read but none of its bytes from the delimiter on answered; it MUST hold, read and not yet answered, never more bytes than the delimiter's length, and MUST read the file in pieces that fill that holding, never one byte at a time; for a positive size it MUST answer empty bytes only once the delimiter has been reached, and on every later call, and for a size of zero it MUST answer empty bytes, reading nothing.
+- MultipartFileBody.read: [VALIDATION_ERROR] MUST raise ValueError to its caller, answering none of the bytes held, when reading stream raises, or stream ends, before the delimiter is reached, so that a file part without its closing delimiter is never taken for a whole file.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from app.models. Use the listed enum member names and model fields exactly.
+- ByteStream operations (exact, no others exist):
+    read(self, size: int) -> bytes
+- UploadBody operations (exact, no others exist):
+    read(self, size: int) -> bytes
+- UploadHead fields (exact, no others exist): csrf_value: str | None, delimiter: str | None, file_declared_length: int | None
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+read_upload_head
+
+MODELS CONTEXT:
+Runtime models live in app.models. Use IMPORTS and IMPORTED MODEL
+OWNERSHIP for runtime model symbols; do not reproduce model schemas
+or import from a top-level models module.
+
+Generate the complete upload_framing.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Import from IMPORTS every symbol the module uses, including symbols used only in annotations, and annotate each parameter with the type its CONTRACTS signature declares, never object or nothing in its place; a parameter the signature itself declares as object is annotated object.
+Never import from a top-level models module or models.*; runtime models live in app.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and app.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
