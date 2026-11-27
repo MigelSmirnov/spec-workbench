@@ -81,6 +81,10 @@ def author_guidance(state: int | None = None, *, factory_return: bool = False) -
     if state == 5:
         lines.append("State 5: decide obligations between modules for inputs, results, failures and effects; "
                      "leave exact contract forms and hidden implementation to later layers.")
+    if state == 7:
+        lines.append("For an enum-to-enum lookup, resolve the typed table before rewriting the note "
+                     "(SPEC_STANDARD §15.2 and §6.10 v2). Use python tools/design_enum_map.py template "
+                     "--help, fill rows, then preview and apply in the case checkout.")
     if factory_return:
         lines.insert(0, "Factory return: preserve the exact diagnostic, tool revisions, artifact hash and a minimal "
                      "reproducer. Compare the requirement, structured data/contracts, notes, generated code and "

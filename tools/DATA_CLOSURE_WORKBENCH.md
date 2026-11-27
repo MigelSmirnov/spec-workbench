@@ -760,3 +760,25 @@ Q11 — в `tools/DATA_CLOSURE_RESEARCH_Q9_Q10_Q11.md`; Q9-a — в
 ### Открыты
 
 Нет. Все вопросы контракта решены или сняты (2026-10-13).
+
+## Авторская операция для соответствия двух перечислений (§15.2, §6.10)
+
+В рабочем дереве проекта с объявленными перечислениями и поставщиком данных
+заполните форму по принятому продуктовому решению. Пример синтаксиса:
+
+```bash
+python tools/design_enum_map.py template "$CASE" WAIT_REASON_RESTING_STATUSES \
+  --source WaitReason.reason --target RunStatus.resting_status \
+  --row-model WaitReasonRestingStatus --total > /tmp/enum-map.json
+python tools/design_enum_map.py preview "$CASE" /tmp/enum-map.json
+python tools/design_enum_map.py apply "$CASE" /tmp/enum-map.json
+```
+
+Между первой и второй командой заполните `rows` именами из `target_members`.
+Ранее объявленные пары инструмент подставит из `string_mapping` или совместимой
+типизированной таблицы. Для частичного соответствия выберите `--partial` и
+удалите строки вне области решения. Оставшийся `null` требует решения автора.
+`preview` выводит diff. `apply` применяет его к исходным JSON проекта:
+добавляет модель строки в файл исходного перечисления, если её ещё нет,
+и обновляет константу в `70_data_provider_closure.json`. Обновления заметок,
+проверка импорта потребителя и обычная проекция выполняются после операции.
