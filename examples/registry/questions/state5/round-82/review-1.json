@@ -1,0 +1,99 @@
+{
+ "open_points": [
+  {
+   "subject": "CONFIRMED_OWNER_ACTIONS table contract",
+   "kind": "missing_boundary_guarantee",
+   "text": "`ConfirmedOwnerAction` (a confirmed action and the owner action that carries it)",
+   "question": "Which confirmed actions must `CONFIRMED_OWNER_ACTIONS` cover, what owner action corresponds to each, and must there be exactly one row for every confirmed action and no other rows?",
+   "options": [
+    "Require exactly one row for each action that asks for confirmation—archiving a project, erasing an archived project, importing, and erasing old audit entries—with its corresponding owner action.",
+    "Allow missing rows and make consumers refuse an action whose mapping is absent.",
+    "Allow several rows for one confirmed action and define an ordering or conflict rule.",
+    "Treat the table as advisory and let each consumer maintain its own mapping."
+   ],
+   "default_guess": "Require a total, unique mapping: exactly one row for every confirmed action and no other rows.",
+   "witness": {
+    "initial": "A valid owner session has a pending confirmation for archiving an active project.",
+    "events": [
+     "`owner_interface` receives the confirmed submission and looks up its owner action in `CONFIRMED_OWNER_ACTIONS`.",
+     "`operations` processes the action using its reading of the same table."
+    ],
+    "outcomes": [
+     "Both consumers find one unique archive mapping, so the archive operation is attempted.",
+     "A missing or duplicate mapping makes one careful implementation refuse the submission while another selects a row or uses a private mapping."
+    ],
+    "observer": "The owner sees either the archive result or a refusal; the audit log may likewise contain or omit the archive entry."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "owner_interface-to-operations confirmation boundary",
+   "kind": "missing_module_obligation",
+   "text": "| `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES`, `PERSONAL_DATA_FIELDS`, `OWNER_AUDIT_ACTIONS`, `OWNER_CHANGE_ACTIONS`, `SERVICE_CHANGE_OPERATIONS`, `CONFIRMED_OWNER_ACTIONS` |\n| `owner_interface` | `OWNER_ACTIONS`, `OWNER_FORM_FIELDS`, `OWNER_FORM_POSITION_MARK`, `OWNER_FORM_PATH_SEPARATOR`, `OWNER_TARGET_PARAMETER`, `OWNER_CSRF_FIELD`, `OWNER_SESSION_COOKIE_NAME`, `OWNER_SESSION_COOKIE_ATTRIBUTES`, `SERVICE_ANSWER_STATUS`, `REFUSAL_HTTP_STATUSES`, `CONTENT_TYPE_HEADER`, `CONTENT_LENGTH_HEADER`, `OWNER_COOKIE_HEADER`, `OWNER_SET_COOKIE_HEADER`, `OWNER_CONTENT_SECURITY_POLICY_HEADER`, `OWNER_CONTENT_SECURITY_POLICY`, `OWNER_FORM_MEDIA_TYPE`, `TEXT_ENCODING`, `PROJECT_STATUS_CONFIRMATIONS`, `OWNER_NAVIGATION_ACTIONS`, `CONFIRMED_OWNER_ACTIONS` |",
+   "question": "What confirmation-related meaning does `owner_interface` supply to `operations`, and which module must derive or verify that the confirmed action corresponds to the owner action being executed?",
+   "options": [
+    "`owner_interface` supplies the confirmed action and request values; `operations` derives the owner action from `CONFIRMED_OWNER_ACTIONS`.",
+    "`owner_interface` derives the owner action from the table; `operations` receives it and independently verifies the mapping.",
+    "`owner_interface` supplies both values; `operations` rejects any mismatched pair.",
+    "Only `owner_interface` checks the mapping, and `operations` trusts the owner action it receives."
+   ],
+   "default_guess": "Have `owner_interface` supply the confirmed action and bound request, and require `operations` to derive or independently verify the owner action before changing state.",
+   "witness": {
+    "initial": "A pending confirmation is bound to archiving project P, but an internal call presents that confirmation together with the owner action for erasing P.",
+    "events": [
+     "`owner_interface` constructs the call to `operations`.",
+     "`operations` checks the pending confirmation and performs or refuses the requested owner action."
+    ],
+    "outcomes": [
+     "`operations` verifies the table association and refuses the mismatch.",
+     "`operations` trusts the translated owner action and attempts erasure rather than archive."
+    ],
+    "observer": "The owner sees a refusal versus an erasure result, and the stored project and audit entry differ."
+   },
+   "unit": "?"
+  },
+  {
+   "subject": "ConfirmedOwnerAction contract shape",
+   "kind": "later_layer_choice",
+   "text": "`ConfirmedOwnerAction`, the row shape of the fourteenth, `CONFIRMED_OWNER_ACTIONS` (a confirmed action and the owner action that carries it), declared with the contracts alone and no State 1 record",
+   "question": "What exact State 6 model fields and types represent the two accepted meanings of `ConfirmedOwnerAction`?",
+   "options": [
+    "Fields named `confirmed_action` and `owner_action`, typed by `ConfirmedAction` and `OwnerAction`.",
+    "Fields named `action` and `carrier`, typed by those enumerations.",
+    "Another two-field contract preserving the same confirmed-action-to-owner-action association."
+   ],
+   "default_guess": "Use `confirmed_action: ConfirmedAction` and `owner_action: OwnerAction`.",
+   "decision_owner": "6",
+   "consequences": [
+    "The first form makes both roles explicit and reduces ambiguity at lookup sites.",
+    "The shorter form is valid but makes generated consumer code depend more heavily on contextual naming.",
+    "Another form is compatible only if every consumer receives the same declared contract and the semantic association is unchanged."
+   ],
+   "requirement": "`ConfirmedOwnerAction` (a confirmed action and the owner action that carries it)",
+   "unit": "?"
+  },
+  {
+   "subject": "ConfirmedOwnerAction ownership, exports and data_provider model imports",
+   "kind": "later_layer_choice",
+   "text": "`ConfirmedOwnerAction` (a confirmed action and the owner action that carries it) with `ConfirmedAction` and `OwnerAction` for `CONFIRMED_OWNER_ACTIONS`.",
+   "question": "How must State 6 encode the new class and its direct dependency surfaces in `module_functions`, `imports.internal` and `module_internal`, including the previously unstated `data_provider` → `models` edge?",
+   "options": [
+    "Place `ConfirmedOwnerAction` in `module_functions[\"models\"]`, export it from `models`, export `CONFIRMED_OWNER_ACTIONS` from `data_provider`, and declare exactly the model symbols `data_provider` directly names or constructs.",
+    "Rely on contract-type structural imports for the row class while explicitly declaring only enum symbols that `data_provider` directly names.",
+    "Import only `ConfirmedOwnerAction` and rely on its field types transitively for the enumerations."
+   ],
+   "default_guess": "Assign and export the class from `models`, export the constant from `data_provider`, and declare `data_provider`'s exact direct model imports; include both enums if its table construction names their members.",
+   "decision_owner": "6",
+   "consequences": [
+    "Explicit ownership and exact direct imports satisfy strict slicing and make generated table construction deterministic.",
+    "Structural import inference can avoid a redundant row-class declaration only if the constant contract actually creates that structural reference; directly named enum members still require imports.",
+    "Treating field types as automatic runtime imports is valid only when `data_provider` never directly names those enums; otherwise strict-import generation rejects the module."
+   ],
+   "requirement": "`ConfirmedOwnerAction` (a confirmed action and the owner action that carries it) with `ConfirmedAction` and `OwnerAction` for `CONFIRMED_OWNER_ACTIONS`.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"CONFIRMED_OWNER_ACTIONS table contract\",\"kind\":\"missing_boundary_guarantee\",\"text\":\"`ConfirmedOwnerAction` (a confirmed action and the owner action that carries it)\",\"question\":\"Which confirmed actions must `CONFIRMED_OWNER_ACTIONS` cover, what owner action corresponds to each, and must there be exactly one row for every confirmed action and no other rows?\",\"options\":[\"Require exactly one row for each action that asks for confirmation—archiving a project, erasing an archived project, importing, and erasing old audit entries—with its corresponding owner action.\",\"Allow missing rows and make consumers refuse an action whose mapping is absent.\",\"Allow several rows for one confirmed action and define an ordering or conflict rule.\",\"Treat the table as advisory and let each consumer maintain its own mapping.\"],\"default_guess\":\"Require a total, unique mapping: exactly one row for every confirmed action and no other rows.\",\"witness\":{\"initial\":\"A valid owner session has a pending confirmation for archiving an active project.\",\"events\":[\"`owner_interface` receives the confirmed submission and looks up its owner action in `CONFIRMED_OWNER_ACTIONS`.\",\"`operations` processes the action using its reading of the same table.\"],\"outcomes\":[\"Both consumers find one unique archive mapping, so the archive operation is attempted.\",\"A missing or duplicate mapping makes one careful implementation refuse the submission while another selects a row or uses a private mapping.\"],\"observer\":\"The owner sees either the archive result or a refusal; the audit log may likewise contain or omit the archive entry.\"}},{\"subject\":\"owner_interface-to-operations confirmation boundary\",\"kind\":\"missing_module_obligation\",\"text\":\"| `operations` | `REFUSAL_STAGE_AUTHENTICATION`, `REFUSAL_STAGE_AGENT_SESSION`, `REFUSAL_STAGE_VALUES`, `PERSONAL_DATA_FIELDS`, `OWNER_AUDIT_ACTIONS`, `OWNER_CHANGE_ACTIONS`, `SERVICE_CHANGE_OPERATIONS`, `CONFIRMED_OWNER_ACTIONS` |\\n| `owner_interface` | `OWNER_ACTIONS`, `OWNER_FORM_FIELDS`, `OWNER_FORM_POSITION_MARK`, `OWNER_FORM_PATH_SEPARATOR`, `OWNER_TARGET_PARAMETER`, `OWNER_CSRF_FIELD`, `OWNER_SESSION_COOKIE_NAME`, `OWNER_SESSION_COOKIE_ATTRIBUTES`, `SERVICE_ANSWER_STATUS`, `REFUSAL_HTTP_STATUSES`, `CONTENT_TYPE_HEADER`, `CONTENT_LENGTH_HEADER`, `OWNER_COOKIE_HEADER`, `OWNER_SET_COOKIE_HEADER`, `OWNER_CONTENT_SECURITY_POLICY_HEADER`, `OWNER_CONTENT_SECURITY_POLICY`, `OWNER_FORM_MEDIA_TYPE`, `TEXT_ENCODING`, `PROJECT_STATUS_CONFIRMATIONS`, `OWNER_NAVIGATION_ACTIONS`, `CONFIRMED_OWNER_ACTIONS` |\",\"question\":\"What confirmation-related meaning does `owner_interface` supply to `operations`, and which module must derive or verify that the confirmed action corresponds to the owner action being executed?\",\"options\":[\"`owner_interface` supplies the confirmed action and request values; `operations` derives the owner action from `CONFIRMED_OWNER_ACTIONS`.\",\"`owner_interface` derives the owner action from the table; `operations` receives it and independently verifies the mapping.\",\"`owner_interface` supplies both values; `operations` rejects any mismatched pair.\",\"Only `owner_interface` checks the mapping, and `operations` trusts the owner action it receives.\"],\"default_guess\":\"Have `owner_interface` supply the confirmed action and bound request, and require `operations` to derive or independently verify the owner action before changing state.\",\"witness\":{\"initial\":\"A pending confirmation is bound to archiving project P, but an internal call presents that confirmation together with the owner action for erasing P.\",\"events\":[\"`owner_interface` constructs the call to `operations`.\",\"`operations` checks the pending confirmation and performs or refuses the requested owner action.\"],\"outcomes\":[\"`operations` verifies the table association and refuses the mismatch.\",\"`operations` trusts the translated owner action and attempts erasure rather than archive.\"],\"observer\":\"The owner sees a refusal versus an erasure result, and the stored project and audit entry differ.\"}},{\"subject\":\"ConfirmedOwnerAction contract shape\",\"kind\":\"later_layer_choice\",\"text\":\"`ConfirmedOwnerAction`, the row shape of the fourteenth, `CONFIRMED_OWNER_ACTIONS` (a confirmed action and the owner action that carries it), declared with the contracts alone and no State 1 record\",\"question\":\"What exact State 6 model fields and types represent the two accepted meanings of `ConfirmedOwnerAction`?\",\"options\":[\"Fields named `confirmed_action` and `owner_action`, typed by `ConfirmedAction` and `OwnerAction`.\",\"Fields named `action` and `carrier`, typed by those enumerations.\",\"Another two-field contract preserving the same confirmed-action-to-owner-action association.\"],\"default_guess\":\"Use `confirmed_action: ConfirmedAction` and `owner_action: OwnerAction`.\",\"decision_owner\":\"6\",\"consequences\":[\"The first form makes both roles explicit and reduces ambiguity at lookup sites.\",\"The shorter form is valid but makes generated consumer code depend more heavily on contextual naming.\",\"Another form is compatible only if every consumer receives the same declared contract and the semantic association is unchanged.\"],\"requirement\":\"`ConfirmedOwnerAction` (a confirmed action and the owner action that carries it)\"},{\"subject\":\"ConfirmedOwnerAction ownership, exports and data_provider model imports\",\"kind\":\"later_layer_choice\",\"text\":\"`ConfirmedOwnerAction` (a confirmed action and the owner action that carries it) with `ConfirmedAction` and `OwnerAction` for `CONFIRMED_OWNER_ACTIONS`.\",\"question\":\"How must State 6 encode the new class and its direct dependency surfaces in `module_functions`, `imports.internal` and `module_internal`, including the previously unstated `data_provider` → `models` edge?\",\"options\":[\"Place `ConfirmedOwnerAction` in `module_functions[\\\"models\\\"]`, export it from `models`, export `CONFIRMED_OWNER_ACTIONS` from `data_provider`, and declare exactly the model symbols `data_provider` directly names or constructs.\",\"Rely on contract-type structural imports for the row class while explicitly declaring only enum symbols that `data_provider` directly names.\",\"Import only `ConfirmedOwnerAction` and rely on its field types transitively for the enumerations.\"],\"default_guess\":\"Assign and export the class from `models`, export the constant from `data_provider`, and declare `data_provider`'s exact direct model imports; include both enums if its table construction names their members.\",\"decision_owner\":\"6\",\"consequences\":[\"Explicit ownership and exact direct imports satisfy strict slicing and make generated table construction deterministic.\",\"Structural import inference can avoid a redundant row-class declaration only if the constant contract actually creates that structural reference; directly named enum members still require imports.\",\"Treating field types as automatic runtime imports is valid only when `data_provider` never directly names those enums; otherwise strict-import generation rejects the module.\"],\"requirement\":\"`ConfirmedOwnerAction` (a confirmed action and the owner action that carries it) with `ConfirmedAction` and `OwnerAction` for `CONFIRMED_OWNER_ACTIONS`.\"}]}",
+ "set_aside": []
+}
