@@ -2,7 +2,6 @@
 """Author a State 7 enum-to-enum lookup in its provider and model closures (§6.10)."""
 import argparse
 import difflib
-import hashlib
 import json
 import keyword
 import re
@@ -12,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import authoring_form as forms
 from design_stage6_data import DATA_PROVIDER_CLOSURE
 from identity_workbench.service import state6_closure, verify
 from identity_workbench.sources import load_state1
@@ -129,13 +129,12 @@ def context(case, op):
     if set(pairs) - source.keys() or set(pairs.values()) - target.keys():
         raise ValueError(f"{symbol} contains values outside the selected enums; reconcile with the design first")
     cells = {member: target.get(pairs.get(raw)) for raw, member in source.items()}
-    digest = hashlib.sha256()
-    for p, raw in originals.items():
-        digest.update(p.name.encode() + b"\0" + hashlib.sha256(raw).digest())
-    for p in sorted(case.glob("01_models*.md")):
-        digest.update(p.name.encode() + b"\0" + hashlib.sha256(p.read_bytes()).digest())
+    read = forms.read_set(case, [*originals, *case.glob("01_models*.md")])
+    reopen = forms.command("design_enum_map.py", "template", case, symbol, "--source", op["source"], "--target",
+                           op["target"], "--row-model", row, "--total" if op["total"] else "--partial")
     identity = row_info["declared"] or (state1.identity if state1 else None)
-    form = {**op, "revision": digest.hexdigest()}
+    form = {**op, "read_set": read, "revision": forms.revision(read),
+            "return_to": forms.return_address(case, symbol, reopen)}
     if old and old.get("total") is True and not op["total"]:
         form["coverage_change"] = (f"{symbol} currently guarantees a result for every {src} member. "
                                    "Partial coverage allows existing or future members to have no result.")
@@ -313,8 +312,7 @@ def run(args):
     try:
         identity, home = row_declaration(form, row, row_info)
     except ValueError:
-        if form["revision"] != current["revision"]:
-            raise ValueError("stale form: generate a fresh template from the current closures") from None
+        forms.require_current(form.get("read_set"), current["read_set"], current["return_to"]["reopen"])
         raise
     owner = next(p for p in docs if p.name == home)
     if row not in docs[owner]["models"]:
@@ -346,8 +344,7 @@ def run(args):
     if not diff:
         print("Already matches the requested mapping.")
         return
-    if form["revision"] != current["revision"]:
-        raise ValueError("stale form: generate a fresh template from the current closures")
+    forms.require_current(form.get("read_set"), current["read_set"], current["return_to"]["reopen"])
     # The decision in the author's terms first; the diff below only shows how it is stored.
     before = current["rows"]
     removed = [name for name, was in before.items() if was is not None and name not in rows]
@@ -372,6 +369,9 @@ def run(args):
     if weakened:
         print("\n".join(readers(case, backend, op["symbol"])))
     patch = "".join(diff)
+    print(forms.will_write(case, {path.relative_to(case).as_posix():
+                                  "enum table " + op["symbol"] if path.name == DATA_PROVIDER_CLOSURE
+                                  else "row model " + row for path in changed}))
     print(patch, end="")
     known = identity_findings(case)
     added = sorted(identity_trial(case, changed) - known, key=str)
@@ -393,6 +393,7 @@ def run(args):
           + (f" ({form['row_identity_reason'].strip()})" if isinstance(form.get("row_identity_reason"), str) else "")
           + f". Consumer note: name the imported {op['symbol']} constant and its selection field {key}."
           + (" Re-read the readers listed above: a row they relied on changed or may now be absent." if weakened else ""))
+    print(forms.returning(current["return_to"]))
 
 
 def main(argv=None):

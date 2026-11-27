@@ -110,7 +110,7 @@ python tools/design_lint.py examples/<case> --state 2
 ```
 
 To develop one outcome from an existing accepted decision, open the form in
-the author’s current case checkout (replace A12 with its actual decision ID):
+the author's current case checkout (replace A12 with its actual decision ID):
 
 ```bash
 python tools/design_state2_form.py template "$CASE" A12 > /tmp/state2-form.json
@@ -118,16 +118,43 @@ python tools/design_state2_form.py preview "$CASE" /tmp/state2-form.json
 python tools/design_state2_form.py apply "$CASE" /tmp/state2-form.json
 ```
 
-Read the prefilled passage. Between template and preview, choose `decision`
-when the passage supports the outcome, quote it and fill the guarantee, the
-observation that demonstrates it, and its consequence. Choose `question` when
-the owner must choose between outcomes. The operation inserts one indexed
-sibling in the same document. It checks the quote and the structure; the
-existing State 2 review judges whether the source supports the outcome.
-A decision also needs a short `title` for its heading. Write the quote on one
-line: where the source wraps, join the lines with a space. When the case
-already has `30_trace.json`, a new decision is unclaimed until State 3 gives
-it a primary owner or a disposition, and the form says so after saving.
+Read the prefilled passage. Between template and preview choose a
+`disposition`:
+
+- `proposal` when the passage supports the outcome. Give a short `title`, quote
+  the passage on one line (where the source wraps, join the lines with a
+  space) and fill the outcome, the guarantee, the observation that demonstrates
+  it, and its consequence. `apply` saves a draft in
+  `proposals/state2/P-NNN.json`. **No specification file changes**: a draft is
+  not a requirement, the index, the lint and the trace do not see it.
+- `question` when the owner must choose between outcomes. `apply` records an
+  indexed open question beside the decision.
+
+After saving a proposal the form repeats the check in your own words: in the
+situation you described, which result must each participant see? Describe what
+can be checked, not how it is achieved. An answer that names a mechanism (a
+lock, a queue, a retry) is saved all the same and is marked for the reviewer.
+
+The reviewer reads and decides:
+
+```bash
+python tools/design_state2_form.py review "$CASE"            # every proposal and its status
+python tools/design_state2_form.py review "$CASE" P-001      # the draft and what accepting would write
+python tools/design_state2_form.py accept "$CASE" P-001 --reviewer NAME --reviewed TOKEN
+python tools/design_state2_form.py reject "$CASE" P-001 --reviewer NAME --reason "what to change"
+```
+
+`review P-001` prints the exact `accept` command with its token. Only `accept`
+puts the text into the specification, as the next accepted decision beside its
+source, with the proposal and the reviewer named. The author sees a rejection
+and its reason in `review "$CASE"`. Accepting is the reviewer's action: an
+author does not run it on their own draft. When the case already has
+`30_trace.json`, an accepted decision is unclaimed until State 3 gives it a
+primary owner or a disposition, and the form says so.
+
+The form checks the quote and the structure; whether the source supports the
+outcome is the reviewer's judgement. The order of template, preview, apply and
+return is the common one in `tools/AUTHORING_FORMS.md`.
 Saving a card leaves the phase gates to the ordinary authoring sequence.
 
 The State 2 lint includes the explicit security-review gate. Unresolved security
