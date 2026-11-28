@@ -1115,6 +1115,21 @@ found "unchanged" and "added" contradicting; round-27 clear). The
 `instance_lifecycle` packet changed by that clause and the constant;
 re-read and re-hashed, PASS.
 
+## 2026-11-28: the owner signs in from the first page
+
+The generated owner page offered sign-in as a link carrying an empty
+credential (`_action_control` chose a link for every row that is not a
+change, and the sign-in row is a `POST` that carries no CSRF value), so no
+browser could sign in, while the server accepted the same credential posted
+as a form. The notes of `_render_owner_page` already asked for the sign-in
+form; no test evidence checked it. Since e2f95107 and 8904a875 a
+`[TEST_EVIDENCE]` note asks a test to submit the sign-in form of the
+`UNAUTHENTICATED` page through `serve_owner_request` (State 7 round-29 found
+the code read from `RefusedAnswer` itself, not its refusal; round-30 clear).
+The `owner_interface` packet changed by that note; re-read, PASS. The
+`upload_framing` and `operations` packets changed by note numbering alone;
+re-hashed, PASS.
+
 ## Known tooling limits met in the review
 
 - **Union variants.** The review packet does not expand union variants
