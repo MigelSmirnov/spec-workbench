@@ -241,7 +241,7 @@ def binding_material(case: Path, factory: Path | None = None) -> list[dict[str, 
         for item in required_test_items(tests[1]) if tests else []:
             for kind, name in WITNESS_RE.findall(item):
                 named = [i for i in invariant_ids(item) if i in ids] or ids
-                statements = [ITEM_RE.sub("", s, count=1).strip() for s in required_test_items(invariants[1])
+                statements = [ITEM_RE.sub("", s, count=1).strip() for s in invariant_statements(invariants[1])
                               if not named or set(invariant_ids(s)) & set(named)]
                 entry: dict[str, Any] = {"decision": key, "witness": f"{kind}:{name}",
                                          "invariants": named, "statements": statements,
@@ -572,6 +572,87 @@ def required_test_items(section: str) -> list[str]:
     if current:
         items.append("\n".join(current))
     return items
+
+
+FENCE_RE = re.compile(r"^\s{0,3}(```|~~~)")
+
+
+def _fenced_statements(lines: list[str]) -> list[str]:
+    """The statements of one fenced invariants block, read by indentation.
+
+    A line at the block's own indentation opens a group; the lines indented
+    under it belong to it. A group whose opening line carries an invariant
+    id is one statement with everything indented under it (the id may be on
+    its first line, as in `a =>   -- A10-1` followed by its continuation).
+    A group whose opening line carries none and whose indented lines do is a
+    shared head (`for each project p:`): each indented line with an id ends
+    one statement, which is the head and the lines since the previous id.
+    A group without any id belongs to the next statement (a formula whose id
+    is on its last, unindented line); one left at the end joins the last."""
+    rows = [line for line in lines if line.strip()]
+    if not rows:
+        return []
+    base = min(len(line) - len(line.lstrip()) for line in rows)
+    groups: list[list[str]] = []
+    for line in rows:
+        if len(line) - len(line.lstrip()) <= base or not groups:
+            groups.append([line])
+        else:
+            groups[-1].append(line)
+    statements: list[str] = []
+    pending: list[str] = []
+    for head, *body in groups:
+        if invariant_ids(head):
+            statements.append("\n".join(pending + [head] + body))
+            pending = []
+        elif not any(invariant_ids(line) for line in body):
+            pending += [head] + body
+        else:
+            part: list[str] = []
+            for line in body:
+                part.append(line)
+                if invariant_ids(line):
+                    statements.append("\n".join(pending + [head] + part))
+                    part = []
+            if part:
+                statements[-1] += "\n" + "\n".join(part)
+            pending = []
+    if pending:
+        if statements:
+            statements[-1] += "\n" + "\n".join(pending)
+        else:
+            statements.append("\n".join(pending))
+    return statements
+
+
+def invariant_statements(section: str) -> list[str]:
+    """The formal invariants of a Formal invariants section, one per statement.
+
+    Outside a fenced block they are the section's logical items
+    (`required_test_items`). Inside one — the usual form, a ```text block
+    with `-- <id>` on each statement — they are read by indentation
+    (`_fenced_statements`), so a binding that names A17-1 is given A17-1 and
+    not the whole block. The fences themselves are not statements."""
+    statements: list[str] = []
+    prose: list[str] = []
+    block: list[str] = []
+    fenced = False
+    for line in section.splitlines():
+        if FENCE_RE.match(line):
+            if fenced:
+                statements.extend(_fenced_statements(block))
+                block = []
+            elif prose:
+                statements.extend(required_test_items("\n".join(prose)))
+                prose = []
+            fenced = not fenced
+            continue
+        (block if fenced else prose).append(line)
+    if block:
+        statements.extend(_fenced_statements(block))
+    if prose:
+        statements.extend(required_test_items("\n".join(prose)))
+    return statements
 
 
 def required_tests(case: Path) -> dict[str, Any]:

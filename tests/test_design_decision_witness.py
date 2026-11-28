@@ -205,3 +205,51 @@ def test_bare_none_or_none_after_a_formula_is_still_an_invariant(tmp_path):
         report = design_decision_witness.coverage(case, factory)
         assert report["summary"]["kept_outside"] == 0, invariants
         assert [f["code"] for f in report["findings"]] == ["decision_without_witness"], invariants
+
+
+def test_fenced_invariants_are_one_statement_per_identifier():
+    """A binding is given the invariants its Required test names, not the
+    whole fenced block: the judge cannot hold a test to an invariant the
+    item does not claim (registry A17, 2026-11-24)."""
+    section = """### Formal invariants
+
+```text
+serving => checks_passed(config)   -- A17-1
+for secrets s1 != s2 in config:
+    value(s1) != value(s2)   -- A17-2
+```
+"""
+    statements = design_decision_witness.invariant_statements(section)
+    assert statements == [
+        "serving => checks_passed(config)   -- A17-1",
+        "for secrets s1 != s2 in config:\n    value(s1) != value(s2)   -- A17-2",
+    ]
+    # outside a fence the items are the section's list items, as before
+    assert design_decision_witness.invariant_statements(
+        "### Formal invariants\n\n1. a -- X-1\n2. b -- X-2\n"
+    ) == ["1. a -- X-1", "2. b -- X-2"]
+    # a fenced block without identifiers stays one statement
+    assert design_decision_witness.invariant_statements(
+        "```text\ndownload_served -> memory_bounded\n```\n"
+    ) == ["download_served -> memory_bounded"]
+
+
+def test_fenced_invariants_read_by_indentation_in_both_styles():
+    """The id may open a statement whose continuation is indented under it
+    (cabinet-kernel, registry A10-1), or a shared head may carry several
+    indented statements (registry A07)."""
+    section = """```text
+agent_call(x) accepted =>   -- A10-1
+  token = Kernel and registered(x)
+answer(p not in granted(x)) = answer(p does not exist)   -- A10-2
+for each project p and type t:
+  count(published) <= 1   -- A07-1
+  versions are 1..n   -- A07-2
+```
+"""
+    assert design_decision_witness.invariant_statements(section) == [
+        "agent_call(x) accepted =>   -- A10-1\n  token = Kernel and registered(x)",
+        "answer(p not in granted(x)) = answer(p does not exist)   -- A10-2",
+        "for each project p and type t:\n  count(published) <= 1   -- A07-1",
+        "for each project p and type t:\n  versions are 1..n   -- A07-2",
+    ]
